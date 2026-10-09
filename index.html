@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>寶可夢 開放世界</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="game">
+    <canvas id="world" width="672" height="480"></canvas>
+    <div id="battle" class="hidden"></div>
+    <div id="title">
+      <div class="logo">寶可夢<span>開放世界</span></div>
+      <div class="sub">九大地區・全 1025 種寶可夢</div>
+      <div class="note">非營利同人研究作品。寶可夢相關名稱與圖像版權屬於任天堂／Creatures／GAME FREAK／The Pokémon Company。</div>
+    </div>
+    <div id="banner"></div>
+    <div id="choices" class="hidden"></div>
+    <div id="dialog" class="hidden"><div id="dialog-text"></div><div id="dialog-more" class="hidden">▼</div></div>
+  </div>
+</div>
+<div id="touch">
+  <div class="pad">
+    <button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="right">▶</button><button data-dir="down">▼</button>
+  </div>
+  <div class="ab"><button data-key="x">B</button><button data-key="z">A</button></div>
+</div>
+<script src="data/pokedex.js"></script>
+<script src="data/moves.js"></script>
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/mon.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# 從 pokeemerald 轉出的官方素材（僅供本機個人研究，不公開散布）
+.cache/
+assets/gen3/
+assets/bgm/
+assets/sfx/
+assets/player.png
+__pycache__/
