@@ -425,6 +425,14 @@ const Game = {
         g.fillStyle = dy ? '#fff' : '#ffe080'; g.fillText(txt, x, y - r + dy);
       }
     }
+    // 地標（去過的顯示名稱）
+    g.font = 'bold 14px "Cubic11", "Microsoft JhengHei"';
+    for (const lm of (World.landmarks || new Map()).values()) {
+      const seen = G.state.flags['lm_' + lm.id] || G.state.flags['seen_' + lm.id];
+      g.fillStyle = seen ? '#ffd040' : '#c08040';
+      g.beginPath(); g.moveTo(lm.x, lm.y - 7); g.lineTo(lm.x + 6, lm.y + 4); g.lineTo(lm.x - 6, lm.y + 4); g.fill();
+      if (seen) { g.fillStyle = '#000'; g.fillText(lm.n, lm.x + 1, lm.y + 19); g.fillStyle = '#fff'; g.fillText(lm.n, lm.x, lm.y + 18); }
+    }
     g.fillStyle = '#f22'; g.beginPath(); g.arc(G.state.x, G.state.y, 6, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
     wrap.appendChild(c);
@@ -457,20 +465,21 @@ const Game = {
   },
 
   async mainMenu() {
-    const items = ['寶可夢', '圖鑑', '背包', '地圖', '訓練家卡片', '存檔', '設定', '關閉'];
+    const items = ['寶可夢', '圖鑑', '背包', '任務', '地圖', '訓練家卡片', '存檔', '設定', '關閉'];
     while (true) {
-      const c = await UI.choose(items, { cls: 'side-menu' });
-      if (c < 0 || c === 7) return;
-      if (c === 0) await Game.partyMenu();
-      if (c === 1) await Game.dexMenu();
-      if (c === 2) await Game.bagMenu();
-      if (c === 3) { await Game.mapMenu(); return; }
-      if (c === 4) await Game.trainerCard();
-      if (c === 5) {
+      const c = items[await UI.choose(items, { cls: 'side-menu' })];
+      if (!c || c === '關閉') return;
+      if (c === '寶可夢') await Game.partyMenu();
+      if (c === '圖鑑') await Game.dexMenu();
+      if (c === '背包') await Game.bagMenu();
+      if (c === '任務') await UI.say(`【關都・大木博士的請託】\n${Story.questText(G.state)}`);
+      if (c === '地圖') { await Game.mapMenu(); return; }
+      if (c === '訓練家卡片') await Game.trainerCard();
+      if (c === '存檔') {
         const ok = await UI.choose(['是', '否'], { prompt: '要儲存目前的進度嗎？' });
         if (ok === 0 && Game.save(true)) Sound.sfx('save'), await UI.say(`${G.state.name} 將進度儲存好了！`);
       }
-      if (c === 6) await Game.settingsMenu();
+      if (c === '設定') await Game.settingsMenu();
       UI.hideDialog();
     }
   },
@@ -579,6 +588,8 @@ const Game = {
     else if (caught >= 150) comment = '很不錯！試著到其他地區看看吧，那裡有不同的寶可夢。';
     else if (caught >= 50) comment = '進展很順利！草叢、水面、岩地、雪原、沙漠都住著不同的寶可夢。';
     await UI.say(`${reg.prof}：「你已經發現了 ${seen} 種，捕捉了 ${caught} 種寶可夢。${comment}」`);
+    // 關都：大木博士的任務線
+    if (t.region === 'kanto') await Story.oak();
   },
 
   async gymChallenge(t) {
@@ -734,6 +745,8 @@ const Game = {
     const fx = s.x + d[0], fy = s.y + d[1];
     const b = World.doors.get(fx + ',' + fy);
     if (b) return Game.enterBuilding(b);
+    const lm = World.landmarks && World.landmarks.get(fx + ',' + fy);
+    if (lm) return Story.landmark(lm);
     const tr = World.trainers.get(fx + ',' + fy);
     if (tr) {
       if (s.defeated[tr.x + ',' + tr.y]) {
@@ -774,6 +787,7 @@ const Game = {
     const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir];
     const tx = s.x + d[0], ty = s.y + d[1];
     if (World.doors.has(tx + ',' + ty) && dir === 'up') { Game.flow(() => Game.enterBuilding(World.doors.get(tx + ',' + ty))); G.keys.clear(); return; }
+    if (World.landmarks && World.landmarks.has(tx + ',' + ty)) { Sound.sfx('door'); Game.flow(() => Story.landmark(World.landmarks.get(tx + ',' + ty))); G.keys.clear(); return; }
     if (!Game.walkable(tx, ty)) return;
     const run = G.keys.has('Shift');
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: s.surf ? 120 : run ? 85 : 160 };

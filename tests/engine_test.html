@@ -28,6 +28,7 @@
 <script src="../js/sprites.js"></script>
 <script src="../js/audio.js"></script>
 <script src="../js/world.js"></script>
+<script src="../js/story.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/battle.js"></script>
 <script src="../js/engine.js"></script>
@@ -286,6 +287,46 @@ async function run() {
     b6.foe.item = 'lum-berry';
     await use(b6, b6.me, 'thunderwave');
     check('木子果治好麻痺', !b6.foe.st && !b6.foe.item);
+  }
+  // 17. 關都：城鎮名稱、地標、招牌隊伍、任務
+  {
+    G.state = Game.newState('T', 'kanto', 4);
+    World.generate(20261010, 'kanto');
+    const kt = World.towns.filter(t => t.region === 'kanto');
+    const brockTown = kt.find(t => t.gym === 0);
+    check('關都城鎮使用原作名稱', brockTown.name === '深灰市' && kt.find(t => t.kind === 'league').name === '石英高原');
+    const lms = [...World.landmarks.values()];
+    check('關都 5 個地標都有放置', lms.length === 5, lms.map(l => l.n).join('、'));
+    // 從真新鎮出發，地標入口（陸上：入口下方；海上：可衝浪）都要能到達
+    const h = World.homeTown, sx = h.x + 1, sy = h.y + 5;
+    const seen = new Uint8Array(WW * WH), q = [[sx, sy]];
+    seen[sy * WW + sx] = 1;
+    while (q.length) {
+      const [x, y] = q.pop();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!World.inside(nx, ny) || seen[ny * WW + nx]) continue;
+        const t = World.tile(nx, ny);
+        if (BLOCKED.has(t) || t === T.DOOR) continue;
+        seen[ny * WW + nx] = 1; q.push([nx, ny]);
+      }
+    }
+    const unreached = lms.filter(l => ![[0, 1], [1, 0], [-1, 0], [0, -1]].some(([dx, dy]) => seen[(l.y + dy) * WW + l.x + dx]));
+    check('所有地標都能抵達（可衝浪）', unreached.length === 0, unreached.map(l => l.n).join('、'));
+    G.state.badges = {};
+    const brock = World.gymParty(brockTown);
+    check('小剛的招牌隊伍（0 枚徽章）：小拳石、大岩蛇', brock.map(m => m.sp).join() === '74,95', brock.map(m => POKEDEX[m.sp].n + m.lv).join(' '));
+    G.state.badges = { kanto: [0, 1, 2, 3, 4, 5, 6] };
+    const giov = World.gymParty(kt.find(t => t.gym === 7));
+    check('坂木後期隊伍的王牌是超甲狂犀', giov[giov.length - 1].sp === 464, giov.map(m => POKEDEX[m.sp].n + m.lv).join(' '));
+    const blue = World.championParty(kt.find(t => t.kind === 'league'));
+    check('選小火龍時青綠的王牌是水箭龜', blue[5].sp === 9, blue.map(m => POKEDEX[m.sp].n + m.lv).join(' '));
+    G.state = Game.newState('T', 'kanto', 4);
+    check('任務從第 0 階段開始', Story.questStage(G.state) === 0);
+    G.state.flags.q_start = 1;
+    for (let i = 1; i <= 10; i++) G.state.caught[i] = 1;
+    check('捕捉 10 種後任務前進', Story.questStage(G.state) === 2);
+    check('野生遇敵不會出現三聖鳥與超夢', !World.pools.tall.filter(p => p.lg && !EVENT_LEGENDS.has(p.id)).some(p => EVENT_LEGENDS.has(p.id)));
   }
   // 12. 隨機對戰不出錯
   {

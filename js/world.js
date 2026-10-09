@@ -1,11 +1,11 @@
 // 開放世界：地形生成、城鎮道路、訓練家、野生寶可夢、繪製
-const T = { GRASS: 0, TALL: 1, TREE: 2, WATER: 3, SAND: 4, MOUNT: 5, CAVE: 6, SNOW: 7, SNOWTALL: 8, DESERT: 9, PATH: 10, BRIDGE: 11, TOWN: 12, BLDG: 13, DOOR: 14, FLOWER: 15, DEEP: 16 };
+const T = { GRASS: 0, TALL: 1, TREE: 2, WATER: 3, SAND: 4, MOUNT: 5, CAVE: 6, SNOW: 7, SNOWTALL: 8, DESERT: 9, PATH: 10, BRIDGE: 11, TOWN: 12, BLDG: 13, DOOR: 14, FLOWER: 15, DEEP: 16, LANDMARK: 17 };
 const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5] };
 const WW = 960, WH = 600;
 const TOWN_W = 16, TOWN_H = 12;
-const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG]);
+const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
 
 const World = {
   seed: 0, tiles: null, towns: [], buildings: [], doors: new Map(), trainers: new Map(), pools: null,
@@ -82,6 +82,8 @@ const World = {
     this.carveRoads(rng);
     this.stampTowns();
     this.alignTrees();
+    this.placeLandmarks(rng);
+    this.alignTrees();
     this.buildPools();
   },
 
@@ -111,9 +113,11 @@ const World = {
       order.forEach((p, k) => {
         const kind = k === 0 ? 'home' : k === order.length - 1 ? 'league' : 'gym';
         let name;
+        const rnd = TOWN_A[Math.floor(rng() * TOWN_A.length)] + TOWN_A[Math.floor(rng() * TOWN_A.length)] + TOWN_B[Math.floor(rng() * TOWN_B.length)];
+        // 原作的城鎮名稱（道館所在城鎮、聯盟），沒有資料的地區用隨機名稱
         if (kind === 'home') name = REGIONS[region].home;
-        else if (kind === 'league') name = REGIONS[region].n + '寶可夢聯盟';
-        else name = TOWN_A[Math.floor(rng() * TOWN_A.length)] + TOWN_A[Math.floor(rng() * TOWN_A.length)] + TOWN_B[Math.floor(rng() * TOWN_B.length)];
+        else if (kind === 'league') name = (typeof LEAGUE_TOWN !== 'undefined' && LEAGUE_TOWN[region]) || REGIONS[region].n + '寶可夢聯盟';
+        else name = (typeof GYM_TOWNS !== 'undefined' && GYM_TOWNS[region] && GYM_TOWNS[region][k - 1]) || rnd;
         this.towns.push({ id: id++, region, kind, gym: kind === 'gym' ? k - 1 : -1, name, x: p.x, y: p.y, cx: p.cx, cy: p.cy });
       });
     }
@@ -239,6 +243,75 @@ const World = {
     }
   },
 
+  // 地標（洞窟入口等）：放在指定城鎮附近，並開一條路連到最近的道路
+  placeLandmarks(rng) {
+    this.landmarks = new Map();
+    if (typeof LANDMARKS === 'undefined') return;
+    const hard = [T.WATER, T.DEEP, T.BRIDGE, T.PATH, T.TOWN, T.BLDG, T.DOOR, T.LANDMARK];
+    for (const [region, list] of Object.entries(LANDMARKS)) for (const lm of list) {
+      const anchor = this.towns.find(t => t.region === region && (lm.near === 'home' ? t.kind === 'home' : lm.near === 'league' ? t.kind === 'league' : t.gym === lm.near));
+      if (!anchor) continue;
+      let best = null;
+      for (let tries = 0; tries < 800 && !best; tries++) {
+        const ang = rng() * Math.PI * 2, r = 12 + rng() * (lm.sea ? 30 : 16);
+        const x = Math.round(anchor.cx + Math.cos(ang) * r), y = Math.round(anchor.cy + Math.sin(ang) * r);
+        if (!this.inside(x - 3, y - 3) || !this.inside(x + 3, y + 3) || this.regionAt(x, y) !== region) continue;
+        if ([[0, 0], [0, 1], [0, -2], [2, 0], [-2, 0]].some(([dx, dy]) => this.townAt(x + dx, y + dy))) continue;
+        let near = false;
+        for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (this.trainers.has((x + dx) + ',' + (y + dy)) || this.landmarks.has((x + dx) + ',' + (y + dy))) near = true;
+        if (near) continue;
+        const t = this.tile(x, y);
+        if (lm.sea) { if (t === T.DEEP || t === T.WATER) best = [x, y]; }
+        else if (!hard.includes(t) && !hard.includes(this.tile(x, y + 1))) best = [x, y];
+      }
+      if (!best) continue;
+      const [x, y] = best;
+      if (lm.sea) {
+        // 海上的小島：沙灘與岩石
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) this.set(x + dx, y + dy, Math.abs(dx) + Math.abs(dy) <= 3 ? T.SAND : this.tile(x + dx, y + dy));
+        for (let dx = -1; dx <= 1; dx++) { this.set(x + dx, y - 1, T.MOUNT); this.set(x + dx, y - 2, T.MOUNT); }
+      } else {
+        for (let dy = -2; dy <= 0; dy++) for (let dx = -1; dx <= 1; dx++) this.set(x + dx, y + dy, T.MOUNT);
+        this.set(x, y + 1, T.PATH);
+        this.connectToRoad(x, y + 1);
+      }
+      this.set(x, y, T.LANDMARK);
+      this.landmarks.set(x + ',' + y, { ...lm, x, y, region });
+    }
+  },
+  // 從 (x,y) 找最近的道路或城鎮，沿途鋪成道路（水面鋪橋）
+  connectToRoad(sx, sy) {
+    const R = 60, W2 = R * 2 + 1;
+    const prev = new Int32Array(W2 * W2).fill(-1);
+    const key = (x, y) => (y - sy + R) * W2 + (x - sx + R);
+    const q = [[sx, sy]];
+    prev[key(sx, sy)] = key(sx, sy);
+    let goal = null;
+    while (q.length && !goal) {
+      const [x, y] = q.shift();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (Math.abs(nx - sx) > R || Math.abs(ny - sy) > R || !this.inside(nx, ny)) continue;
+        const k = key(nx, ny);
+        if (prev[k] !== -1) continue;
+        const t = this.tile(nx, ny);
+        if (t === T.BLDG || t === T.DOOR || t === T.LANDMARK) continue;
+        prev[k] = key(x, y);
+        if ((t === T.PATH || t === T.TOWN || t === T.BRIDGE) && Math.abs(nx - sx) + Math.abs(ny - sy) > 1) { goal = [nx, ny]; break; }
+        q.push([nx, ny]);
+      }
+    }
+    if (!goal) return;
+    let k = key(goal[0], goal[1]);
+    const start = key(sx, sy);
+    while (k !== start) {
+      const x = (k % W2) - R + sx, y = Math.floor(k / W2) - R + sy;
+      const t = this.tile(x, y);
+      if (t !== T.PATH && t !== T.TOWN && t !== T.BRIDGE) this.set(x, y, t === T.WATER || t === T.DEEP ? T.BRIDGE : T.PATH);
+      k = prev[k];
+    }
+  },
+
   // 綠寶石的樹是 2×2 格；把樹對齊到偶數座標的 2×2 區塊
   alignTrees() {
     const soft = new Set([T.GRASS, T.TALL, T.FLOWER, T.SNOW, T.SNOWTALL, T.TREE]);
@@ -323,7 +396,8 @@ const World = {
     const night = U.isNight();
     // 傳說／幻之寶可夢：極低機率
     if (L >= 35 && U.chance(1 / 350)) {
-      const legends = pool.filter(p => p.lg && p.wm <= L);
+      // 有專屬事件的傳說寶可夢（三聖鳥、超夢）不會隨機出現
+      const legends = pool.filter(p => p.lg && p.wm <= L && !(typeof EVENT_LEGENDS !== 'undefined' && EVENT_LEGENDS.has(p.id)));
       if (legends.length) return Mon.create(U.pick(legends).id, L, { hidden: .03 });
     }
     const local = U.chance(.75);
@@ -393,10 +467,15 @@ const World = {
     const gen = REGIONS[town.region].gen;
     const party = [];
     const used = new Set();
+    // 招牌隊伍：依等級選前期或後期版本，取最後 n 隻（最後一隻是王牌）
+    const sig = typeof SIGNATURE !== 'undefined' && SIGNATURE[town.region] && SIGNATURE[town.region].gyms[town.gym];
+    const sigList = sig ? (L < 35 ? sig[0] : sig[1]).slice(-n) : null;
     for (let i = 0; i < n; i++) {
       const lv = Math.min(100, L - (n - 1 - i));
       let id, tries = 0;
-      do { id = this.pickForLevel(rnd, lv, { types: [type], gen, strong: i === n - 1 }); } while (used.has(id) && ++tries < 30);
+      const sigIdx = sigList ? i - (n - sigList.length) : -1;
+      if (sigIdx >= 0) id = sigList[sigIdx];
+      else do { id = this.pickForLevel(rnd, lv, { types: [type], gen, strong: i === n - 1 }); } while ((used.has(id) || (sigList && sigList.includes(id))) && ++tries < 30);
       used.add(id);
       // 王牌寶可夢攜帶文柚果
       party.push(Mon.create(id, lv, { shiny: false, perfect: 20, hidden: .1, item: i === n - 1 ? 'sitrus-berry' : null }));
@@ -413,9 +492,12 @@ const World = {
     const reg = REGIONS[town.region];
     const party = [];
     const used = new Set();
+    const sig = typeof SIGNATURE !== 'undefined' && SIGNATURE[town.region] && SIGNATURE[town.region].champ;
+    const sigList = sig ? sig(G.state ? G.state.starter : 1) : null;
     for (let i = 0; i < 6; i++) {
       let id, tries = 0;
-      do { id = this.pickForLevel(rnd, L, { gen: reg.gen, strong: true }); } while (used.has(id) && ++tries < 10);
+      if (sigList) id = sigList[i];
+      else do { id = this.pickForLevel(rnd, L, { gen: reg.gen, strong: true }); } while (used.has(id) && ++tries < 10);
       used.add(id);
       // 冠軍的隊伍各自攜帶對戰道具
       const pool = ['leftovers', 'life-orb', 'choice-scarf', 'focus-sash', 'sitrus-berry', 'expert-belt', 'assault-vest', 'lum-berry', 'choice-band', 'choice-specs'];
@@ -471,6 +553,16 @@ const World = {
   },
 
   drawTile(g, t, x, y, px, py, frame) {
+    // 地標：岩壁上的洞窟入口
+    if (t === T.LANDMARK) {
+      this.drawTile(g, T.MOUNT, x, y, px, py, frame);
+      const s = TILE / 16;
+      g.fillStyle = '#382818';
+      g.beginPath(); g.ellipse(px + 8 * s, py + 9 * s, 6 * s, 6 * s, 0, Math.PI, 0); g.rect(px + 2 * s, py + 9 * s, 12 * s, 7 * s); g.fill();
+      g.fillStyle = '#100808';
+      g.beginPath(); g.ellipse(px + 8 * s, py + 10 * s, 4.5 * s, 4.5 * s, 0, Math.PI, 0); g.rect(px + 3.5 * s, py + 10 * s, 9 * s, 6 * s); g.fill();
+      return;
+    }
     if (Gen3.on) {
       const im = this.gen3Tile(t, x, y);
       if (im) { g.drawImage(im, px, py); return; }
