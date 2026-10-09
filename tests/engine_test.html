@@ -19,8 +19,10 @@
 <script src="../data/moves.js"></script>
 <script src="../data/showdown.js"></script>
 <script src="../data/items.js"></script>
+<script src="../data/abilities.js"></script>
 <script src="../js/util.js"></script>
 <script src="../js/data.js"></script>
+<script src="../js/abilities.js"></script>
 <script src="../js/mon.js"></script>
 <script src="../js/gen3.js"></script>
 <script src="../js/sprites.js"></script>
@@ -215,6 +217,75 @@ async function run() {
     const st = Mon.stats(ty);
     const want = st[1] > st[2] ? 106 : st[1] < st[2] ? 107 : 237;
     check('無畏小子依攻擊與防禦的大小進化', Mon.pickEvo(ty, Mon.evoCandidates(ty)) === want);
+  }
+  // 15. 特性
+  {
+    const b = setup(130, 50, 68, 50);
+    b.me.ability = 'intimidate'; b.foe.ability = 'guts';
+    await b.abilityStart(b.me);
+    check('威嚇降低對手攻擊', b.vFoe.stg.atk === -1);
+    const b2 = setup(130, 50, 376, 50);
+    b2.me.ability = 'intimidate'; b2.foe.ability = 'clear-body';
+    await b2.abilityStart(b2.me);
+    check('恆淨之軀擋下威嚇', b2.vFoe.stg.atk === 0);
+    const b3 = setup(50, 50, 92, 50);
+    b3.foe.ability = 'levitate';
+    const hp3 = b3.foe.hp;
+    await use(b3, b3.me, 'earthquake');
+    check('飄浮讓地面招式無效', b3.foe.hp === hp3);
+    const b4 = setup(68, 100, 74, 5);
+    b4.foe.ability = 'sturdy';
+    await use(b4, b4.me, 'closecombat');
+    check('結實在滿 HP 時撐住一擊', b4.foe.hp === 1, 'hp=' + b4.foe.hp);
+    const b5 = setup(186, 50, 143, 50);
+    b5.me.ability = 'drizzle';
+    await b5.abilityStart(b5.me);
+    check('降雨登場時下雨', b5.field.weather === 'raindance');
+    const b6 = setup(143, 50, 143, 50);
+    b6.foe.ability = 'contrary';
+    await use(b6, b6.me, 'growl');
+    check('唱反調讓能力下降變成提升', b6.vFoe.stg.atk === 1);
+    const b7 = setup(35, 50, 143, 50);
+    b7.me.ability = 'magic-guard'; b7.me.st = 'psn';
+    const hp7 = b7.me.hp;
+    await b7.endOfTurn();
+    check('魔法防守不受中毒傷害', b7.me.hp === hp7);
+    const b8 = setup(25, 50, 143, 50);
+    b8.foe.ability = 'volt-absorb';
+    b8.foe.hp = 10;
+    await use(b8, b8.me, 'thunderbolt');
+    check('蓄電吸收電屬性招式並回復', b8.foe.hp > 10);
+  }
+  // 16. 持有道具
+  {
+    const b = setup(143, 50, 143, 50);
+    b.me.item = 'leftovers'; b.me.hp = 50;
+    await b.endOfTurn();
+    check('吃剩的東西回復 1/16', b.me.hp === 50 + Math.floor(Mon.maxHp(b.me) / 16));
+    const b2 = setup(68, 100, 10, 5);
+    b2.foe.item = 'focus-sash';
+    await use(b2, b2.me, 'closecombat');
+    check('氣勢披帶在滿 HP 時撐住並消耗', b2.foe.hp === 1 && !b2.foe.item);
+    const b3 = setup(143, 50, 143, 50);
+    b3.me.item = 'life-orb';
+    await use(b3, b3.me, 'tackle');
+    check('生命寶珠攻擊後扣 1/10 HP', b3.me.hp === Mon.maxHp(b3.me) - Math.floor(Mon.maxHp(b3.me) / 10));
+    const b4 = setup(143, 50, 143, 50);
+    b4.me.item = 'choice-band';
+    b4.me.moves = [{ id: moveId('tackle'), pp: 35 }, { id: moveId('bodyslam'), pp: 15 }];
+    b4.vMe.lockOn = 2;
+    await b4.runMove(b4.me, b4.foe, { mv: md(b4.me.moves[0].id), slot: b4.me.moves[0] });
+    check('講究頭帶鎖定第一個招式', !!b4.moveBlocked(b4.me, b4.vMe, b4.me.moves[1].id) && !b4.moveBlocked(b4.me, b4.vMe, b4.me.moves[0].id));
+    const b5 = setup(68, 60, 143, 60);
+    b5.foe.item = 'sitrus-berry';
+    b5.foe.hp = Math.floor(Mon.maxHp(b5.foe) * .6);
+    await use(b5, b5.me, 'tackle');
+    const max5 = Mon.maxHp(b5.foe);
+    check('文柚果在 HP 低於一半時發動', !b5.foe.item || b5.foe.hp * 2 > max5, `hp=${b5.foe.hp}/${max5} item=${b5.foe.item}`);
+    const b6 = setup(25, 50, 143, 50);
+    b6.foe.item = 'lum-berry';
+    await use(b6, b6.me, 'thunderwave');
+    check('木子果治好麻痺', !b6.foe.st && !b6.foe.item);
   }
   // 12. 隨機對戰不出錯
   {

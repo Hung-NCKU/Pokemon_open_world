@@ -291,7 +291,7 @@ const World = {
     // 傳說／幻之寶可夢：極低機率
     if (L >= 35 && U.chance(1 / 350)) {
       const legends = pool.filter(p => p.lg && p.wm <= L);
-      if (legends.length) return Mon.create(U.pick(legends).id, L);
+      if (legends.length) return Mon.create(U.pick(legends).id, L, { hidden: .03 });
     }
     const local = U.chance(.75);
     const build = (useGen, useLevel) => pool.filter(p => !p.lg && (!useGen || p.g === gen) && (!useLevel || p.wm <= L)).map(p => {
@@ -305,7 +305,9 @@ const World = {
     let cands = build(local, true);
     if (!cands.length) cands = build(false, true);
     if (!cands.length) cands = build(false, false);
-    return Mon.create(U.weighted(cands).id, L);
+    // 野生寶可夢：隱藏特性 3%、有 5% 機率攜帶樹果
+    const item = Math.random() < .05 ? U.pick(['oran-berry', 'sitrus-berry', 'cheri-berry', 'pecha-berry', 'rawst-berry', 'chesto-berry']) : null;
+    return Mon.create(U.weighted(cands).id, L, { hidden: .03, item });
   },
 
   // 從指定屬性中挑選適合等級的寶可夢（訓練家、館主用）
@@ -337,7 +339,7 @@ const World = {
     const party = [];
     for (let i = 0; i < n; i++) {
       const lv = U.clamp(L - 1 + Math.floor(rnd() * 3), 2, 100);
-      party.push(Mon.create(this.pickForLevel(rnd, lv, { types: cls.types, gen: rnd() < .7 ? gen : null }), lv, { shiny: false }));
+      party.push(Mon.create(this.pickForLevel(rnd, lv, { types: cls.types, gen: rnd() < .7 ? gen : null }), lv, { shiny: false, hidden: .05, item: L >= 30 && rnd() < .3 ? 'oran-berry' : null }));
     }
     return party;
   },
@@ -355,7 +357,8 @@ const World = {
       let id, tries = 0;
       do { id = this.pickForLevel(rnd, lv, { types: [type], gen, strong: i === n - 1 }); } while (used.has(id) && ++tries < 30);
       used.add(id);
-      party.push(Mon.create(id, lv, { shiny: false, perfect: 20 }));
+      // 王牌寶可夢攜帶文柚果
+      party.push(Mon.create(id, lv, { shiny: false, perfect: 20, hidden: .1, item: i === n - 1 ? 'sitrus-berry' : null }));
     }
     return party;
   },
@@ -370,7 +373,9 @@ const World = {
       let id, tries = 0;
       do { id = this.pickForLevel(rnd, L, { gen: reg.gen, strong: true }); } while (used.has(id) && ++tries < 10);
       used.add(id);
-      party.push(Mon.create(id, Math.min(100, L - 5 + i), { shiny: false, perfect: 31 }));
+      // 冠軍的隊伍各自攜帶對戰道具
+      const pool = ['leftovers', 'life-orb', 'choice-scarf', 'focus-sash', 'sitrus-berry', 'expert-belt', 'assault-vest', 'lum-berry', 'choice-band', 'choice-specs'];
+      party.push(Mon.create(id, Math.min(100, L - 5 + i), { shiny: false, perfect: 31, hidden: .3, item: pool[Math.floor(rnd() * pool.length)] }));
     }
     return party;
   },

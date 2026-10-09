@@ -107,6 +107,39 @@ Object.assign(Battle.prototype, {
     this.sides = { me: side(), foe: side() };
     this.futures = [];
   },
+  // 特性（破格類特性會讓目標的特性在這次攻擊中失效）
+  ab(m) {
+    if (!m || !m.ability) return null;
+    if (this.moldTarget === m) return null;
+    return m.ability;
+  },
+  // 持有道具（笨拙特性讓道具失效）
+  itm(m) { return m && m.item && m.ability !== 'klutz' ? m.item : null; },
+  async consume(m, txt) {
+    const it = m.item;
+    m.item = null;
+    const v = this.volOf(m);
+    if (v) {
+      if (m.ability === 'unburden') v.unburden = true; // 輕裝：道具消失後速度加倍
+      if (it && it.endsWith('-berry')) v.lastBerry = it;
+    }
+    if (txt) await this.msg(txt.replace('{i}', Held.name(it)));
+    if (it && it.endsWith('-berry') && m.ability === 'cheek-pouch' && m.hp > 0) {
+      await this.healMon(m, Math.floor(Mon.maxHp(m) / 3)); await this.abilityMsg(m, `${this.label(m)} 的體力回復了！`);
+    }
+    return it;
+  },
+  // 體重（重金屬加倍、輕金屬減半）
+  wt(m) { const w = weightOf(m); return this.ab(m) === 'heavy-metal' ? w * 2 : this.ab(m) === 'light-metal' ? w / 2 : w; },
+  // 古代活性（晴天）、夸克充能（電氣場地）：提高最高的能力
+  paradoxStat(m) {
+    const a = this.ab(m);
+    if (!((a === 'protosynthesis' && this.wx() === 'sunnyday') || (a === 'quark-drive' && this.field.terrain === 'electricterrain'))) return null;
+    const s = Mon.stats(m);
+    return ['atk', 'def', 'spa', 'spd', 'spe'][[1, 2, 3, 4, 5].reduce((b, i) => s[i] > s[b] ? i : b, 1) - 1];
+  },
+  async abilityMsg(m, txt) { await this.msg(`［${this.label(m)} 的${Abil.name(m.ability)}］\n${txt}`); },
+  hasAbility(id) { return [this.me, this.foe].some(m => m && m.hp > 0 && m.ability === id); },
   sideKey(m) { return m === this.me ? 'me' : 'foe'; },
   volOf(m) { return m === this.me ? this.vMe : this.vFoe; },
   otherOf(m) { return m === this.me ? this.foe : this.me; },
@@ -119,14 +152,23 @@ Object.assign(Battle.prototype, {
   grounded(m) {
     const v = this.volOf(m);
     if (this.field.gravity || v.smackDown || v.ingrain) return true;
-    if (v.magnetRise) return false;
+    if (v.magnetRise || this.ab(m) === 'levitate' || this.itm(m) === 'air-balloon') return false;
     return !this.typesOf(m).includes('flying');
   },
+  // 天氣（無關天氣、氣閘會讓天氣失效）
+  wx() { return this.hasAbility('air-lock') || this.hasAbility('cloud-nine') ? null : this.field.weather; },
 
   speedOf(m, v) {
     let s = Mon.stats(m)[5] * boostMul(v.stg.spe);
-    if (m.st === 'par') s *= .5;
+    const a = this.ab(m), w = this.field ? this.wx() : null;
+    if (m.st === 'par' && a !== 'quick-feet') s *= .5;
     if (this.sides && this.sides[this.sideKey(m)].tailwind) s *= 2;
+    if ((a === 'swift-swim' && w === 'raindance') || (a === 'chlorophyll' && w === 'sunnyday') || (a === 'sand-rush' && w === 'sandstorm')
+      || (a === 'slush-rush' && (w === 'snowscape' || w === 'hail')) || (a === 'surge-surfer' && this.field && this.field.terrain === 'electricterrain')) s *= 2;
+    if (a === 'quick-feet' && m.st) s *= 1.5;
+    if (v.unburden && !m.item) s *= 2;
+    if (this.field && this.paradoxStat(m) === 'spe') s *= 1.5;
+    if (this.itm(m) === 'choice-scarf') s *= 1.5;
     return Math.floor(s);
   },
 
@@ -139,15 +181,16 @@ Object.assign(Battle.prototype, {
     // 1. 逃跑、交換、道具（Showdown：優先度高於所有招式）
     if (action.type === 'run') {
       if (this.trainer) { await this.msg('不行！不能從訓練家對戰中逃走！'); this.turn--; return null; }
-      if (this.vMe.trapped || this.vMe.trap || this.vMe.ingrain || this.vMe.octolock) { if (!this.typesOf(this.me).includes('ghost')) { await this.msg('無法逃走！'); this.turn--; return null; } }
+      if (this.ab(this.me) === 'run-away') { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
+      if (this.trappedBy(this.me)) { await this.msg(`${this.trappedBy(this.me)}，無法逃走！`); this.turn--; return null; }
       this.runTries++;
       const a = this.speedOf(this.me, this.vMe), b = this.speedOf(this.foe, this.vFoe);
       const odds = (Math.floor(a * 128 / Math.max(1, b)) + 30 * this.runTries) % 256;
       if (a >= b || Math.random() * 256 < odds) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
       await this.msg('沒能逃走！');
     } else if (action.type === 'switch') {
-      if ((this.vMe.trapped || this.vMe.trap || this.vMe.ingrain || this.vMe.octolock) && !this.typesOf(this.me).includes('ghost')) {
-        await this.msg(`${Mon.name(this.me)} 無法退場！`); this.turn--; return null;
+      if (this.trappedBy(this.me)) {
+        await this.msg(`${this.trappedBy(this.me)}，${Mon.name(this.me)} 無法退場！`); this.turn--; return null;
       }
       await this.switchTo(action.idx);
     } else if (action.type === 'item') {
@@ -162,12 +205,19 @@ Object.assign(Battle.prototype, {
     if (!foeAction.heal && foeAction.switchTo === undefined) acts.push({ side: 'foe', ...this.resolveMove(this.foe, this.vFoe, foeAction.idx) });
     for (const a of acts) {
       const m = a.side === 'me' ? this.me : this.foe, v = a.side === 'me' ? this.vMe : this.vFoe;
+      const ua = this.ab(m);
       a.pri = a.mv.pri || 0;
       if (a.mv.id === 'grassyglide' && this.field.terrain === 'grassyterrain') a.pri += 1;
+      if (ua === 'prankster' && a.mv.cat === 'Status') { a.pri += 1; a.prankster = true; }
+      if (ua === 'gale-wings' && a.mv.type === 'flying' && m.hp === Mon.maxHp(m)) a.pri += 1;
+      if (ua === 'triage' && (a.mv.heal || a.mv.drain)) a.pri += 3;
+      a.quick = this.itm(m) === 'quick-claw' && Math.random() < .2 ? 1 : 0;
+      a.stall = ua === 'stall' ? 1 : 0;
       a.spe = this.speedOf(m, v) * (this.field.trickRoom ? -1 : 1);
       a.rnd = Math.random();
     }
-    acts.sort((x, y) => y.pri - x.pri || y.spe - x.spe || x.rnd - y.rnd);
+    acts.sort((x, y) => y.pri - x.pri || y.quick - x.quick || x.stall - y.stall || y.spe - x.spe || x.rnd - y.rnd);
+    for (const a of acts) if (a.quick) await this.msg(`${this.label(a.side === 'me' ? this.me : this.foe)} 靠先制之爪搶先行動了！`);
     this.order = acts.map(a => a.side);
     for (let i = 0; i < acts.length; i++) {
       const a = acts[i];
@@ -183,6 +233,18 @@ Object.assign(Battle.prototype, {
     await this.endOfTurn();
     const r = await this.checkFaints();
     return r || null;
+  },
+
+  // 是否被困住（回傳原因或 null）；幽靈屬性與脫出殼不會被困住
+  trappedBy(m) {
+    const v = this.volOf(m), o = this.otherOf(m);
+    if (this.typesOf(m).includes('ghost') || this.itm(m) === 'shed-shell') return null;
+    if (v.trapped || v.trap || v.ingrain || v.octolock) return '被困住了';
+    const oa = o && o.hp > 0 ? this.ab(o) : null;
+    if (oa === 'shadow-tag' && this.ab(m) !== 'shadow-tag') return `受到${Abil.name(oa)}的影響`;
+    if (oa === 'arena-trap' && this.grounded(m)) return `受到${Abil.name(oa)}的影響`;
+    if (oa === 'magnet-pull' && this.typesOf(m).includes('steel')) return `受到${Abil.name(oa)}的影響`;
+    return null;
   },
 
   // 決定實際要使用的招式（鎖定、蓄力、再來一次、掙扎）
@@ -248,6 +310,7 @@ Object.assign(Battle.prototype, {
   async foeSwitch(i) {
     await this.msg(`${this.trainer.name} 收回了 ${Mon.name(this.foe)}！`);
     await this.recall('foe');
+    await this.onSwitchOut(this.foe);
     this.foeIdx = i;
     this.vFoe = newVol();
     Game.markSeen(this.foe.sp);
@@ -258,21 +321,26 @@ Object.assign(Battle.prototype, {
 
   moveBlocked(m, v, id) {
     const mv = md(id);
+    const it = this.itm(m);
+    if (v.choiceLock && v.choiceLock !== id && (['choice-band', 'choice-specs', 'choice-scarf'].includes(it) || this.ab(m) === 'gorilla-tactics')
+      && m.moves.some(s => s.id === v.choiceLock && s.pp > 0)) return it ? Held.name(it) : Abil.name('gorilla-tactics');
+    if (it === 'assault-vest' && mv.cat === 'Status') return Held.name(it);
     if (v.taunt > 0 && mv.cat === 'Status') return '挑釁';
     if (v.disable > 0 && v.disableMove === id) return '定身法';
     if (this.field && this.field.gravity && mv.flags.gravity) return '重力';
     return null;
   },
 
-  effectiveness(mv, target) {
+  effectiveness(mv, target, user = null) {
     if (!TYPES[mv.type] || mv.type === '???' || mv.type === 'stellar') return 1;
     const tv = this.volOf(target);
     let types = this.typesOf(target);
     let e = 1;
+    const scrappy = user && ['scrappy', 'minds-eye'].includes(this.ab(user));
     for (const t of types) {
       let r = CHART[mv.type] && CHART[mv.type][t];
       if (r === undefined) r = 1;
-      if (r === 0 && t === 'ghost' && (mv.type === 'normal' || mv.type === 'fighting') && tv.foresight) r = 1;
+      if (r === 0 && t === 'ghost' && (mv.type === 'normal' || mv.type === 'fighting') && (tv.foresight || scrappy)) r = 1;
       if (r === 0 && t === 'flying' && mv.type === 'ground' && this.grounded(target)) r = 1;
       if (mv.id === 'freezedry' && t === 'water') r = 2;
       e *= r;
@@ -292,7 +360,7 @@ Object.assign(Battle.prototype, {
     if (act.recharge) { vU.recharge = false; await this.msg(`${name} 需要休息，無法動彈！`); return; }
     // 行動前判定（beforeMove）
     if (user.st === 'slp') {
-      user.slpT = (user.slpT || 1) - 1;
+      user.slpT = (user.slpT || 1) - (this.ab(user) === 'early-bird' ? 2 : 1);
       if (user.slpT <= 0) { user.st = null; this.draw(); await this.msg(`${name} 醒過來了！`); }
       else if (!mv.sleepUsable) { await this.msg(`${name} 正在呼呼大睡。`); vU.locked = null; vU.charging = null; vU.semi = null; return; }
       else await this.msg(`${name} 正在呼呼大睡。`);
@@ -301,7 +369,12 @@ Object.assign(Battle.prototype, {
       if (Math.random() < .2 || mv.flags.defrost) { user.st = null; this.draw(); await this.msg(`${name} 的冰凍融化了！`); }
       else { await this.msg(`${name} 因冰凍而無法行動！`); return; }
     }
-    if (vU.flinch) { await this.msg(`${name} 畏縮了，無法使出招式！`); vU.locked = null; return; }
+    if (vU.flinch) {
+      await this.msg(`${name} 畏縮了，無法使出招式！`);
+      vU.locked = null;
+      if (this.ab(user) === 'steadfast') await this.boost(user, { spe: 1 }, user);
+      return;
+    }
     const blocked = !act.cont && act.slot && this.moveBlocked(user, vU, act.slot.id);
     if (blocked) { await this.msg(`${name} 因${blocked}而無法使出 ${mv.n}！`); return; }
     if (vU.conf > 0) {
@@ -339,11 +412,14 @@ Object.assign(Battle.prototype, {
     this.field.lastMoveUsed = moveId;
     vU.lastMove = mv.id === 'struggle' ? null : moveId;
     if (mv.id !== 'protect' && !mv.stallingMove) vU.protectCount = 0;
+    // 講究類道具、一猩一意：鎖定第一個使用的招式
+    if (act.slot && !act.called && (['choice-band', 'choice-specs', 'choice-scarf'].includes(this.itm(user)) || this.ab(user) === 'gorilla-tactics')) vU.choiceLock = act.slot.id;
 
     // 蓄力招式（第一回合）
     if (mv.flags.charge && !vU.charging) {
-      const sun = this.field.weather === 'sunnyday';
+      const sun = this.wx() === 'sunnyday';
       if ((mv.id === 'solarbeam' || mv.id === 'solarblade') && sun) { /* 晴天直接發動 */ }
+      else if (this.itm(user) === 'power-herb') { await this.consume(user, `${name} 用{i}完成了蓄力！`); }
       else {
         vU.charging = moveId;
         const semi = { fly: 'fly', bounce: 'fly', skydrop: 'fly', dig: 'dig', dive: 'dive', phantomforce: 'phantom', shadowforce: 'phantom' }[mv.id];
@@ -359,7 +435,18 @@ Object.assign(Battle.prototype, {
     vU.charging = null; vU.semi = null;
     if (wasCharging && mv.id === 'shadowforce' || mv.id === 'phantomforce') vT.protect = false;
 
-    const ok = await this.useMoveOn(user, target, mv, act);
+    // 變幻自如、自由者：使用招式前變成招式的屬性（每次登場一次）
+    const pa = this.ab(user);
+    if ((pa === 'protean' || pa === 'libero') && !vU.proteanUsed && TYPES[this.moveType(user, mv)]) {
+      const t = this.moveType(user, mv);
+      if (this.typesOf(user).join() !== t) { vU.types = [t]; vU.proteanUsed = true; await this.abilityMsg(user, `${name} 變成了${TYPES[t].n}屬性！`); }
+    }
+    // 破格、渦輪火焰、兆級電壓：無視目標的特性
+    this.moldTarget = ['mold-breaker', 'teravolt', 'turboblaze'].includes(this.ab(user)) ? target : null;
+    let ok;
+    try { ok = await this.useMoveOn(user, target, mv, act); } finally { this.moldTarget = null; }
+    if (vU.metronomeMove === mv.num && ok) vU.metronomeN = (vU.metronomeN || 0) + 1;
+    else { vU.metronomeMove = mv.num; vU.metronomeN = 0; }
     vU.lastMoveFailed = !ok;
     // 連續攻擊類（逆鱗）
     if (mv.self && mv.self.volatileStatus === 'lockedmove' && ok !== null) {
@@ -424,16 +511,33 @@ Object.assign(Battle.prototype, {
       }
       // 精神場地擋下先制招式
       if (this.field.terrain === 'psychicterrain' && (mv.pri || 0) > 0 && this.grounded(target)) { await this.msg(`${tname} 受到了精神場地的保護！`); return false; }
+      // 惡作劇之心的變化招式對惡屬性無效
+      if (act.prankster && this.typesOf(target).includes('dark') && this.sideKey(target) !== this.sideKey(user)) { await this.msg(`對 ${tname} 好像沒有效果……`); return false; }
       // 屬性免疫（Showdown：變化招式預設忽略免疫）
       const ignoreImm = mv.ignoreImmunity !== undefined ? mv.ignoreImmunity === true : mv.cat === 'Status';
-      if (!ignoreImm && this.effectiveness(mv, target) === 0 && !(mv.damage === undefined && mv.cat === 'Status' && mv.ignoreImmunity === undefined)) {
+      if (!ignoreImm && this.effectiveness({ ...mv, type: this.moveType(user, mv) }, target, user) === 0) {
         await this.msg(`對 ${tname} 好像沒有效果……`);
         if (mv.hasCrashDamage) await this.crash(user);
         return false;
       }
-      if (mv.flags.powder && this.typesOf(target).includes('grass')) { await this.msg(`對 ${tname} 好像沒有效果……`); return false; }
+      if (mv.flags.powder && (this.typesOf(target).includes('grass') || this.ab(target) === 'overcoat' || this.itm(target) === 'safety-goggles')) {
+        await this.msg(`對 ${tname} 好像沒有效果……`); return false;
+      }
+      // 濕氣：場上有濕氣時無法使用爆炸類招式
+      if (['selfdestruct', 'explosion', 'mindblown', 'mistyexplosion'].includes(mv.id) && [user, target].some(m => this.ab(m) === 'damp')) {
+        await this.msg('受到濕氣的影響，無法使用這個招式！'); return false;
+      }
+      // 特性造成的免疫（飄浮、蓄電、引火、神奇守護……）
+      if (await this.abilityImmune(user, target, mv)) return false;
       // 替身擋下變化招式
-      if (vT.sub && mv.cat === 'Status' && !mv.flags.bypasssub && !mv.flags.sound) { await this.msg('但是失敗了！'); return false; }
+      if (vT.sub && mv.cat === 'Status' && !mv.flags.bypasssub && !mv.flags.sound && this.ab(user) !== 'infiltrator') { await this.msg('但是失敗了！'); return false; }
+      // 魔法鏡：把變化招式反彈回去
+      if (mv.cat === 'Status' && mv.flags.reflectable && this.ab(target) === 'magic-bounce' && !act.bounced) {
+        await this.abilityMsg(target, `把 ${mv.n} 反彈了回去！`);
+        return this.useMoveOn(target, user, mv, { ...act, bounced: true, prankster: false });
+      }
+      // 芳香幕：擋下挑釁、再來一次、定身法、著迷
+      if (this.ab(target) === 'aroma-veil' && ['taunt', 'encore', 'disable', 'attract'].includes(mv.volatileStatus)) { await this.abilityMsg(target, '受到了芳香幕的保護！'); return false; }
       // 命中判定
       if (!(await this.accuracyCheck(user, target, mv))) {
         await this.msg(`${tname} 躲開了攻擊！`);
@@ -446,6 +550,41 @@ Object.assign(Battle.prototype, {
     await this.moveAnim(user, target, this.viewMove(mv));
     if (mv.cat !== 'Status') return this.damagingMove(user, target, mv, act);
     return this.statusMove(user, target, mv, act);
+  },
+
+  // 回傳 true 表示招式被特性擋下（並處理吸收、提升等效果）
+  async abilityImmune(user, target, mv) {
+    const a = this.ab(target);
+    if (!a || target === user) return false;
+    const type = this.moveType(user, mv), tname = this.label(target);
+    const heal = async frac => {
+      const max = Mon.maxHp(target);
+      if (target.hp < max) { await this.healMon(target, Math.floor(max * frac)); await this.abilityMsg(target, `${tname} 的體力回復了！`); }
+      else await this.abilityMsg(target, `對 ${tname} 好像沒有效果……`);
+      return true;
+    };
+    const raise = async boosts => { await this.abilityMsg(target, '吸收了招式！'); await this.boost(target, boosts, target); return true; };
+    if (type === 'electric' && mv.cat !== 'Status' || mv.id === 'thunderwave') {
+      if (a === 'volt-absorb') return heal(.25);
+      if (a === 'lightning-rod') return raise({ spa: 1 });
+      if (a === 'motor-drive') return raise({ spe: 1 });
+    }
+    if (type === 'water' && (mv.cat !== 'Status' || mv.target !== 'self')) {
+      if (a === 'water-absorb' || a === 'dry-skin') return heal(.25);
+      if (a === 'storm-drain') return raise({ spa: 1 });
+    }
+    if (type === 'grass' && a === 'sap-sipper') return raise({ atk: 1 });
+    if (type === 'ground' && a === 'earth-eater') return heal(.25);
+    if (type === 'fire' && a === 'well-baked-body') return raise({ def: 2 });
+    if (type === 'fire' && a === 'flash-fire') { this.volOf(target).flashFire = true; await this.abilityMsg(target, `${tname} 的火屬性招式威力提高了！`); return true; }
+    if (mv.flags.wind && a === 'wind-rider') return raise({ atk: 1 });
+    if (type === 'ground' && mv.cat !== 'Status' && a === 'levitate' && !this.field.gravity && !this.volOf(target).smackDown) { await this.abilityMsg(target, `${tname} 浮在空中，地面屬性招式沒有效果！`); return true; }
+    if (mv.flags.sound && a === 'soundproof') { await this.abilityMsg(target, '聲音類招式沒有效果！'); return true; }
+    if (mv.flags.bullet && a === 'bulletproof') { await this.abilityMsg(target, '球和彈類招式沒有效果！'); return true; }
+    if (a === 'wonder-guard' && mv.cat !== 'Status' && this.effectiveness({ ...mv, type }, target, user) <= 1 && mv.id !== 'struggle') {
+      await this.abilityMsg(target, `對 ${tname} 好像沒有效果……`); return true;
+    }
+    return false;
   },
 
   viewMove(mv) {
@@ -462,15 +601,29 @@ Object.assign(Battle.prototype, {
       return Math.random() * 100 < acc;
     }
     let acc = mv.acc;
-    const w = this.field.weather;
+    const w = this.wx();
     if ((mv.id === 'thunder' || mv.id === 'hurricane') && w === 'raindance') acc = true;
     if ((mv.id === 'thunder' || mv.id === 'hurricane') && w === 'sunnyday') acc = 50;
     if (mv.id === 'blizzard' && (w === 'hail' || w === 'snowscape')) acc = true;
     if (vT.minimize && mv.flags.minimize) acc = true;
     if (vU.lockOn > 0) { vU.lockOn = 0; acc = true; }
+    const ua = this.ab(user), ta = this.ab(target);
+    if (ua === 'no-guard' || ta === 'no-guard') acc = true;
     if (acc === true) return true;
-    let stage = vU.stg.acc - (mv.ignoreEvasion || vT.foresight ? Math.min(0, vT.stg.eva) : vT.stg.eva);
-    acc = acc * accBoostMul(stage);
+    // 能力等級：純樸無視對方的等級，銳利目光無視閃避提升
+    const accStage = ta === 'unaware' ? 0 : vU.stg.acc;
+    let evaStage = ua === 'unaware' ? 0 : vT.stg.eva;
+    if (mv.ignoreEvasion || vT.foresight || ua === 'keen-eye' || ua === 'minds-eye') evaStage = Math.min(0, evaStage);
+    acc = acc * accBoostMul(accStage - evaStage);
+    if (ua === 'compound-eyes') acc *= 1.3;
+    if (ua === 'victory-star') acc *= 1.1;
+    if (ua === 'hustle' && mv.cat === 'Physical') acc *= .8;
+    if ((ta === 'sand-veil' && w === 'sandstorm') || (ta === 'snow-cloak' && (w === 'snowscape' || w === 'hail'))) acc *= .8;
+    if (this.itm(target) === 'bright-powder') acc *= .9;
+    if (ta === 'tangled-feet' && vT.conf > 0) acc *= .5;
+    if (ta === 'wonder-skin' && mv.cat === 'Status') acc = Math.min(acc, 50);
+    if (this.itm(user) === 'wide-lens') acc *= 1.1;
+    if (this.itm(user) === 'zoom-lens' && vT.movedThisTurn) acc *= 1.2;
     if (this.field.gravity) acc = acc * 5 / 3;
     return Math.random() * 100 < acc;
   },
@@ -483,11 +636,11 @@ Object.assign(Battle.prototype, {
     let bp = mv.bp;
     switch (mv.id) {
       case 'grassknot': case 'lowkick': {
-        const w = weightOf(target);
+        const w = this.wt(target);
         bp = w >= 200 ? 120 : w >= 100 ? 100 : w >= 50 ? 80 : w >= 25 ? 60 : w >= 10 ? 40 : 20; break;
       }
       case 'heavyslam': case 'heatcrash': {
-        const r = weightOf(user) / weightOf(target);
+        const r = this.wt(user) / this.wt(target);
         bp = r >= 5 ? 120 : r >= 4 ? 100 : r >= 3 ? 80 : r >= 2 ? 60 : 40; break;
       }
       case 'gyroball': bp = Math.min(150, Math.floor(25 * this.speedOf(target, vT) / Math.max(1, this.speedOf(user, vU))) + 1); break;
@@ -509,7 +662,7 @@ Object.assign(Battle.prototype, {
       case 'brine': if (target.hp * 2 <= st[0]) bp *= 2; break;
       case 'facade': if (['brn', 'par', 'psn', 'tox'].includes(user.st)) bp *= 2; break;
       case 'acrobatics': bp *= 2; break; // 尚無持有道具系統，視為沒有道具
-      case 'knockoff': break;
+      case 'knockoff': if (this.itm(target)) bp = Math.floor(bp * 1.5); break;
       case 'assurance': if (vT.damagedThisTurn) bp *= 2; break;
       case 'avalanche': case 'revenge': if (vU.hitBy.length) bp *= 2; break;
       case 'payback': if (vT.movedThisTurn) bp *= 2; break;
@@ -549,6 +702,10 @@ Object.assign(Battle.prototype, {
     if (mv.id === 'terrainpulse') return { electricterrain: 'electric', grassyterrain: 'grass', mistyterrain: 'fairy', psychicterrain: 'psychic' }[this.field.terrain] || 'normal';
     if (mv.id === 'revelationdance') return this.typesOf(user)[0];
     if (mv.id === 'ragingbull' && user.sp === 128) return 'fighting';
+    const a = this.ab(user);
+    if (a === 'normalize') return 'normal';
+    const ate = { aerilate: 'flying', pixilate: 'fairy', refrigerate: 'ice', galvanize: 'electric' }[a];
+    if (ate && mv.type === 'normal') return ate;
     return mv.type;
   },
 
@@ -558,8 +715,11 @@ Object.assign(Battle.prototype, {
     const tname = this.label(target);
     const type = this.moveType(user, mv);
     const tmv = { ...mv, type };
-    const eff = this.effectiveness(tmv, target);
+    const eff = this.effectiveness(tmv, target, user);
     if (eff === 0 && mv.damage === undefined && !mv.ohko) { await this.msg(`對 ${tname} 好像沒有效果……`); return false; }
+    if (mv.ohko && this.ab(target) === 'sturdy') { await this.abilityMsg(target, `${tname} 不會受到一擊必殺的影響！`); return false; }
+    const ua = this.ab(user), ui = this.itm(user);
+    const contact = mv.flags.contact && ui !== 'punching-glove' && ua !== 'long-reach' && ui !== 'protective-pads';
 
     // 破壁（劈瓦、精神之牙、怒牛）
     if (['brickbreak', 'psychicfangs', 'ragingbull'].includes(mv.id)) {
@@ -571,7 +731,9 @@ Object.assign(Battle.prototype, {
     let hits = 1;
     if (Array.isArray(mv.multihit)) {
       const [a, b] = mv.multihit;
-      if (a === 2 && b === 5) { const r = Math.random(); hits = r < .35 ? 2 : r < .7 ? 3 : r < .85 ? 4 : 5; }
+      if (ua === 'skill-link') hits = b;
+      else if (ui === 'loaded-dice') hits = a === 2 && b === 5 ? U.ri(4, 5) : b;
+      else if (a === 2 && b === 5) { const r = Math.random(); hits = r < .35 ? 2 : r < .7 ? 3 : r < .85 ? 4 : 5; }
       else hits = U.ri(a, b);
     } else if (mv.multihit) hits = mv.multihit;
 
@@ -589,8 +751,8 @@ Object.assign(Battle.prototype, {
         if (bp <= 0) { if (mv.id === 'present') { await this.healMon(target, Math.floor(Mon.maxHp(target) / 4)); await this.msg(`${tname} 的體力回復了！`); return true; } await this.msg('但是失敗了！'); return false; }
         ({ dmg, crit } = this.calcDamage(user, target, vU, vT, tmv, eff, bp));
       }
-      // 替身
-      if (vT.sub && !mv.flags.bypasssub && !mv.flags.sound) {
+      // 替身（穿透可以無視）
+      if (vT.sub && !mv.flags.bypasssub && !mv.flags.sound && ua !== 'infiltrator') {
         const d = Math.min(vT.sub, dmg);
         vT.sub -= d;
         subHit = true;
@@ -601,18 +763,31 @@ Object.assign(Battle.prototype, {
       }
       // 點到為止、手下留情：至少留下 1 HP
       if ((mv.id === 'falseswipe' || mv.id === 'holdback') && dmg >= target.hp) dmg = target.hp - 1;
-      // 挺住
-      if (vT.endure && dmg >= target.hp) { dmg = target.hp - 1; vT.endureUsed = true; }
+      // 挺住、結實、氣勢披帶、氣勢頭帶
+      const full = target.hp === Mon.maxHp(target);
+      let survived = null;
+      if (dmg >= target.hp) {
+        if (vT.endure) survived = 'endure';
+        else if (full && this.ab(target) === 'sturdy') survived = 'sturdy';
+        else if (full && this.itm(target) === 'focus-sash') survived = 'sash';
+        else if (this.itm(target) === 'focus-band' && Math.random() < .1) survived = 'band';
+        if (survived) dmg = target.hp - 1;
+      }
       dmg = Math.min(dmg, target.hp);
       if (crit) anyCrit = true;
       total += dmg; n++;
+      const hpBefore = target.hp;
       await this.hurt(target, dmg, fixed !== null ? 1 : eff);
       if (crit) await this.msg('擊中了要害！');
       vT.hitBy.push({ by: this.sideKey(user), dmg, cat: mv.cat });
       vT.damagedThisTurn = true;
       vT.timesHit++;
-      if (vT.endureUsed) { vT.endureUsed = false; await this.msg(`${tname} 挺住了攻擊！`); }
-      if (vT.recharge === false && target.hp <= 0) break;
+      if (survived === 'endure') await this.msg(`${tname} 挺住了攻擊！`);
+      if (survived === 'sturdy') await this.abilityMsg(target, `${tname} 挺住了攻擊！`);
+      if (survived === 'sash' || survived === 'band') await this.consume(target, `${tname} 靠著{i}撐了下來！`);
+      if (survived === 'band') target.item = 'focus-band';
+      await this.afterHit(user, target, tmv, dmg, eff, crit, contact, hpBefore);
+      if (user.hp <= 0) break;
     }
     if (n === 0) return false;
     if (fixedType(mv) === null && !subHit) {
@@ -625,30 +800,58 @@ Object.assign(Battle.prototype, {
     vU.furyCutter = mv.id === 'furycutter' ? vU.furyCutter + 1 : 0;
     vU.rollout = (mv.id === 'rollout' || mv.id === 'iceball') ? vU.rollout + 1 : 0;
 
-    // 吸取／反作用力
+    // 吸取／反作用力（大根莖增加吸取量；堅硬腦袋、魔法防守不受反作用力）
     if (mv.drain && user.hp > 0 && total > 0) {
-      const h = Math.max(1, Math.floor(total * mv.drain[0] / mv.drain[1]));
-      await this.healMon(user, h);
-      await this.msg(`從 ${tname} 吸取了體力！`);
+      let h = Math.max(1, Math.floor(total * mv.drain[0] / mv.drain[1]));
+      if (ui === 'big-root') h = Math.floor(h * 1.3);
+      if (this.ab(target) === 'liquid-ooze') { await this.hurt(user, Math.min(user.hp, h)); await this.abilityMsg(target, `${this.label(user)} 吸到了污泥漿！`); }
+      else { await this.healMon(user, h); await this.msg(`從 ${tname} 吸取了體力！`); }
     }
-    if (user.hp > 0 && total > 0) {
+    // 詛咒之軀：30% 封住打中自己的招式
+    if (this.ab(target) === 'cursed-body' && target.hp >= 0 && !vU.disable && Math.random() < .3 && act.slot) {
+      vU.disable = 4; vU.disableMove = act.slot.id;
+      await this.abilityMsg(target, `${this.label(user)} 的 ${mv.n} 被封住了！`);
+    }
+    if (user.hp > 0 && total > 0 && ua !== 'magic-guard') {
       let rec = 0;
-      if (mv.recoil) rec = Math.max(1, Math.round(total * mv.recoil[0] / mv.recoil[1]));
+      if (mv.recoil && ua !== 'rock-head') rec = Math.max(1, Math.round(total * mv.recoil[0] / mv.recoil[1]));
       if (mv.struggleRecoil) rec = Math.max(1, Math.round(Mon.maxHp(user) / 4));
       if (mv.mindBlownRecoil || mv.chloroblastRecoil) rec = Math.ceil(Mon.maxHp(user) / 2);
       if (rec) { await this.hurt(user, Math.min(rec, user.hp)); await this.msg(`${this.label(user)} 受到了反作用力的傷害！`); }
     }
 
-    // 追加效果（替身擋下對目標的追加效果）
+    // 追加效果（強行會消除；天恩機率加倍；替身、鱗粉、密探斗篷擋下對目標的追加效果）
     const secs = mv.secondaries || (mv.secondary ? [mv.secondary] : []);
-    for (const s of secs) {
-      if (Math.random() * 100 >= (s.chance ?? 100)) continue;
-      if (s.self) { if (user.hp > 0 && s.self.boosts) await this.boost(user, s.self.boosts, user); continue; }
-      if (target.hp <= 0 || subHit) continue;
-      if (s.status) await this.setStatus(target, s.status, user, true);
-      if (s.volatileStatus) await this.addVolatile(target, s.volatileStatus, user, mv, true);
-      if (s.boosts) await this.boost(target, s.boosts, user, true);
+    const sheer = ua === 'sheer-force' && secs.length > 0;
+    const shielded = subHit || this.ab(target) === 'shield-dust' || this.itm(target) === 'covert-cloak';
+    if (!sheer) {
+      for (const s of secs) {
+        if (Math.random() * 100 >= (s.chance ?? 100) * (ua === 'serene-grace' ? 2 : 1)) continue;
+        if (s.self) { if (user.hp > 0 && s.self.boosts) await this.boost(user, s.self.boosts, user); continue; }
+        if (target.hp <= 0 || shielded) continue;
+        if (s.status) await this.setStatus(target, s.status, user, true);
+        if (s.volatileStatus) await this.addVolatile(target, s.volatileStatus, user, mv, true);
+        if (s.boosts) await this.boost(target, s.boosts, user, true);
+      }
+      // 王者之證、銳利之牙：10% 畏縮
+      if ((ui === 'kings-rock' || ui === 'razor-fang') && target.hp > 0 && !shielded && !secs.some(s => s.volatileStatus === 'flinch') && Math.random() < .1) vT.flinch = true;
     }
+    // 生命寶珠的反作用力、貝殼之鈴、打倒對手時的特性
+    if (user.hp > 0 && total > 0) {
+      if (ui === 'life-orb' && ua !== 'magic-guard' && !sheer) { await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 10))); await this.msg(`${this.label(user)} 的體力被削減了！`); }
+      if (ui === 'shell-bell' && user.hp > 0 && user.hp < Mon.maxHp(user)) { await this.healMon(user, Math.max(1, Math.floor(total / 8))); await this.msg(`${this.label(user)} 用貝殼之鈴回復了少許體力！`); }
+      if (ui === 'throat-spray' && mv.flags.sound && user.hp > 0) { await this.consume(user, `${this.label(user)} 使用了{i}！`); await this.boost(user, { spa: 1 }, user); }
+    }
+    if (target.hp <= 0 && user.hp > 0) {
+      if (ua === 'moxie' || ua === 'chilling-neigh') await this.boost(user, { atk: 1 }, user);
+      if (ua === 'grim-neigh' || ua === 'soul-heart') await this.boost(user, { spa: 1 }, user);
+      if (ua === 'beast-boost') {
+        const s = Mon.stats(user);
+        const k = ['atk', 'def', 'spa', 'spd', 'spe'][[1, 2, 3, 4, 5].reduce((b, i) => s[i] > s[b] ? i : b, 1) - 1];
+        await this.boost(user, { [k]: 1 }, user);
+      }
+    }
+    if (user.hp > 0) await this.checkBerry(user);
     // 對目標的揮發狀態（束縛類）
     if (mv.volatileStatus && target.hp > 0 && !subHit) await this.addVolatile(target, mv.volatileStatus, user, mv);
     // 自身效果
@@ -668,7 +871,19 @@ Object.assign(Battle.prototype, {
     if (mv.id === 'clearsmog' && target.hp > 0) { Object.keys(vT.stg).forEach(k => { vT.stg[k] = 0; }); await this.msg(`${tname} 的能力變化恢復原狀了！`); }
     if (mv.id === 'burnup') vU.types = this.typesOf(user).filter(t => t !== 'fire');
     if (mv.id === 'doubleshock') vU.types = this.typesOf(user).filter(t => t !== 'electric');
-    if (mv.id === 'incinerate' || mv.id === 'thief' || mv.id === 'covet' || mv.id === 'pluck' || mv.id === 'bugbite' || mv.id === 'knockoff') { /* 尚無持有道具 */ }
+    // 與道具相關的招式
+    const tItem = this.itm(target);
+    const sticky = this.ab(target) === 'sticky-hold';
+    if (mv.id === 'knockoff' && tItem && target.hp > 0 && !subHit && !sticky) { await this.consume(target, `${tname} 的{i}被拍落了！`); }
+    if (mv.id === 'incinerate' && tItem && tItem.endsWith('-berry') && !subHit) { await this.consume(target, `${tname} 的{i}被燒掉了！`); }
+    if ((mv.id === 'pluck' || mv.id === 'bugbite') && tItem && tItem.endsWith('-berry') && !subHit) {
+      const b = await this.consume(target, `${this.label(user)} 吃掉了 ${tname} 的{i}！`);
+      if (b === 'sitrus-berry') await this.healMon(user, Math.floor(Mon.maxHp(user) / 4));
+      if (b === 'oran-berry') await this.healMon(user, 10);
+    }
+    if ((mv.id === 'thief' || mv.id === 'covet') && tItem && !user.item && this.wildMon && !subHit && !sticky) {
+      user.item = await this.consume(target, `${this.label(user)} 搶走了 ${tname} 的{i}！`);
+    }
     // 自爆類
     if (mv.selfdestruct === 'always' || mv.selfdestruct === 'ifHit') await this.selfFaint(user);
     if (mv.id === 'finalgambit') await this.selfFaint(user);
@@ -677,6 +892,63 @@ Object.assign(Battle.prototype, {
     // 交換（急速折返等）
     if (mv.selfSwitch && user.hp > 0) await this.selfSwitchOut(user, mv);
     return true;
+  },
+
+  // 每次命中後：受擊方的特性與道具、接觸效果、樹果
+  async afterHit(user, target, mv, dmg, eff, crit, contact, hpBefore) {
+    const ta = this.ab(target), ua = this.ab(user), ti = this.itm(target);
+    const tname = this.label(target), uname = this.label(user);
+    const max = Mon.maxHp(target);
+    if (dmg > 0 && ti === 'air-balloon') await this.consume(target, `${tname} 的{i}破掉了！`);
+    if (target.hp > 0 && dmg > 0) {
+      if (eff > 1 && ti === 'weakness-policy') { await this.consume(target, `${tname} 的{i}發動了！`); await this.boost(target, { atk: 2, spa: 2 }, target); }
+      if (ta === 'justified' && mv.type === 'dark') await this.boost(target, { atk: 1 }, target);
+      if (ta === 'rattled' && ['dark', 'ghost', 'bug'].includes(mv.type)) await this.boost(target, { spe: 1 }, target);
+      if (ta === 'weak-armor' && mv.cat === 'Physical') await this.boost(target, { def: -1, spe: 2 }, target);
+      if (ta === 'stamina') await this.boost(target, { def: 1 }, target);
+      if (ta === 'thermal-exchange' && mv.type === 'fire') await this.boost(target, { atk: 1 }, target);
+      if (ta === 'anger-point' && crit && this.volOf(target).stg.atk < 6) { this.volOf(target).stg.atk = 6; await this.abilityMsg(target, `${tname} 的攻擊提升到了最大！`); }
+      const crossed = hpBefore * 2 > max && target.hp * 2 <= max;
+      if (crossed && ta === 'berserk') await this.boost(target, { spa: 1 }, target);
+      if (crossed && ta === 'anger-shell') await this.boost(target, { atk: 1, spa: 1, spe: 1, def: -1, spd: -1 }, target);
+      await this.checkBerry(target);
+    }
+    if (target.hp <= 0 && contact && ta === 'aftermath' && user.hp > 0 && this.ab(user) !== 'magic-guard') {
+      await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 4))); await this.abilityMsg(target, `${uname} 受到了傷害！`);
+    }
+    if (!contact || user.hp <= 0) return;
+    const guard = this.ab(user) === 'magic-guard';
+    if ((ta === 'rough-skin' || ta === 'iron-barbs') && !guard) { await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 8))); await this.abilityMsg(target, `${uname} 受到了傷害！`); }
+    if (ti === 'rocky-helmet' && !guard && user.hp > 0) { await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 6))); await this.msg(`${uname} 受到了凸凸頭盔的傷害！`); }
+    if (user.hp <= 0) return;
+    if (Math.random() < .3) {
+      if (ta === 'static') await this.setStatus(user, 'par', target, true);
+      if (ta === 'flame-body') await this.setStatus(user, 'brn', target, true);
+      if (ta === 'poison-point') await this.setStatus(user, 'psn', target, true);
+      if (ta === 'cute-charm') await this.addVolatile(user, 'attract', target, mv, true);
+      if (ta === 'effect-spore' && !this.typesOf(user).includes('grass') && this.ab(user) !== 'overcoat' && this.itm(user) !== 'safety-goggles') {
+        await this.setStatus(user, U.pick(['slp', 'par', 'psn']), target, true);
+      }
+    }
+    if (ta === 'gooey' || ta === 'tangling-hair') await this.boost(user, { spe: -1 }, target, true);
+    if (ua === 'poison-touch' && target.hp > 0 && Math.random() < .3) await this.setStatus(target, 'psn', user, true);
+  },
+  // 樹果：HP 低於一半時回復
+  async checkBerry(m) {
+    if (!m || m.hp <= 0) return;
+    const it = this.itm(m), max = Mon.maxHp(m);
+    if (it === 'sitrus-berry' && m.hp * 2 <= max) { await this.consume(m, `${this.label(m)} 吃掉了{i}，回復了體力！`); await this.healMon(m, Math.floor(max / 4)); }
+    else if (it === 'oran-berry' && m.hp * 2 <= max) { await this.consume(m, `${this.label(m)} 吃掉了{i}，回復了體力！`); await this.healMon(m, 10); }
+  },
+  // 異常狀態樹果、木子果
+  async checkStatusBerry(m) {
+    const it = this.itm(m);
+    if (!it || !m.st) return;
+    if (it === 'lum-berry' || (STATUS_BERRY[it] || []).includes(m.st)) {
+      await this.consume(m, `${this.label(m)} 吃掉了{i}！`);
+      m.st = null; this.draw();
+      await this.msg(`${this.label(m)} 的異常狀態治好了！`);
+    }
   },
 
   // 固定傷害；null 表示一般計算，false 表示失敗
@@ -702,42 +974,117 @@ Object.assign(Battle.prototype, {
 
   // Showdown getDamage（單打）
   calcDamage(user, target, vU, vT, mv, eff, bp) {
-    const su = Mon.stats(user), st = Mon.stats(target);
+    const st = Mon.stats(target);
     const phys = mv.cat === 'Physical';
-    let critStage = (mv.critRatio ? mv.critRatio - 1 : 0) + (vU.focus || 0);
+    const ua = this.ab(user), ta = this.ab(target), ui = this.itm(user), ti = this.itm(target);
+    const w = this.wx(), t = this.field.terrain;
+    const contact = mv.flags.contact && ui !== 'punching-glove' && ua !== 'long-reach';
+    // 會心
+    let critStage = (mv.critRatio ? mv.critRatio - 1 : 0) + (vU.focus || 0) + (ua === 'super-luck' ? 1 : 0) + (ui === 'scope-lens' || ui === 'razor-claw' ? 1 : 0);
     let crit = !!mv.willCrit || vU.laserFocus > 0 || Math.random() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
+    if (ta === 'battle-armor' || ta === 'shell-armor') crit = false;
     if (vU.laserFocus > 0) vU.laserFocus = 0;
-    // 攻擊方能力
-    let atkMon = mv.overrideOffensivePokemon === 'target' ? target : user;
-    let atkV = atkMon === user ? vU : vT;
-    let atkStat = mv.overrideOffensiveStat === 'def' ? 'def' : phys ? 'atk' : 'spa';
-    let defStat = mv.overrideDefensiveStat === 'def' ? 'def' : phys ? 'def' : 'spd';
+    // 威力修正（Showdown onBasePower）
+    let bpMod = 1;
+    if (ua === 'technician' && bp <= 60) bpMod *= 1.5;
+    if (ua === 'iron-fist' && mv.flags.punch) bpMod *= 1.2;
+    if (ua === 'strong-jaw' && mv.flags.bite) bpMod *= 1.5;
+    if (ua === 'mega-launcher' && mv.flags.pulse) bpMod *= 1.5;
+    if (ua === 'tough-claws' && contact) bpMod *= 1.3;
+    if (ua === 'sharpness' && mv.flags.slicing) bpMod *= 1.5;
+    if (ua === 'reckless' && (mv.recoil || mv.hasCrashDamage)) bpMod *= 1.2;
+    if (ua === 'sheer-force' && (mv.secondary || mv.secondaries)) bpMod *= 1.3;
+    if (ua === 'sand-force' && w === 'sandstorm' && ['rock', 'ground', 'steel'].includes(mv.type)) bpMod *= 1.3;
+    if (ua === 'analytic' && vT.movedThisTurn) bpMod *= 1.3;
+    if (ua === 'punk-rock' && mv.flags.sound) bpMod *= 1.3;
+    if (ua === 'steelworker' && mv.type === 'steel') bpMod *= 1.5;
+    if (ua === 'transistor' && mv.type === 'electric') bpMod *= 1.3;
+    if (ua === 'dragons-maw' && mv.type === 'dragon') bpMod *= 1.5;
+    if (ua === 'rocky-payload' && mv.type === 'rock') bpMod *= 1.5;
+    if (['aerilate', 'pixilate', 'refrigerate', 'galvanize'].includes(ua) && MOVES[mv.num] && MOVES[mv.num].t === 'normal') bpMod *= 1.2;
+    if (ua === 'normalize') bpMod *= 1.2;
+    if (ua === 'toxic-boost' && phys && (user.st === 'psn' || user.st === 'tox')) bpMod *= 1.5;
+    if (ua === 'flare-boost' && !phys && user.st === 'brn') bpMod *= 1.5;
+    if (ua === 'stakeout' && vT.turnsOut === 0) bpMod *= 2;
+    if (ua === 'supreme-overlord') bpMod *= 1 + .1 * Math.min(5, this.sides[this.sideKey(user)].fainted);
+    if (TYPE_ITEM[ui] === mv.type) bpMod *= 1.2;
+    if (ui === 'muscle-band' && phys) bpMod *= 1.1;
+    if (ui === 'wise-glasses' && !phys) bpMod *= 1.1;
+    if (ui === 'punching-glove' && mv.flags.punch) bpMod *= 1.1;
+    if (vU.flashFire && mv.type === 'fire') bpMod *= 1.5;
+    if (ta === 'dry-skin' && mv.type === 'fire') bpMod *= 1.25;
+    // 場地
+    if (this.grounded(user) && ((t === 'electricterrain' && mv.type === 'electric') || (t === 'grassyterrain' && mv.type === 'grass') || (t === 'psychicterrain' && mv.type === 'psychic'))) bpMod *= 1.3;
+    if (t === 'mistyterrain' && mv.type === 'dragon' && this.grounded(target)) bpMod *= .5;
+    if (t === 'grassyterrain' && ['earthquake', 'bulldoze', 'magnitude'].includes(mv.id)) bpMod *= .5;
+    if (vU.charge && mv.type === 'electric') { bpMod *= 2; vU.charge = false; }
+    bp = Math.max(1, Math.floor(bp * bpMod));
+
+    // 攻擊與防禦能力（純樸無視對方的能力等級）
+    const atkMon = mv.overrideOffensivePokemon === 'target' ? target : user;
+    const atkV = atkMon === user ? vU : vT;
+    const atkStat = mv.overrideOffensiveStat === 'def' ? 'def' : phys ? 'atk' : 'spa';
+    const defStat = mv.overrideDefensiveStat === 'def' ? 'def' : phys ? 'def' : 'spd';
     const IDX = { atk: 1, def: 2, spa: 3, spd: 4 };
-    let aS = atkV.stg[atkStat], dS = mv.ignoreDefensive ? 0 : vT.stg[defStat];
+    let aS = ta === 'unaware' ? 0 : atkV.stg[atkStat];
+    let dS = mv.ignoreDefensive || ua === 'unaware' ? 0 : vT.stg[defStat];
     if (crit) { aS = Math.max(0, aS); dS = Math.min(0, dS); }
     let A = Math.floor(Mon.stats(atkMon)[IDX[atkStat]] * boostMul(aS));
     let D = Math.floor(st[IDX[defStat]] * boostMul(dS));
-    if (this.field.weather === 'sandstorm' && this.typesOf(target).includes('rock') && defStat === 'spd') D = Math.floor(D * 1.5);
-    if ((this.field.weather === 'snowscape' || this.field.weather === 'hail') && this.typesOf(target).includes('ice') && defStat === 'def') D = Math.floor(D * 1.5);
-    // 場地威力修正
-    const t = this.field.terrain, grounded = this.grounded(user);
-    if (grounded && ((t === 'electricterrain' && mv.type === 'electric') || (t === 'grassyterrain' && mv.type === 'grass') || (t === 'psychicterrain' && mv.type === 'psychic'))) bp = Math.floor(bp * 1.3);
-    if (t === 'mistyterrain' && mv.type === 'dragon' && this.grounded(target)) bp = Math.floor(bp / 2);
-    if (t === 'grassyterrain' && ['earthquake', 'bulldoze', 'magnitude'].includes(mv.id)) bp = Math.floor(bp / 2);
-    if (vU.charge && mv.type === 'electric') { bp *= 2; vU.charge = false; }
+    const lowHp = user.hp * 3 <= Mon.maxHp(user);
+    let aMod = 1;
+    if (phys && (ua === 'huge-power' || ua === 'pure-power')) aMod *= 2;
+    if (phys && (ua === 'hustle' || ua === 'gorilla-tactics')) aMod *= 1.5;
+    if (phys && ua === 'guts' && user.st) aMod *= 1.5;
+    if (lowHp && ({ blaze: 'fire', torrent: 'water', overgrow: 'grass', swarm: 'bug' }[ua] === mv.type)) aMod *= 1.5;
+    if (!phys && ua === 'solar-power' && w === 'sunnyday') aMod *= 1.5;
+    if (ua === 'defeatist' && user.hp * 2 <= Mon.maxHp(user)) aMod *= .5;
+    if (ua === 'water-bubble' && mv.type === 'water') aMod *= 2;
+    if (!phys && ua === 'hadron-engine' && t === 'electricterrain') aMod *= 5461 / 4096;
+    if (phys && ua === 'orichalcum-pulse' && w === 'sunnyday') aMod *= 5461 / 4096;
+    if (phys && ui === 'choice-band') aMod *= 1.5;
+    if (!phys && ui === 'choice-specs') aMod *= 1.5;
+    if (ta === 'thick-fat' && (mv.type === 'fire' || mv.type === 'ice')) aMod *= .5;
+    if ((ta === 'water-bubble' || ta === 'heatproof') && mv.type === 'fire') aMod *= .5;
+    if (ta === 'purifying-salt' && mv.type === 'ghost') aMod *= .5;
+    if (this.paradoxStat(atkMon) === atkStat) aMod *= 1.3;
+    // 鬥爭心：同性別威力提高、異性別降低
+    if (ua === 'rivalry' && user.gender && target.gender) aMod *= user.gender === target.gender ? 1.25 : .75;
+    A = Math.floor(A * aMod);
+    let dMod = 1;
+    if (this.paradoxStat(target) === defStat) dMod *= 1.3;
+    if (defStat === 'def' && ta === 'fur-coat') dMod *= 2;
+    if (defStat === 'def' && ta === 'marvel-scale' && target.st) dMod *= 1.5;
+    if (defStat === 'def' && ta === 'grass-pelt' && t === 'grassyterrain') dMod *= 1.5;
+    if (ti === 'eviolite' && (POKEDEX[target.sp].ev || []).length) dMod *= 1.5;
+    if (defStat === 'spd' && ti === 'assault-vest') dMod *= 1.5;
+    if (w === 'sandstorm' && this.typesOf(target).includes('rock') && defStat === 'spd') dMod *= 1.5;
+    if ((w === 'snowscape' || w === 'hail') && this.typesOf(target).includes('ice') && defStat === 'def') dMod *= 1.5;
+    D = Math.floor(D * dMod);
+
     let base = Math.floor(Math.floor(Math.floor(2 * user.lv / 5 + 2) * bp * A / Math.max(1, D)) / 50) + 2;
     // 天氣
-    const w = this.field.weather;
     if (w === 'sunnyday') { if (mv.type === 'fire') base = Math.floor(base * 1.5); if (mv.type === 'water' && mv.id !== 'hydrosteam') base = Math.floor(base / 2); }
     if (w === 'raindance') { if (mv.type === 'water') base = Math.floor(base * 1.5); if (mv.type === 'fire') base = Math.floor(base / 2); }
-    if (crit) base = Math.floor(base * 1.5);
+    if (crit) base = Math.floor(base * (ua === 'sniper' ? 2.25 : 1.5));
     base = Math.floor(base * (100 - U.ri(0, 15)) / 100);
-    if (this.typesOf(user).includes(mv.type)) base = Math.floor(base * 1.5);
+    if (this.typesOf(user).includes(mv.type)) base = Math.floor(base * (ua === 'adaptability' ? 2 : 1.5));
     base = Math.floor(base * eff);
-    if (phys && user.st === 'brn' && mv.id !== 'facade') base = Math.floor(base / 2);
-    // 牆壁（會心一擊無視）
+    if (phys && user.st === 'brn' && mv.id !== 'facade' && ua !== 'guts') base = Math.floor(base / 2);
+    // 最終修正（穿透無視牆壁）
     const sd = this.sides[this.sideKey(target)];
-    if (!crit && !['brickbreak', 'psychicfangs', 'ragingbull'].includes(mv.id) && (sd.auroraveil || (phys ? sd.reflect : sd.lightscreen))) base = Math.floor(base / 2);
+    if (!crit && ua !== 'infiltrator' && !['brickbreak', 'psychicfangs', 'ragingbull'].includes(mv.id) && (sd.auroraveil || (phys ? sd.reflect : sd.lightscreen))) base = Math.floor(base / 2);
+    let fMod = 1;
+    if (ua === 'tinted-lens' && eff < 1) fMod *= 2;
+    if (['filter', 'solid-rock', 'prism-armor'].includes(ta) && eff > 1) fMod *= .75;
+    if ((ta === 'multiscale' || ta === 'shadow-shield') && target.hp === Mon.maxHp(target)) fMod *= .5;
+    if (ta === 'fluffy') { if (contact) fMod *= .5; if (mv.type === 'fire') fMod *= 2; }
+    if (ta === 'ice-scales' && !phys) fMod *= .5;
+    if (ta === 'punk-rock' && mv.flags.sound) fMod *= .5;
+    if (ui === 'expert-belt' && eff > 1) fMod *= 1.2;
+    if (ui === 'life-orb') fMod *= 1.3;
+    if (ui === 'metronome') fMod *= 1 + Math.min(1, .2 * (vU.metronomeN || 0));
+    base = Math.floor(base * fMod);
     if (vT.minimize && mv.flags.minimize) base *= 2;
     if ((mv.id === 'collisioncourse' || mv.id === 'electrodrift') && eff > 1) base = Math.floor(base * 5461 / 4096);
     if (vT.semi === 'dig' && ['earthquake', 'magnitude'].includes(mv.id)) base *= 2;
@@ -867,7 +1214,9 @@ Object.assign(Battle.prototype, {
     if (mv.weather) {
       const w = mv.weather === 'RainDance' ? 'raindance' : mv.weather === 'Sandstorm' ? 'sandstorm' : mv.weather;
       if (this.field.weather === w) return fail();
-      this.field.weather = w; this.field.weatherT = 5;
+      // 天氣岩石讓天氣持續 8 回合
+      const rocks = { raindance: 'damp-rock', sunnyday: 'heat-rock', sandstorm: 'smooth-rock', snowscape: 'icy-rock', hail: 'icy-rock' };
+      this.field.weather = w; this.field.weatherT = this.itm(user) === rocks[w] ? 8 : 5;
       await this.msg({ raindance: '開始下雨了！', sunnyday: '日照變強了！', sandstorm: '開始颳沙暴了！', hail: '開始下冰雹了！', snowscape: '開始下雪了！' }[w]);
       did = true;
     }
@@ -901,7 +1250,7 @@ Object.assign(Battle.prototype, {
       else if (zh) {
         if (side[sc]) return fail();
         if (sc === 'auroraveil' && !['hail', 'snowscape'].includes(this.field.weather)) return fail();
-        side[sc] = sc === 'tailwind' ? 4 : 5;
+        side[sc] = sc === 'tailwind' ? 4 : ['reflect', 'lightscreen', 'auroraveil'].includes(sc) && this.itm(user) === 'light-clay' ? 8 : 5;
         await this.msg(`${name} 張起了${zh}！`);
       } else await this.msg('但是什麼事都沒有發生。');
       did = true;
@@ -962,12 +1311,29 @@ Object.assign(Battle.prototype, {
     if ((status === 'psn' || status === 'tox') && (types.includes('poison') || types.includes('steel'))) return fail();
     if (status === 'frz' && (types.includes('ice') || this.field.weather === 'sunnyday')) return fail();
     if (status === 'par' && mv && mv.id === 'thunderwave' && types.includes('ground')) return fail();
+    // 特性造成的異常狀態免疫
+    const a = this.ab(target);
+    const immune = {
+      immunity: ['psn', 'tox'], limber: ['par'], insomnia: ['slp'], 'vital-spirit': ['slp'], 'sweet-veil': ['slp'], 'water-veil': ['brn'],
+      'water-bubble': ['brn'], 'thermal-exchange': ['brn'], 'magma-armor': ['frz'], comatose: ['par', 'slp', 'frz', 'brn', 'psn', 'tox'],
+      'purifying-salt': ['par', 'slp', 'frz', 'brn', 'psn', 'tox'],
+    }[a];
+    if ((immune && immune.includes(status)) || (a === 'leaf-guard' && this.wx() === 'sunnyday')) {
+      if (!secondary) await this.abilityMsg(target, `${name} 不會陷入異常狀態！`);
+      return false;
+    }
     target.st = status;
     if (status === 'slp') target.slpT = U.ri(2, 4);
     if (status === 'tox') this.volOf(target).toxN = 0;
     this.draw();
     await this.statusFx(target, status);
     await this.msg(`${name} ${{ par: '麻痺了，可能會無法行動！', slp: '睡著了！', frz: '被凍住了！', brn: '被灼傷了！', psn: '中毒了！', tox: '中了劇毒！' }[status]}`);
+    // 同步：把灼傷、麻痺、中毒傳回給對手
+    if (a === 'synchronize' && source && source !== target && ['brn', 'par', 'psn', 'tox'].includes(status)) {
+      await this.abilityMsg(target, '把異常狀態傳給了對手！');
+      await this.setStatus(source, status === 'tox' ? 'tox' : status, target, true);
+    }
+    await this.checkStatusBerry(target);
     return true;
   },
 
@@ -982,15 +1348,27 @@ Object.assign(Battle.prototype, {
     const user = source, vU = this.volOf(source);
     const fail = async () => { if (!secondary) await this.msg('但是失敗了！'); return false; };
     switch (vs) {
-      case 'flinch': v.flinch = true; return true;
+      case 'flinch': if (this.ab(target) !== 'inner-focus') v.flinch = true; return true;
       case 'confusion':
         if (v.conf > 0) return fail();
         if (this.field.terrain === 'mistyterrain' && this.grounded(target)) return fail();
-        v.conf = U.ri(2, 5); await this.msg(`${name} 混亂了！`); return true;
-      case 'attract': if (v.love) return fail(); v.love = true; await this.msg(`${name} 著迷了！`); return true;
+        if (this.ab(target) === 'own-tempo') { if (!secondary) await this.abilityMsg(target, `${name} 不會混亂！`); return false; }
+        v.conf = U.ri(2, 5); await this.msg(`${name} 混亂了！`);
+        if (['persim-berry', 'lum-berry'].includes(this.itm(target))) { await this.consume(target, `${name} 吃掉了{i}！`); v.conf = 0; await this.msg(`${name} 的混亂解除了！`); }
+        return true;
+      case 'attract':
+        if (v.love) return fail();
+        if (this.ab(target) === 'oblivious') { if (!secondary) await this.abilityMsg(target, `${name} 不會著迷！`); return false; }
+        v.love = true; await this.msg(`${name} 著迷了！`);
+        if (this.itm(target) === 'mental-herb') { await this.consume(target, `${name} 用{i}恢復了正常！`); v.love = false; }
+        return true;
       case 'leechseed': if (v.seed || this.typesOf(target).includes('grass')) { if (!secondary) await this.msg(`對 ${name} 好像沒有效果……`); return false; }
         v.seed = true; await this.msg(`在 ${name} 身上種下了種子！`); return true;
-      case 'partiallytrapped': if (v.trap) return true; v.trap = U.ri(4, 5); await this.msg(`${name} 被困住了！`); return true;
+      case 'partiallytrapped':
+        if (v.trap) return true;
+        v.trap = this.itm(source) === 'grip-claw' ? 8 : U.ri(5, 6);
+        v.trapDiv = this.itm(source) === 'binding-band' ? 6 : 8;
+        await this.msg(`${name} 被困住了！`); return true;
       case 'yawn': if (target.st || v.yawn) return fail(); v.yawn = 2; await this.msg(`${name} 變得昏昏欲睡了！`); return true;
       case 'substitute': {
         const max = Mon.maxHp(target);
@@ -1008,7 +1386,12 @@ Object.assign(Battle.prototype, {
       }
       case 'focusenergy': if (v.focus) return fail(); v.focus = 2; await this.msg(`${name} 變得充滿幹勁！`); return true;
       case 'laserfocus': v.laserFocus = 2; await this.msg(`${name} 磨練了專注力！`); return true;
-      case 'taunt': if (v.taunt) return fail(); v.taunt = 3; await this.msg(`${name} 被挑釁了！`); return true;
+      case 'taunt':
+        if (v.taunt) return fail();
+        if (this.ab(target) === 'oblivious') { await this.abilityMsg(target, `${name} 沒有理會挑釁！`); return false; }
+        v.taunt = 3; await this.msg(`${name} 被挑釁了！`);
+        if (this.itm(target) === 'mental-herb') { await this.consume(target, `${name} 用{i}恢復了正常！`); v.taunt = 0; }
+        return true;
       case 'encore': {
         if (v.encore || !v.lastMove || md(v.lastMove).callsMove) return fail();
         v.encore = 3; v.encoreMove = v.lastMove; await this.msg(`${name} 接受了再來一次！`); return true;
@@ -1048,23 +1431,43 @@ Object.assign(Battle.prototype, {
   async boost(target, boosts, source, secondary = false) {
     if (!target || target.hp <= 0) return false;
     const v = this.volOf(target), name = this.label(target);
-    let any = false;
-    for (const [k, c] of Object.entries(boosts)) {
+    const a = this.ab(target);
+    const byFoe = source && source !== target;
+    let any = false, droppedByFoe = false;
+    for (let [k, c] of Object.entries(boosts)) {
       const key = STAGE_OF[k];
       if (!key || !c) continue;
-      if (c < 0 && target !== source && this.sides[this.sideKey(target)].mist) { if (!secondary) await this.msg(`${name} 受到白霧的保護！`); continue; }
-      if (c < 0 && target !== source && this.volOf(target).sub && !secondary) { await this.msg('但是失敗了！'); continue; }
+      if (a === 'contrary') c = -c;
+      if (a === 'simple') c *= 2;
+      if (c < 0 && byFoe) {
+        if (this.sides[this.sideKey(target)].mist) { if (!secondary) await this.msg(`${name} 受到白霧的保護！`); continue; }
+        if (this.volOf(target).sub && !secondary) { await this.msg('但是失敗了！'); continue; }
+        // 恆淨之軀、白色煙霧、金屬防護、清淨墜飾：不會被對手降低能力
+        if (['clear-body', 'white-smoke', 'full-metal-body'].includes(a)) { if (!secondary) await this.abilityMsg(target, `${name} 的能力不會被降低！`); continue; }
+        if (this.itm(target) === 'clear-amulet') { if (!secondary) await this.msg(`${name} 的清淨墜飾防止了能力降低！`); continue; }
+        if ((a === 'hyper-cutter' && key === 'atk') || (a === 'big-pecks' && key === 'def') || ((a === 'keen-eye' || a === 'minds-eye') && key === 'acc')) {
+          if (!secondary) await this.abilityMsg(target, `${name} 的${BOOST_ZH[k]}不會被降低！`); continue;
+        }
+      }
       const cur = v.stg[key];
       if ((c > 0 && cur >= 6) || (c < 0 && cur <= -6)) {
         if (!secondary) await this.msg(`${name} 的${BOOST_ZH[k]}已經無法再${c > 0 ? '提高' : '降低'}了！`);
         continue;
       }
       v.stg[key] = U.clamp(cur + c, -6, 6);
-      if (c < 0) v.statsLoweredThisTurn = true;
+      if (c < 0) { v.statsLoweredThisTurn = true; if (byFoe) droppedByFoe = true; }
       any = true;
       const amt = Math.abs(c) >= 3 ? '極大幅' : Math.abs(c) === 2 ? '大幅' : '';
       await this.statFx(target, c > 0);
       await this.msg(`${name} 的${BOOST_ZH[k]}${amt}${c > 0 ? '提高' : '降低'}了！`);
+    }
+    // 不服輸、好勝：被對手降低能力時大幅提高攻擊／特攻
+    if (droppedByFoe && a === 'defiant') await this.boost(target, { atk: 2 }, target);
+    if (droppedByFoe && a === 'competitive') await this.boost(target, { spa: 2 }, target);
+    // 白色香草：恢復被降低的能力
+    if (this.itm(target) === 'white-herb' && Object.values(v.stg).some(s => s < 0)) {
+      await this.consume(target, `${name} 用{i}恢復了降低的能力！`);
+      for (const kk of Object.keys(v.stg)) if (v.stg[kk] < 0) v.stg[kk] = 0;
     }
     return any;
   },
@@ -1094,6 +1497,7 @@ Object.assign(Battle.prototype, {
 
   // 吹飛：野生戰鬥直接結束；訓練家戰隨機換上下一隻
   async forceOut(target) {
+    if (this.ab(target) === 'suction-cups' || this.volOf(target).ingrain) { await this.msg(`${this.label(target)} 緊緊吸附在地面上！`); return; }
     if (this.wildMon) { this.fled = true; await this.msg(this.sideKey(target) === 'foe' ? `${this.label(target)} 被吹走了！` : '被吹走了，戰鬥結束了！'); return; }
     const isFoe = target === this.foe;
     const party = isFoe ? this.foeParty : G.party;
@@ -1101,6 +1505,7 @@ Object.assign(Battle.prototype, {
     const opts = party.map((m, i) => i).filter(i => i !== cur && party[i].hp > 0);
     if (!opts.length) { await this.msg('但是失敗了！'); return; }
     const i = U.pick(opts);
+    await this.onSwitchOut(target);
     if (isFoe) { this.foeIdx = i; this.vFoe = newVol(); Game.markSeen(this.foe.sp); await this.sendOut('foe', this.foe); await this.msg(`${Mon.name(this.foe)} 被拖了出來！`); await this.onEntry(this.foe); }
     else { this.myIdx = i; this.vMe = newVol(); this.participants.add(i); await this.sendOut('me', this.me); await this.msg(`${Mon.name(this.me)} 被拖了出來！`); await this.onEntry(this.me); }
   },
@@ -1133,20 +1538,95 @@ Object.assign(Battle.prototype, {
       Mon.heal(m); this.draw(); await this.msg(`治癒之願讓 ${this.label(m)} 恢復了！`);
     }
     const grounded = this.grounded(m);
-    if (side.stealthrock) {
+    // 厚底靴、魔法防守不受場上的陷阱影響
+    const hazardFree = this.itm(m) === 'heavy-duty-boots' || this.ab(m) === 'magic-guard';
+    if (side.stealthrock && !hazardFree) {
       const e = typeEff('rock', this.typesOf(m));
       await this.hurt(m, Math.max(1, Math.floor(Mon.maxHp(m) * e / 8)));
       await this.msg(`尖銳的岩石扎進了 ${this.label(m)} 的身體！`);
     }
-    if (side.spikes && grounded && m.hp > 0) {
+    if (side.spikes && grounded && m.hp > 0 && !hazardFree) {
       await this.hurt(m, Math.floor(Mon.maxHp(m) * [0, 1 / 8, 1 / 6, 1 / 4][side.spikes]));
       await this.msg(`${this.label(m)} 受到了撒菱的傷害！`);
     }
     if (side.toxicspikes && grounded && m.hp > 0) {
       if (this.typesOf(m).includes('poison')) { side.toxicspikes = 0; await this.msg('毒菱被吸收了！'); }
-      else await this.setStatus(m, side.toxicspikes >= 2 ? 'tox' : 'psn', null, true);
+      else if (this.itm(m) !== 'heavy-duty-boots') await this.setStatus(m, side.toxicspikes >= 2 ? 'tox' : 'psn', null, true);
     }
-    if (side.stickyweb && grounded && m.hp > 0) { await this.msg(`${this.label(m)} 被黏黏網纏住了！`); await this.boost(m, { spe: -1 }, null, true); }
+    if (side.stickyweb && grounded && m.hp > 0 && this.itm(m) !== 'heavy-duty-boots') { await this.msg(`${this.label(m)} 被黏黏網纏住了！`); await this.boost(m, { spe: -1 }, null, true); }
+    if (m.hp > 0) await this.abilityStart(m);
+  },
+
+  // 特性的登場效果
+  async abilityStart(m) {
+    const a = this.ab(m), o = this.otherOf(m), name = this.label(m);
+    if (!a) return;
+    const rock = it => this.itm(m) === it ? 8 : 5;
+    const setW = async (w, it, txt) => {
+      if (this.field.weather === w) return;
+      this.field.weather = w; this.field.weatherT = rock(it);
+      await this.abilityMsg(m, txt);
+    };
+    const setT = async (t, txt) => {
+      if (this.field.terrain === t) return;
+      this.field.terrain = t; this.field.terrainT = this.itm(m) === 'terrain-extender' ? 8 : 5;
+      await this.abilityMsg(m, txt);
+    };
+    switch (a) {
+      case 'drizzle': return setW('raindance', 'damp-rock', '開始下雨了！');
+      case 'drought': case 'orichalcum-pulse': return setW('sunnyday', 'heat-rock', '日照變強了！');
+      case 'sand-stream': return setW('sandstorm', 'smooth-rock', '開始颳沙暴了！');
+      case 'snow-warning': return setW('snowscape', 'icy-rock', '開始下雪了！');
+      case 'electric-surge': case 'hadron-engine': return setT('electricterrain', '腳下電流飛竄！');
+      case 'grassy-surge': return setT('grassyterrain', '腳下青草如茵！');
+      case 'misty-surge': return setT('mistyterrain', '腳下霧氣繚繞！');
+      case 'psychic-surge': return setT('psychicterrain', '腳下傳來奇妙的感覺！');
+      case 'intimidate': {
+        if (!o || o.hp <= 0) return;
+        await this.abilityMsg(m, `威嚇了 ${this.label(o)}！`);
+        const oa = this.ab(o);
+        if (['inner-focus', 'own-tempo', 'oblivious', 'scrappy'].includes(oa)) { await this.abilityMsg(o, `${this.label(o)} 沒有被威嚇！`); return; }
+        await this.boost(o, { atk: -1 }, m);
+        if (oa === 'rattled') await this.boost(o, { spe: 1 }, o);
+        return;
+      }
+      case 'download': {
+        if (!o) return;
+        const s = Mon.stats(o);
+        await this.boost(m, s[2] < s[4] ? { atk: 1 } : { spa: 1 }, m);
+        return;
+      }
+      case 'pressure': return this.abilityMsg(m, `${name} 散發著壓迫感！`);
+      case 'mold-breaker': return this.abilityMsg(m, `${name} 打破了常規！`);
+      case 'unnerve': return this.abilityMsg(m, '對手變得緊張，無法吃樹果！');
+      case 'air-lock': case 'cloud-nine': return this.abilityMsg(m, '天氣的影響消失了！');
+      case 'frisk': if (o && this.itm(o)) return this.abilityMsg(m, `察覺到了 ${this.label(o)} 的${Held.name(this.itm(o))}！`); return;
+      case 'anticipation':
+        if (o && o.moves.some(s => { const x = md(s.id); return x.cat !== 'Status' && this.effectiveness({ ...x, type: x.type }, m) > 1 || x.ohko; })) return this.abilityMsg(m, `${name} 打了個寒顫！`);
+        return;
+      case 'forewarn': {
+        if (!o) return;
+        const best = o.moves.map(s => md(s.id)).sort((x, y) => (y.bp || 0) - (x.bp || 0))[0];
+        if (best) return this.abilityMsg(m, `察覺到了 ${this.label(o)} 的 ${best.n}！`);
+        return;
+      }
+      case 'trace': {
+        const oa = o && o.ability;
+        if (!oa || ['trace', 'multitype', 'stance-change', 'schooling', 'comatose', 'shields-down', 'disguise', 'rks-system', 'battle-bond', 'power-construct', 'ice-face', 'gulp-missile', 'neutralizing-gas', 'hunger-switch', 'zero-to-hero', 'commander', 'protosynthesis', 'quark-drive', 'imposter'].includes(oa)) return;
+        this.volOf(m).tracedFrom = m.ability;
+        m.ability = oa;
+        await this.msg(`［${this.label(m)} 的複製］\n複製了 ${this.label(o)} 的${Abil.name(oa)}！`);
+        return this.abilityStart(m);
+      }
+    }
+  },
+  // 退場時：自然回復、再生力；複製來的特性還原
+  async onSwitchOut(m) {
+    const v = this.volOf(m);
+    if (v && v.tracedFrom) { m.ability = v.tracedFrom; v.tracedFrom = null; }
+    const a = this.ab(m);
+    if (a === 'natural-cure' && m.st) { m.st = null; }
+    if (a === 'regenerator' && m.hp > 0) m.hp = Math.min(Mon.maxHp(m), m.hp + Math.floor(Mon.maxHp(m) / 3));
   },
 
   // ---------- 回合結束（Showdown residual 順序） ----------
@@ -1154,11 +1634,14 @@ Object.assign(Battle.prototype, {
     const f = this.field;
     // 天氣
     if (f.weather) {
-      if (f.weather === 'sandstorm' || f.weather === 'hail') {
+      if ((f.weather === 'sandstorm' || f.weather === 'hail') && this.wx()) {
         for (const m of [this.me, this.foe]) {
           if (!m || m.hp <= 0) continue;
-          const t = this.typesOf(m);
-          const immune = f.weather === 'sandstorm' ? t.some(x => ['rock', 'ground', 'steel'].includes(x)) : t.includes('ice');
+          const t = this.typesOf(m), a = this.ab(m);
+          // 防塵、防塵護目鏡、魔法防守，以及各自天氣的相關特性不受傷害
+          const abilityImmune = ['overcoat', 'magic-guard'].includes(a) || this.itm(m) === 'safety-goggles'
+            || (f.weather === 'sandstorm' ? ['sand-veil', 'sand-rush', 'sand-force'].includes(a) : ['ice-body', 'snow-cloak'].includes(a));
+          const immune = abilityImmune || (f.weather === 'sandstorm' ? t.some(x => ['rock', 'ground', 'steel'].includes(x)) : t.includes('ice'));
           if (immune || this.volOf(m).semi === 'dig' || this.volOf(m).semi === 'dive') continue;
           await this.hurt(m, Math.max(1, Math.floor(Mon.maxHp(m) / 16)));
           await this.msg(`${this.label(m)} 受到了${f.weather === 'sandstorm' ? '沙暴' : '冰雹'}的傷害！`);
@@ -1184,31 +1667,66 @@ Object.assign(Battle.prototype, {
     for (const [m, v, om] of [[this.me, this.vMe, this.foe], [this.foe, this.vFoe, this.me]]) {
       v.flinch = false; v.protect = false; v.endure = false; v.roost = false;
       if (!m || m.hp <= 0) continue;
+      const wasOut = v.turnsOut > 0;
       v.turnsOut++;
       const max = Mon.maxHp(m), name = this.label(m);
-      if (f.terrain === 'grassyterrain' && this.grounded(m) && m.hp < max) { await this.healMon(m, Math.max(1, Math.floor(max / 16))); await this.msg(`${name} 的體力回復了！`); }
-      if (v.aquaRing && m.hp < max) { await this.healMon(m, Math.max(1, Math.floor(max / 16))); await this.msg(`水環回復了 ${name} 的體力！`); }
-      if (v.ingrain && m.hp < max) { await this.healMon(m, Math.max(1, Math.floor(max / 16))); await this.msg(`${name} 從根部吸取了養分！`); }
-      if (v.seed && om && om.hp > 0) {
+      const a = this.ab(m), it = this.itm(m), w = this.wx();
+      const guard = a === 'magic-guard'; // 魔法防守：不受招式以外的傷害
+      const heal = async (frac, txt) => { if (m.hp < max) { await this.healMon(m, Math.max(1, Math.floor(max * frac))); await this.msg(txt); } };
+      const hurt = async (frac, txt) => { if (!guard && m.hp > 0) { await this.hurt(m, Math.max(1, Math.floor(max * frac))); await this.msg(txt); } };
+      // 天氣相關特性
+      if (a === 'rain-dish' && w === 'raindance') await heal(1 / 16, `［${Abil.name(a)}］${name} 的體力回復了！`);
+      if (a === 'ice-body' && (w === 'snowscape' || w === 'hail')) await heal(1 / 16, `［${Abil.name(a)}］${name} 的體力回復了！`);
+      if (a === 'dry-skin' && w === 'raindance') await heal(1 / 8, `［${Abil.name(a)}］${name} 的體力回復了！`);
+      if (a === 'dry-skin' && w === 'sunnyday') await hurt(1 / 8, `［${Abil.name(a)}］${name} 受到了傷害！`);
+      if (a === 'solar-power' && w === 'sunnyday') await hurt(1 / 8, `［${Abil.name(a)}］${name} 受到了傷害！`);
+      if (a === 'hydration' && w === 'raindance' && m.st) { m.st = null; this.draw(); await this.abilityMsg(m, `${name} 的異常狀態治好了！`); }
+      if (f.terrain === 'grassyterrain' && this.grounded(m)) await heal(1 / 16, `${name} 的體力回復了！`);
+      if (v.aquaRing) await heal(1 / 16, `水環回復了 ${name} 的體力！`);
+      if (v.ingrain) await heal(1 / 16, `${name} 從根部吸取了養分！`);
+      if (it === 'leftovers') await heal(1 / 16, `${name} 用吃剩的東西回復了少許體力！`);
+      if (it === 'black-sludge') {
+        if (this.typesOf(m).includes('poison')) await heal(1 / 16, `${name} 用黑色污泥回復了少許體力！`);
+        else await hurt(1 / 8, `${name} 受到了黑色污泥的傷害！`);
+      }
+      if (v.seed && om && om.hp > 0 && !guard) {
         const d = Math.min(m.hp, Math.max(1, Math.floor(max / 8)));
         await this.hurt(m, d); await this.healMon(om, d);
         await this.msg(`寄生種子吸取了 ${name} 的體力！`);
       }
       if (m.hp > 0) {
-        if (m.st === 'brn') { await this.hurt(m, Math.max(1, Math.floor(max / 16))); await this.msg(`${name} 受到了灼傷的傷害！`); }
-        else if (m.st === 'psn') { await this.hurt(m, Math.max(1, Math.floor(max / 8))); await this.msg(`${name} 受到了毒的傷害！`); }
-        else if (m.st === 'tox') { v.toxN = Math.min(15, v.toxN + 1); await this.hurt(m, Math.max(1, Math.floor(max * v.toxN / 16))); await this.msg(`${name} 受到了劇毒的傷害！`); }
+        if ((m.st === 'psn' || m.st === 'tox') && a === 'poison-heal') { if (m.st === 'tox') v.toxN = Math.min(15, v.toxN + 1); await heal(1 / 8, `［${Abil.name(a)}］${name} 的體力回復了！`); }
+        else if (m.st === 'brn') await hurt(1 / 16, `${name} 受到了灼傷的傷害！`);
+        else if (m.st === 'psn') await hurt(1 / 8, `${name} 受到了毒的傷害！`);
+        else if (m.st === 'tox') { v.toxN = Math.min(15, v.toxN + 1); await hurt(v.toxN / 16, `${name} 受到了劇毒的傷害！`); }
       }
-      if (m.hp > 0 && v.curse) { await this.hurt(m, Math.max(1, Math.floor(max / 4))); await this.msg(`${name} 受到了詛咒的傷害！`); }
+      if (m.hp > 0 && v.curse) await hurt(1 / 4, `${name} 受到了詛咒的傷害！`);
       if (m.hp > 0 && v.trap > 0) {
         v.trap--;
-        if (v.trap > 0) { await this.hurt(m, Math.max(1, Math.floor(max / 8))); await this.msg(`${name} 受到了束縛的傷害！`); }
+        if (v.trap > 0) await hurt(1 / (v.trapDiv || 8), `${name} 受到了束縛的傷害！`);
         else await this.msg(`${name} 從束縛中解放了！`);
       }
       if (m.hp > 0 && v.saltCure) {
         const big = this.typesOf(m).some(t => t === 'water' || t === 'steel');
-        await this.hurt(m, Math.max(1, Math.floor(max / (big ? 4 : 8)))); await this.msg(`${name} 受到了鹽醃的傷害！`);
+        await hurt(1 / (big ? 4 : 8), `${name} 受到了鹽醃的傷害！`);
       }
+      // 加速、心情不定、蛻皮
+      if (m.hp > 0 && a === 'speed-boost' && wasOut) await this.boost(m, { spe: 1 }, m);
+      if (m.hp > 0 && a === 'moody') {
+        const ks = ['atk', 'def', 'spa', 'spd', 'spe'];
+        const upK = U.pick(ks.filter(k => v.stg[k] < 6)), downK = U.pick(ks.filter(k => k !== upK && v.stg[k] > -6));
+        if (upK) await this.boost(m, { [upK]: 2 }, m);
+        if (downK) await this.boost(m, { [downK]: -1 }, m);
+      }
+      if (m.hp > 0 && a === 'shed-skin' && m.st && Math.random() < 1 / 3) { m.st = null; this.draw(); await this.abilityMsg(m, `${name} 的異常狀態治好了！`); }
+      // 收穫：吃掉的樹果有 50% 機率長回來（晴天必定）
+      if (m.hp > 0 && a === 'harvest' && !m.item && v.lastBerry && (w === 'sunnyday' || Math.random() < .5)) {
+        m.item = v.lastBerry; await this.abilityMsg(m, `${name} 收穫了${Held.name(v.lastBerry)}！`);
+      }
+      // 劇毒寶珠、火焰寶珠
+      if (m.hp > 0 && !m.st && it === 'toxic-orb') await this.setStatus(m, 'tox', null, true);
+      if (m.hp > 0 && !m.st && it === 'flame-orb') await this.setStatus(m, 'brn', null, true);
+      if (m.hp > 0) await this.checkBerry(m);
       if (m.hp > 0 && v.octolock) await this.boost(m, { def: -1, spd: -1 }, om, true);
       if (m.hp > 0 && v.syrupBomb > 0) { v.syrupBomb--; await this.boost(m, { spe: -1 }, om, true); }
       if (v.taunt > 0 && --v.taunt === 0) await this.msg(`${name} 不再被挑釁了。`);

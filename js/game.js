@@ -70,7 +70,7 @@ const Game = {
       m.lv++;
       const after = Mon.stats(m);
       if (m.hp > 0) m.hp += after[0] - before[0];
-      m.happy = Math.min(255, m.happy + 5);
+      m.happy = Math.min(255, m.happy + (m.item === 'soothe-bell' ? 7 : 5));
       m._lvUp = true;
       if (battle) battle.draw();
       Sound.jingle('levelup');
@@ -132,7 +132,9 @@ const Game = {
     }
     box.classList.add('done');
     const before = Mon.stats(m);
+    const fromSp = m.sp;
     m.sp = to;
+    Abil.afterEvolve(m, fromSp, to);
     const after = Mon.stats(m);
     m.hp = Math.max(m.hp > 0 ? 1 : 0, m.hp + after[0] - before[0]);
     Game.markCaught(to);
@@ -174,7 +176,7 @@ const Game = {
       await Game.giveExp(m, Mon.expFor(s.gr, m.lv + 1) - m.exp);
       const c = Mon.evoCandidates(m);
       delete m._lvUp;
-      if (c.length) await Game.evolve(m, Mon.pickEvo(m, c));
+      if (c.length && m.item !== 'everstone') await Game.evolve(m, Mon.pickEvo(m, c));
     } else if (it.kind === 'evo') {
       const c = Mon.evoCandidates(m, id);
       await Game.evolve(m, Mon.pickEvo(m, c));
@@ -222,12 +224,37 @@ const Game = {
         if (c === 1) await Game.summary(m);
         continue;
       }
-      const c = await UI.choose(['查看能力', '換到首位', '取名', '取消'], { prompt: `要對 ${Mon.name(m)} 做什麼？` });
+      const c = await UI.choose(['查看能力', '持有道具', '換到首位', '取名', '取消'], { prompt: `要對 ${Mon.name(m)} 做什麼？` });
       if (c === 0) await Game.summary(m);
-      else if (c === 1 && i > 0) { G.party.splice(i, 1); G.party.unshift(m); start = 0; }
-      else if (c === 2) { const n = await UI.input('要幫牠取什麼名字？（留空恢復原名）', ''); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
+      else if (c === 1) await Game.heldMenu(m);
+      else if (c === 2 && i > 0) { G.party.splice(i, 1); G.party.unshift(m); start = 0; }
+      else if (c === 3) { const n = await UI.input('要幫牠取什麼名字？（留空恢復原名）', ''); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
       UI.hideDialog();
     }
+  },
+
+  // 持有道具：交給寶可夢、取下
+  async heldMenu(m) {
+    const name = Mon.name(m);
+    const opts = m.item ? ['交換道具', '取下道具', '取消'] : ['給予道具', '取消'];
+    const c = await UI.choose(opts, { prompt: m.item ? `${name} 正攜帶著${Held.name(m.item)}。` : `${name} 沒有攜帶任何道具。` });
+    if (opts[c] === '取下道具') {
+      Game.giveItem(m.item);
+      await UI.say(`從 ${name} 身上取下了${Held.name(m.item)}。`);
+      m.item = null;
+      return;
+    }
+    if (opts[c] !== '交換道具' && opts[c] !== '給予道具') return;
+    const ids = Object.keys(G.state.bag).filter(id => ITEMS[id] && (ITEMS[id].kind === 'held' || ITEMS[id].held) && G.state.bag[id] > 0);
+    if (!ids.length) { await UI.say('背包裡沒有可以攜帶的道具。'); return; }
+    const i = await UI.list({ title: '要讓牠攜帶什麼？', rows: ids.map(id => `<div class="grow"><b>${U.esc(ITEMS[id].n)}</b><div class="dim small">${U.esc(ITEMS[id].d)}</div></div><div>× ${G.state.bag[id]}</div>`) });
+    if (i >= 0) await Game.giveHeld(m, ids[i]);
+  },
+  async giveHeld(m, id) {
+    Game.takeItem(id);
+    if (m.item) { Game.giveItem(m.item); await UI.say(`把${Held.name(m.item)}放回了背包。`); }
+    m.item = id;
+    await UI.say(`讓 ${Mon.name(m)} 攜帶了${Held.name(id)}。`);
   },
 
   async summary(m) {
@@ -249,6 +276,8 @@ const Game = {
         <div class="dim">努力值合計 ${(m.ev || []).reduce((a, b) => a + b, 0)}／510</div>
         <div class="dim">距離升級還需 ${next} 經驗值</div>
         <div class="dim">親密度 ${m.happy}</div>
+        <div class="ab"><b>特性：${U.esc(Abil.name(m.ability))}</b>${Abil.supported(m.ability) ? '' : '<small>（效果未實作）</small>'}<div class="dim small">${U.esc(Abil.desc(m.ability))}</div></div>
+        <div class="ab"><b>持有：${m.item ? U.esc(Held.name(m.item)) : '無'}</b>${m.item && !IT_IMPL.has(m.item) && ITEMS[m.item] && ITEMS[m.item].kind !== 'evo' ? '<small>（效果未實作）</small>' : ''}</div>
       </div>
       <div class="right"><table class="stats">${statRows}</table><div class="moves">${moves}</div></div></div>`);
   },
@@ -265,6 +294,13 @@ const Game = {
       if (it.kind === 'ball') {
         if (!battle) { await UI.say('現在不能使用這個道具。'); UI.hideDialog(); continue; }
         return { item: id };
+      }
+      if (it.kind === 'held' || (it.held && !battle && (await UI.choose(['讓寶可夢攜帶', '使用'], { prompt: `要怎麼使用${it.n}？` })) === 0)) {
+        if (battle) { await UI.say('現在不能使用這個道具。'); continue; }
+        const t = await Game.partyMenu({ pick: () => true });
+        if (t >= 0) await Game.giveHeld(G.party[t], id);
+        UI.hideDialog();
+        continue;
       }
       if (it.kind === 'repel') {
         if (battle) { await UI.say('現在不能使用這個道具。'); continue; }
@@ -303,7 +339,8 @@ const Game = {
       const evo = (s.ev || []).map(e => `→ ${G.state.seen[e.to] ? POKEDEX[e.to].n : '？？？'}：${(e.c || [e]).map(c => Mon.evoText(c)).join(' 或 ')}`).join('<br>');
       const ey = (s.ey || []).map((v, k) => v ? `${STAT_ZH[k]}+${v}` : '').filter(Boolean).join(' ');
       await UI.panel(`<div class="summary"><div class="left"><img class="big" src="${Mon.sprite(id)}"><div class="nm">No.${U.pad3(id)} ${U.esc(s.n)}</div>
-        <div class="dim">${U.esc(s.gen)}</div><div>${s.t.map(typeTag).join('')}</div>${s.lg ? `<div class="legend">${s.lg === 1 ? '傳說的寶可夢' : '幻之寶可夢'}</div>` : ''}</div>
+        <div class="dim">${U.esc(s.gen)}</div><div>${s.t.map(typeTag).join('')}</div>${s.lg ? `<div class="legend">${s.lg === 1 ? '傳說的寶可夢' : '幻之寶可夢'}</div>` : ''}
+        <div class="dim small">特性：${(s.ab || []).map(([a, h]) => U.esc(Abil.name(a)) + (h ? '（隱藏）' : '')).join('／')}</div></div>
         <div class="right"><p>${G.state.caught[id] ? U.esc(s.fl) : '捕捉後可以查看更多資料。'}</p>
         <table class="stats">${s.s.map((v, k) => `<tr><td>${STAT_ZH[k]}</td><td>${v}</td><td><div class="sbar"><div style="width:${Math.min(100, v / 1.6)}%"></div></div></td></tr>`).join('')}<tr><td>總和</td><td>${Mon.bst(id)}</td></tr></table>
         <p class="dim">捕捉率 ${s.cr}　打倒後的努力值：${ey || '無'}${evo ? '<br>' + evo : ''}</p></div></div>`);
@@ -857,7 +894,11 @@ const Game = {
     G.state = state;
     G.state.flags = G.state.flags || {};
     // 舊存檔的寶可夢補上性別
-    for (const m of [...state.party, ...state.box]) if (!('gender' in m)) m.gender = Mon.genderOf(m.sp);
+    for (const m of [...state.party, ...state.box]) {
+      if (!('gender' in m)) m.gender = Mon.genderOf(m.sp);
+      if (!m.ability) m.ability = Abil.pick(m.sp);
+      if (!('item' in m)) m.item = null;
+    }
     UI.showText('正在生成世界……');
     World.generate(state.seed, state.region);
     World.renderMap();

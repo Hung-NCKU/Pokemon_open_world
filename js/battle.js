@@ -55,6 +55,9 @@ class Battle {
     }
     await this.msg(`就決定是你了！${Mon.name(this.me)}！`);
     await this.sendOut('me', this.me);
+    // 登場時的特性（速度快的先發動）
+    const first = this.speedOf(this.me, this.vMe) >= this.speedOf(this.foe, this.vFoe) ? [this.me, this.foe] : [this.foe, this.me];
+    for (const m of first) await this.abilityStart(m);
 
     let result = null;
     while (!result) {
@@ -162,7 +165,8 @@ class Battle {
       const m = G.party[i];
       if (m.hp <= 0 || m.lv >= 100) continue;
       const part = this.participants.has(i);
-      const amt = Mon.expGain(foe, m, tr, part);
+      let amt = Mon.expGain(foe, m, tr, part);
+      if (m.item === 'lucky-egg') amt = Math.floor(amt * 1.5);
       Mon.gainEV(m, foe);
       got.push([m, amt, part]);
     }
@@ -177,6 +181,7 @@ class Battle {
     if (!forced && this.me.hp > 0) {
       await this.msg(`回來吧，${Mon.name(this.me)}！`);
       await this.recall('me');
+      await this.onSwitchOut(this.me);
     }
     this.myIdx = i;
     this.vMe = newVol();
@@ -236,7 +241,9 @@ class Battle {
       await this.msg(`打敗了 ${tr.title} ${tr.name}！`);
       if (tr.lose) await this.msg(`${tr.name}：「${tr.lose}」`);
       const last = this.foeParty[this.foeParty.length - 1];
-      const money = tr.money * last.lv;
+      // 護符金幣：上場過的寶可夢攜帶時獎金加倍
+      const coin = [...this.participants].some(i => G.party[i] && G.party[i].item === 'amulet-coin');
+      const money = tr.money * last.lv * (coin ? 2 : 1);
       G.state.money += money;
       await this.msg(`獲得了 ${money} 元的獎金！`);
     }
@@ -250,9 +257,10 @@ class Battle {
       G.state.money -= lost;
       await this.msg(`慌亂中掉了 ${lost} 元……眼前變得一片漆黑！`);
     }
+    if (this.vMe.tracedFrom) this.me.ability = this.vMe.tracedFrom;
     // 戰鬥結束後才進化（與原作相同）
     for (const m of G.party) {
-      if (m._lvUp && m.hp > 0) {
+      if (m._lvUp && m.hp > 0 && m.item !== 'everstone') {
         delete m._lvUp;
         const c = Mon.evoCandidates(m);
         if (c.length) await Game.evolve(m, Mon.pickEvo(m, c));

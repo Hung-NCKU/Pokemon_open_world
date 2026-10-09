@@ -72,6 +72,22 @@ def zh_text(entries, key):
     return ""
 
 
+# 遊戲中可以讓寶可夢攜帶、在對戰中有效果的道具
+HELD_ITEMS = [
+    "leftovers", "life-orb", "choice-band", "choice-specs", "choice-scarf", "focus-sash", "focus-band",
+    "sitrus-berry", "oran-berry", "lum-berry", "chesto-berry", "cheri-berry", "pecha-berry", "rawst-berry",
+    "aspear-berry", "persim-berry", "leppa-berry", "expert-belt", "muscle-band", "wise-glasses",
+    "charcoal", "mystic-water", "miracle-seed", "magnet", "never-melt-ice", "black-belt", "poison-barb",
+    "soft-sand", "sharp-beak", "twisted-spoon", "silver-powder", "hard-stone", "spell-tag", "dragon-fang",
+    "black-glasses", "metal-coat", "silk-scarf", "fairy-feather", "rocky-helmet", "black-sludge", "eviolite",
+    "assault-vest", "kings-rock", "razor-fang", "scope-lens", "razor-claw", "quick-claw", "shell-bell",
+    "air-balloon", "heavy-duty-boots", "light-clay", "damp-rock", "heat-rock", "smooth-rock", "icy-rock",
+    "lucky-egg", "amulet-coin", "everstone", "soothe-bell", "bright-powder", "wide-lens", "zoom-lens",
+    "toxic-orb", "flame-orb", "white-herb", "mental-herb", "power-herb", "weakness-policy", "clear-amulet",
+    "covert-cloak", "loaded-dice", "punching-glove", "protective-pads", "safety-goggles", "big-root",
+    "binding-band", "grip-claw", "shed-shell", "metronome", "throat-spray",
+]
+
 TOWER_ITEM = {"tower-of-darkness": "scroll-of-darkness", "tower-of-waters": "scroll-of-waters"}
 
 
@@ -231,6 +247,9 @@ def main():
             "ey": [effort["hp"], effort["attack"], effort["defense"],
                    effort["special-attack"], effort["special-defense"], effort["speed"]],
             "gr8": s["gender_rate"],  # 雌性比例（八分之幾），-1 為無性別
+            # 特性：[特性 id, 是否為隱藏特性]
+            "ab": [[a["ability"]["name"], 1 if a["is_hidden"] else 0] for a in sorted(p["abilities"], key=lambda a: a["slot"])],
+            "w": p["weight"],  # 體重（0.1 公斤）
             "cr": s["capture_rate"],
             "xp": p["base_experience"] or 60,
             "gr": s["growth_rate"]["name"],
@@ -272,6 +291,28 @@ def main():
     with open(os.path.join(ROOT, "data", "items.js"), "w", encoding="utf-8") as f:
         f.write("window.ITEMNAMES=")
         json.dump(items, f, ensure_ascii=False, separators=(",", ":"))
+        f.write(";\n")
+
+    # 特性的中文名稱與說明
+    ab_names = sorted({a[0] for v in out.values() for a in v["ab"]})
+    print(f"下載特性 ({len(ab_names)})...")
+    abilities = {}
+    for name, a in zip(ab_names, pmap(lambda n: safe_get(f"ability/{n}"), ab_names)):
+        if not a:
+            continue
+        abilities[name] = {"n": zh_name(a["names"], name), "d": zh_text(a["flavor_text_entries"], "flavor_text")}
+    # 持有道具
+    print(f"下載持有道具 ({len(HELD_ITEMS)})...")
+    held = {}
+    for name, it in zip(HELD_ITEMS, pmap(lambda n: safe_get(f"item/{n}"), HELD_ITEMS)):
+        if not it:
+            continue
+        held[name] = {"n": zh_name(it["names"], name), "d": zh_text(it["flavor_text_entries"], "text"), "cost": it.get("cost") or 0}
+    with open(os.path.join(ROOT, "data", "abilities.js"), "w", encoding="utf-8") as f:
+        f.write("window.ABILITIES=")
+        json.dump(abilities, f, ensure_ascii=False, separators=(",", ":"))
+        f.write(";\nwindow.HELDITEMS=")
+        json.dump(held, f, ensure_ascii=False, separators=(",", ":"))
         f.write(";\n")
 
     print(f"下載招式 ({len(all_moves)})...")

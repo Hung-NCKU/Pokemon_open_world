@@ -69,6 +69,8 @@ const Mon = {
       ev: [0, 0, 0, 0, 0, 0],
       nat: U.ri(0, 24),
       gender: Mon.genderOf(id),
+      ability: typeof Abil !== 'undefined' ? Abil.pick(id, opts.hidden || 0) : null,
+      item: opts.item || null,
       happy: s.hap,
       st: null,
       shiny: opts.shiny ?? Math.random() < 1 / 4096,
