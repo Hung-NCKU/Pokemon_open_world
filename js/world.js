@@ -1,6 +1,8 @@
 // 開放世界：地形生成、城鎮道路、訓練家、野生寶可夢、繪製
 const T = { GRASS: 0, TALL: 1, TREE: 2, WATER: 3, SAND: 4, MOUNT: 5, CAVE: 6, SNOW: 7, SNOWTALL: 8, DESERT: 9, PATH: 10, BRIDGE: 11, TOWN: 12, BLDG: 13, DOOR: 14, FLOWER: 15, DEEP: 16 };
-const TILE = 32;
+const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
+// [寬, 高, 門的 x, 門的 y]
+const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5] };
 const WW = 960, WH = 600;
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG]);
@@ -78,6 +80,7 @@ const World = {
     this.placeTowns(rng, homeRegion);
     this.carveRoads(rng);
     this.stampTowns();
+    this.alignTrees();
     this.buildPools();
   },
 
@@ -215,18 +218,45 @@ const World = {
           if (cur !== T.PATH && cur !== T.BRIDGE) this.set(px, py, (x + y) % 5 === 0 ? T.FLOWER : T.GRASS);
         }
       }
-      const add = (kind, bx, by, w, h, dx) => {
-        const b = { kind, town: t, x: t.x + bx, y: t.y + by, w, h, door: { x: t.x + bx + dx, y: t.y + by + h - 1 } };
+      // 建築尺寸與門的位置對應綠寶石原作（寶可夢中心、友好商店取自古金鎮，住家與研究所取自未白鎮，
+      // 道館取自橙華市，聯盟取自彩幽市）；dy 是門所在的列，門以下的列（聯盟的台階）可以通行
+      const add = (kind, bx, by) => {
+        const [w, h, dx, dy] = BUILDING_SIZE[kind];
+        const b = { kind, town: t, x: t.x + bx, y: t.y + by, w, h, door: { x: t.x + bx + dx, y: t.y + by + dy } };
         this.buildings.push(b);
-        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) this.set(b.x + x, b.y + y, T.BLDG);
+        for (let y = 0; y <= dy; y++) for (let x = 0; x < w; x++) this.set(b.x + x, b.y + y, T.BLDG);
         this.set(b.door.x, b.door.y, T.DOOR);
         this.doors.set(b.door.x + ',' + b.door.y, b);
       };
-      add('center', 2, 1, 5, 4, 2);
-      add('mart', 9, 1, 4, 4, 1);
-      if (t.kind === 'gym') add('gym', 5, 6, 6, 5, 2);
-      if (t.kind === 'home') { add('house', 2, 7, 4, 3, 1); add('lab', 9, 6, 5, 4, 2); }
-      if (t.kind === 'league') add('league', 4, 6, 8, 5, 3);
+      if (t.kind === 'league') {
+        add('center', 0, 1); add('mart', 12, 1); add('league', 2, 5);
+      } else {
+        add('center', 1, 1); add('mart', 11, 1);
+        if (t.kind === 'gym') add('gym', 5, 6);
+        if (t.kind === 'home') { add('house', 1, 6); add('lab', 8, 6); }
+      }
+    }
+  },
+
+  // 綠寶石的樹是 2×2 格；把樹對齊到偶數座標的 2×2 區塊
+  alignTrees() {
+    const soft = new Set([T.GRASS, T.TALL, T.FLOWER, T.SNOW, T.SNOWTALL, T.TREE]);
+    for (let y = 0; y < WH - 1; y += 2) for (let x = 0; x < WW - 1; x += 2) {
+      const cells = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]];
+      let trees = 0, hard = false, snowy = false;
+      for (const [cx, cy] of cells) {
+        const t = this.tiles[cy * WW + cx];
+        if (t === T.TREE) trees++;
+        else if (!soft.has(t)) hard = true;
+        if (t === T.SNOW || t === T.SNOWTALL) snowy = true;
+        if (this.trainers.has(cx + ',' + cy)) hard = true;
+      }
+      if (!trees) continue;
+      const fill = trees >= 2 && !hard ? T.TREE : (snowy ? T.SNOW : T.GRASS);
+      for (const [cx, cy] of cells) {
+        const t = this.tiles[cy * WW + cx];
+        if (fill === T.TREE || t === T.TREE) this.tiles[cy * WW + cx] = fill;
+      }
     }
   },
 
@@ -352,7 +382,50 @@ const World = {
     this.tileCache = Spr.makeTiles();
   },
 
+  // 綠寶石圖塊（自動拼接）
+  gen3Tile(t, x, y) {
+    const at = (a, b) => this.tile(a, b);
+    switch (t) {
+      case T.GRASS: case T.TOWN: case T.BLDG: case T.DOOR: return Gen3.single('grass');
+      case T.FLOWER: return Gen3.single('flower');
+      case T.TALL: return Gen3.single('tall');
+      case T.SNOW: return Gen3.single('snow');
+      case T.SNOWTALL: return Gen3.single('snowtall');
+      case T.CAVE: return Gen3.single('cave');
+      case T.BRIDGE: return Gen3.single('bridge') || Gen3.auto('path', (a, b) => at(a, b) === T.PATH || at(a, b) === T.BRIDGE, x, y);
+      case T.WATER: case T.DEEP: {
+        const w = v => v === T.WATER || v === T.DEEP || v === T.BRIDGE;
+        return Gen3.auto('water', (a, b) => !this.inside(a, b) || w(at(a, b)), x, y);
+      }
+      case T.SAND: return Gen3.auto('sand', (a, b) => at(a, b) === T.SAND || !this.inside(a, b), x, y);
+      case T.DESERT: return Gen3.auto('desert', (a, b) => at(a, b) === T.DESERT || at(a, b) === T.CAVE, x, y);
+      case T.PATH: return Gen3.auto('path', (a, b) => at(a, b) === T.PATH || at(a, b) === T.BRIDGE, x, y);
+      case T.MOUNT: {
+        let d = 0;
+        while (d < 3 && at(x, y + d + 1) === T.MOUNT) d++;
+        return Gen3.auto('rock', (a, b) => at(a, b) === T.MOUNT || !this.inside(a, b), x, y, d);
+      }
+      case T.TREE: {
+        const snowy = [[0, -2], [0, 2], [-2, 0], [2, 0], [0, -1], [0, 1], [-1, 0], [1, 0]].some(([a, b]) => {
+          const v = at(x + a, y + b); return v === T.SNOW || v === T.SNOWTALL;
+        });
+        const set = snowy ? 'snowtree' : 'tree';
+        const qx = x & 1, qy = y & 1;
+        // 0:1D4 1:1D5 2:1DC 3:1DD 4:1E4 5:1E5 6:1E6 7:1E7
+        if (!qy) return Gen3.single(set, qx);
+        if (at(x, y + 1) === T.TREE) return Gen3.single(set, 2 + qx);
+        if (!qx) return Gen3.single(set, at(x - 1, y) === T.TREE ? 4 : 6);
+        return Gen3.single(set, at(x + 1, y) === T.TREE ? 5 : 7);
+      }
+    }
+    return null;
+  },
+
   drawTile(g, t, x, y, px, py, frame) {
+    if (Gen3.on) {
+      const im = this.gen3Tile(t, x, y);
+      if (im) { g.drawImage(im, px, py); return; }
+    }
     const arr = this.tileCache[t] || this.tileCache[T.GRASS];
     let img;
     if (t === T.WATER || t === T.DEEP) img = arr[frame % 4];
@@ -371,18 +444,27 @@ const World = {
   },
 
   drawBuilding(g, b, ox, oy) {
-    g.drawImage(Spr.building(b), b.x * TILE - ox, b.y * TILE - oy);
+    const img = (Gen3.on && Gen3.building(b.kind)) || Spr.building(b);
+    g.drawImage(img, b.x * TILE - ox, b.y * TILE - oy);
   },
 
-  drawPerson(g, px, py, dir, pal, frame, opts = {}) {
-    const img = Assets.playerSheet && pal === Spr.PLAYER ? Assets.playerFrame(dir, frame) : null;
+  // who = { pal: 原創圖色盤, sheet: 綠寶石角色圖名稱 }
+  drawPerson(g, px, py, dir, who, frame, opts = {}) {
+    const bob = opts.surf ? ((opts.tick >> 4) & 1) * 3 : 0;
     if (opts.surf) {
-      g.drawImage(Spr.surfBlob((opts.tick >> 4) % 2), px, py + 10);
-      const c = img || Spr.character(pal, dir, 0);
-      g.drawImage(c, 0, 0, c.width, 30, px, py - 6, c.width, 30);
+      const blob = Gen3.on && Gen3.surfBlob(dir);
+      const rider = Gen3.on && Gen3.surfFrame(dir);
+      if (blob && rider) {
+        g.drawImage(blob, px - TILE / 2, py + TILE - blob.height + 6 + bob);
+        g.drawImage(rider, px, py + TILE - rider.height - 18 + bob);
+        return;
+      }
+      g.drawImage(Spr.surfBlob((opts.tick >> 4) % 2), px, py + 14);
+      const c = Spr.character(who.pal, dir, 0);
+      g.drawImage(c, 0, 0, c.width, 45, px, py - 10, c.width, 45);
       return;
     }
-    const c = img || Spr.character(pal, dir, frame);
+    const c = (Gen3.on && who.sheet && Gen3.charFrame(who.sheet, dir, frame)) || Spr.character(who.pal, dir, frame);
     g.drawImage(c, px + (TILE - c.width) / 2, py + TILE - c.height);
   },
 

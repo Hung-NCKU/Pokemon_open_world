@@ -1,6 +1,6 @@
 // 第三世代（綠寶石）風格的原創像素美術：以 16×16 原生解析度繪製後放大 2 倍
 const Spr = (() => {
-  const S = 2; // 放大倍率
+  const S = 3; // 放大倍率
   const N = 16; // 原生圖塊大小
 
   function canvas(w, h) {

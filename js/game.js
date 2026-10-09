@@ -1,6 +1,6 @@
 // 主程式：標題、移動、建築物、選單、存檔
 const SAVE_KEY = 'pkmn_openworld_save_v1';
-const VW = 21, VH = 15;
+const VW = 15, VH = 10;
 
 const G = {
   mode: 'title',
@@ -73,6 +73,7 @@ const Game = {
       m.happy = Math.min(255, m.happy + 5);
       m._lvUp = true;
       if (battle) battle.draw();
+      Sound.jingle('levelup');
       await say(`${Mon.name(m)} 升到了 Lv.${m.lv}！`);
       for (const [lv, mid] of s.l) if (lv === m.lv) await Game.learnMove(m, mid, battle);
     }
@@ -117,6 +118,7 @@ const Game = {
     document.getElementById('game').appendChild(box);
     await UI.say(`咦？${from} 的樣子……！`);
     box.classList.add('go');
+    Sound.play('evolution');
     let cancelled = false;
     const pop = UI.pushKey(e => { if (UI.isNo(e)) cancelled = true; });
     await U.sleep(3200);
@@ -132,8 +134,10 @@ const Game = {
     const after = Mon.stats(m);
     m.hp = Math.max(m.hp > 0 ? 1 : 0, m.hp + after[0] - before[0]);
     Game.markCaught(to);
+    Sound.jingle('evolve');
     await UI.say(`恭喜！${from} 進化成了 ${POKEDEX[to].n}！`);
     box.remove();
+    if (G.mode === 'world') Game.updateMusic(true);
     for (const [lv, mid] of POKEDEX[to].l) if (lv === m.lv) await Game.learnMove(m, mid);
     // 鬼斯通→耿鬼這類多段即時進化不處理；脫殼忍者特例
     if (to === 291 && G.party.length < 6 && Game.takeBall()) {
@@ -417,7 +421,7 @@ const Game = {
       if (c === 4) await Game.trainerCard();
       if (c === 5) {
         const ok = await UI.choose(['是', '否'], { prompt: '要儲存目前的進度嗎？' });
-        if (ok === 0 && Game.save(true)) await UI.say(`${G.state.name} 將進度儲存好了！`);
+        if (ok === 0 && Game.save(true)) Sound.sfx('save'), await UI.say(`${G.state.name} 將進度儲存好了！`);
       }
       if (c === 6) await Game.settingsMenu();
       UI.hideDialog();
@@ -446,6 +450,33 @@ const Game = {
     try { localStorage.setItem(SAVE_KEY + '_settings', JSON.stringify(G.settings)); } catch { }
   },
 
+  // ---------- 背景音樂 ----------
+  updateMusic(force = false) {
+    if (G.mode !== 'world' || !G.state) return;
+    const s = G.state;
+    const town = World.townAt(s.x, s.y);
+    let name;
+    if (s.surf) name = 'surf';
+    else if (town) {
+      if (town.kind === 'league') name = 'ever_grande';
+      else if (town.kind === 'home') name = 'home';
+      else name = ['town', 'city', 'town2', 'city2'][town.id % 4];
+    } else {
+      const t = World.tile(s.x, s.y);
+      const ri = REGION_KEYS.indexOf(World.regionAt(s.x, s.y));
+      if (t === T.DESERT) name = 'desert';
+      else if (t === T.SNOW || t === T.SNOWTALL) name = 'snow';
+      else if (t === T.CAVE || t === T.MOUNT) name = 'cave';
+      else name = ['route', 'route2', 'route3'][ri % 3];
+    }
+    // 只在進出城鎮、開始／結束衝浪、跨越地區時換曲，避免野外地形交錯時頻繁切換
+    const zone = town ? 'town' + town.id : s.surf ? 'surf' : 'wild' + World.regionAt(s.x, s.y);
+    if (force || zone !== G.musicZone) {
+      G.musicZone = zone;
+      Sound.play(name);
+    }
+  },
+
   // ---------- 世界互動 ----------
   warp(x, y, dir) {
     G.state.x = x; G.state.y = y; G.state.dir = dir || G.state.dir; G.state.surf = false;
@@ -463,7 +494,8 @@ const Game = {
         await UI.say('那麼，請把你的寶可夢交給我一會兒。');
         Game.healParty();
         G.state.center = { x: b.door.x, y: b.door.y + 1 };
-        await UI.say('♪～叮叮咚咚♪\n讓你久等了！你的寶可夢都已經恢復健康了。');
+        await Sound.jingle('heal');
+        await UI.say('讓你久等了！你的寶可夢都已經恢復健康了。');
         Game.save(true);
         await UI.say('期待你再次光臨！');
       } else if (c === 1) await Game.pcMenu();
@@ -512,9 +544,10 @@ const Game = {
     if (c !== 0) return;
     await UI.say(`${name}：「歡迎你，挑戰者！就讓我用${TYPES[type].n}屬性寶可夢來試試你的實力吧！」`);
     const party = World.gymParty(t);
-    const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: 100, lose: '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
+    const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: 100, sprite: LEADER_SPRITES[t.region][t.gym], lose: '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
     if (r === 'win') {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
+      Sound.jingle('badge');
       await UI.say(`獲得了${t.name}道館的徽章！（${REGIONS[t.region].n}徽章 ${Game.badgeCount(t.region)}／8）`);
       if (Game.badgeCount(t.region) === 8) await UI.say(`收集齊了${REGIONS[t.region].n}地區的 8 枚徽章！可以挑戰${REGIONS[t.region].n}寶可夢聯盟了！`);
       Game.save(true);
@@ -531,7 +564,7 @@ const Game = {
     if (c !== 0) return;
     await UI.say(`${reg.champ}：「歡迎來到${reg.n}寶可夢聯盟。讓我看看你和寶可夢之間的羈絆吧！」`);
     const party = World.championParty(t);
-    const r = await Game.battle({ trainer: { title: '冠軍', name: reg.champ, party, kind: 'champion', money: 200, lose: '恭喜你！你就是新的冠軍！' }, biome: 'gym' });
+    const r = await Game.battle({ trainer: { title: '冠軍', name: reg.champ, party, kind: 'champion', money: 200, sprite: CHAMP_SPRITES[t.region], lose: '恭喜你！你就是新的冠軍！' }, biome: 'gym' });
     if (r === 'win') {
       const first = !Object.keys(G.state.champs).length;
       G.state.champs[t.region] = 1;
@@ -560,7 +593,7 @@ const Game = {
     const lines = ['眼神交會就是對戰的信號！', '來對戰吧！', '我的寶可夢可是很強的喔！', '你看起來很強，我們來比一場！', '終於等到人了！'];
     await UI.say(`${cls.n} ${tr.name}：「${lines[tr.seed % lines.length]}」`);
     const party = World.trainerParty(tr);
-    const r = await Game.battle({ trainer: { title: cls.n, name: tr.name, party, kind: 'trainer', money: 40, lose: '輸了啊……你好強！' }, biome: Game.biomeHere() });
+    const r = await Game.battle({ trainer: { title: cls.n, name: tr.name, party, kind: 'trainer', money: 40, sprite: TRAINER_BATTLE_SPRITES[tr.cls], lose: '輸了啊……你好強！' }, biome: Game.biomeHere() });
     if (r === 'win') G.state.defeated[tr.x + ',' + tr.y] = 1;
   },
 
@@ -576,6 +609,7 @@ const Game = {
     if (s.steps % 128 === 0) G.party.forEach(m => { if (m.hp > 0) m.happy = Math.min(255, m.happy + 1); });
     if (s.repel > 0) { s.repel--; if (s.repel === 0) await UI.say('除蟲噴霧的效果消失了。'); }
     const town = World.townAt(s.x, s.y);
+    Game.updateMusic();
     if (town !== G.lastTown) {
       G.lastTown = town;
       if (town) {
@@ -606,6 +640,7 @@ const Game = {
     else if (t === T.DESERT) { biome = 'desert'; rate = .05; }
     if (biome && !s.repel && Math.random() < rate) {
       const wild = World.rollWild(s.x, s.y, biome);
+      Sound.sfx('encounter');
       G.flash = 1;
       await U.sleep(450);
       G.flash = 0;
@@ -721,19 +756,33 @@ const Game = {
       if (b.x + b.w < x0 - 1 || b.x > x0 + VW + 1 || b.y + b.h < y0 - 1 || b.y > y0 + VH + 1) continue;
       World.drawBuilding(g, b, ox, oy);
     }
-    for (let y = y0; y <= y0 + VH; y++) for (let x = x0; x <= x0 + VW; x++) {
+    // 人物依 y 座標排序繪製（下方的人物蓋住上方）
+    const people = [];
+    for (let y = y0 - 1; y <= y0 + VH + 1; y++) for (let x = x0; x <= x0 + VW; x++) {
       const tr = World.trainers.get(x + ',' + y);
-      if (!tr) continue;
-      World.drawPerson(g, x * TILE - ox, y * TILE - oy, tr.dir, Spr.trainerPal(tr.cls, tr.seed % 5), 0);
-      if (G.alert === tr) g.drawImage(Spr.exclaim(), x * TILE - ox + 6, y * TILE - oy - 40);
+      if (tr) people.push({ y: y * TILE, tr });
     }
+    people.push({ y: py, player: true });
+    people.sort((a, b) => a.y - b.y);
     const walking = G.move ? (G.move.t / G.move.dur < .5 ? G.stepAnim : 0) : 0;
-    World.drawPerson(g, px - ox, py - oy, s.dir, Spr.PLAYER, walking, { surf: s.surf, tick: G.frame });
-    // 草叢遮腳
+    const exclaim = (Gen3.on && Gen3.exclaim()) || Spr.exclaim();
+    for (const p of people) {
+      if (p.player) {
+        const sheet = G.keys.has('Shift') && G.move ? 'player_run' : 'player_walk';
+        World.drawPerson(g, px - ox, py - oy, s.dir, { pal: Spr.PLAYER, sheet }, walking, { surf: s.surf, tick: G.frame });
+        continue;
+      }
+      const tr = p.tr;
+      const names = Gen3.on ? GEN3.trainers : [];
+      const sheet = names.length ? 'npc_' + names[tr.cls % names.length] : null;
+      World.drawPerson(g, tr.x * TILE - ox, tr.y * TILE - oy, tr.dir, { pal: Spr.trainerPal(tr.cls, tr.seed % 5), sheet }, 0);
+      if (G.alert === tr) g.drawImage(exclaim, tr.x * TILE - ox + (TILE - exclaim.width) / 2, tr.y * TILE - oy - TILE - exclaim.height + 8);
+    }
+    // 站在草叢裡時，草蓋住下半身
     const tt = World.tile(G.move ? G.move.tx : s.x, G.move ? G.move.ty : s.y);
     if ((tt === T.TALL || tt === T.SNOWTALL) && !G.move) {
-      const gi = World.tileCache[tt][0];
-      g.drawImage(gi, 0, gi.height * .55, gi.width, gi.height * .45, px - ox, py - oy + TILE * .55, TILE, TILE * .45);
+      const gi = (Gen3.on && Gen3.single(tt === T.TALL ? 'tall' : 'snowtall')) || World.tileCache[tt][0];
+      g.drawImage(gi, 0, gi.height * .5, gi.width, gi.height * .5, px - ox, py - oy + TILE * .5, TILE, TILE * .5);
     }
     if (U.isNight()) { g.fillStyle = 'rgba(20,30,90,.33)'; g.fillRect(0, 0, cv.width, cv.height); }
     if (G.flash) { g.fillStyle = (G.frame >> 2) % 2 ? '#000' : '#fff'; g.fillRect(0, 0, cv.width, cv.height); }
@@ -815,6 +864,8 @@ const Game = {
     G.lastTown = World.townAt(state.x, state.y);
     G.mode = 'world';
     UI.hideDialog();
+    if (Gen3.on) document.body.classList.add('gen3');
+    Game.updateMusic(true);
     UI.banner(`${REGIONS[World.regionAt(state.x, state.y)].n}地區・${G.lastTown ? G.lastTown.name : '野外'}`);
   },
 };
@@ -822,9 +873,9 @@ const Game = {
 // ---------- 啟動 ----------
 function fit() {
   const w = document.getElementById('wrap');
-  const s = Math.min(window.innerWidth / 672, window.innerHeight / 480);
+  const s = Math.min(window.innerWidth / 720, window.innerHeight / 480);
   w.style.transform = `scale(${s})`;
-  w.style.left = (window.innerWidth - 672 * s) / 2 + 'px';
+  w.style.left = (window.innerWidth - 720 * s) / 2 + 'px';
   w.style.top = (window.innerHeight - 480 * s) / 2 + 'px';
 }
 

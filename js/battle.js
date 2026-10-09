@@ -26,6 +26,10 @@ class Battle {
     this.turn = 0;
     this.aiItems = this.trainer && this.trainer.kind !== 'trainer' ? 2 : 0;
   }
+  musicName() {
+    if (this.wildMon) return POKEDEX[this.wildMon.sp].lg ? 'battle_legend' : 'battle_wild';
+    return { gym: 'battle_gym', champion: 'battle_champion' }[this.trainer.kind] || 'battle_trainer';
+  }
   get me() { return G.party[this.myIdx]; }
   get foe() { return this.foeParty[this.foeIdx]; }
   msg(t) { return UI.say(t, { auto: G.settings.battleAuto }); }
@@ -86,34 +90,28 @@ class Battle {
     this.setup();
     G.mode = 'battle';
     Game.markSeen(this.foe.sp);
+    Sound.play(this.musicName());
+    this.el.querySelector('.hbox.me').classList.add('hidden');
+    this.el.querySelector('.bmon.me img').classList.add('gone');
     if (this.wildMon) {
+      this.el.querySelector('.hbox.foe').classList.add('hidden');
       this.setSprite('foe', this.foe);
-      this.el.querySelector('.bmon.me').classList.add('hidden');
+      await this.wildIntro();
+      this.el.querySelector('.hbox.foe').classList.remove('hidden');
       this.draw();
-      this.el.querySelector('.binfo.me').classList.add('hidden');
-      if (this.foe.shiny) await this.msg('✨ 閃閃發光！');
+      if (this.foe.shiny) await this.msg('閃閃發光！');
       await this.msg(`野生的 ${Mon.name(this.foe)} 跳出來了！`);
     } else {
-      const tr = this.el.querySelector('.btrainer');
-      tr.classList.remove('hidden');
-      tr.textContent = this.trainer.title;
-      this.el.querySelector('.bmon.foe').classList.add('hidden');
-      this.el.querySelector('.bmon.me').classList.add('hidden');
-      this.el.querySelector('.binfo.foe').classList.add('hidden');
-      this.el.querySelector('.binfo.me').classList.add('hidden');
+      this.el.querySelector('.hbox.foe').classList.add('hidden');
+      this.el.querySelector('.bmon.foe img').classList.add('gone');
+      await this.trainerIntro();
       await this.msg(`${this.trainer.title} ${this.trainer.name} 向你發起了對戰！`);
-      tr.classList.add('hidden');
-      this.el.querySelector('.bmon.foe').classList.remove('hidden');
-      this.el.querySelector('.binfo.foe').classList.remove('hidden');
-      this.setSprite('foe', this.foe);
-      this.draw();
+      await this.trainerLeave();
+      await this.sendOut('foe', this.foe);
       await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.foe)}！`);
     }
-    this.el.querySelector('.bmon.me').classList.remove('hidden');
-    this.el.querySelector('.binfo.me').classList.remove('hidden');
-    this.setSprite('me', this.me);
-    this.draw();
     await this.msg(`就決定是你了！${Mon.name(this.me)}！`);
+    await this.sendOut('me', this.me);
 
     let result = null;
     while (!result) {
@@ -130,17 +128,15 @@ class Battle {
       const c = await UI.choose(['戰鬥', '背包', '寶可夢', '逃跑'], { prompt: `${Mon.name(me)} 要做什麼？`, cols: 2, cancel: false, cls: 'battle-menu' });
       if (c === 0) {
         if (me.moves.every(m => m.pp <= 0)) return { type: 'move', idx: -1 };
-        const opts = me.moves.map(mv => {
+        const opts = me.moves.map(mv => ({ label: MOVES[mv.id].n, disabled: mv.pp <= 0 }));
+        while (opts.length < 4) opts.push({ label: '－', disabled: true });
+        const info = i => {
+          const mv = me.moves[i];
+          if (!mv) return '';
           const d = MOVES[mv.id];
-          const ty = TYPES[d.t] || TYPES.unknown;
-          const eff = d.c !== 'st' ? typeEff(d.t, Mon.types(this.foe)) : 1;
-          const effTxt = d.c === 'st' ? '' : eff === 0 ? '<i>沒有效果</i>' : eff > 1 ? '<i class="good">效果絕佳</i>' : eff < 1 ? '<i class="bad">效果不好</i>' : '';
-          return {
-            html: `<div class="mvbtn" style="border-color:${ty.c}"><b>${U.esc(d.n)}</b><span>${typeTag(d.t)} ${['ph', 'sp'].includes(d.c) ? (d.c === 'ph' ? '物理' : '特殊') : '變化'} ${d.p || '—'} · PP ${mv.pp}/${d.pp}</span>${effTxt}</div>`,
-            disabled: mv.pp <= 0,
-          };
-        });
-        const i = await UI.choose(opts, { prompt: '要使用哪一個招式？', cols: 2, cls: 'move-menu' });
+          return `PP　${mv.pp}/${d.pp}<br>類型/${(TYPES[d.t] || TYPES.unknown).n}`;
+        };
+        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info });
         if (i >= 0) return { type: 'move', idx: i };
       } else if (c === 1) {
         const r = await Game.bagMenu({ battle: this });
@@ -291,6 +287,7 @@ class Battle {
       if (mv.cat === 'ohko' && target.lv > user.lv) acc = 0;
       if (Math.random() * 100 >= acc) { await this.msg('但是沒有命中！'); return; }
     }
+    await this.moveAnim(user, target, mv);
 
     if (mv.id === 156) { // 睡覺
       const max = Mon.maxHp(user);
@@ -320,7 +317,7 @@ class Battle {
         }
         dmg = Math.min(dmg, target.hp);
         total += dmg; n++;
-        await this.hurt(target, dmg);
+        await this.hurt(target, dmg, eff);
         if (crit) await this.msg('擊中了要害！');
       }
       if (!fixed) {
@@ -346,7 +343,7 @@ class Battle {
         if (mv.fc && first && Math.random() * 100 < mv.fc) vT.flinch = true;
       }
       if (mv.sx) {
-        const toSelf = mv.cat === 'damage+raise' || (mv.cat !== 'damage+lower' && mv.sx.every(([, c]) => c < 0) && mv.sc === 0);
+        const toSelf = mv.cat === 'damage-raise'; // PokéAPI 分類：damage-raise 作用於使用者，damage-lower 作用於目標
         const chance = mv.sc || 100;
         const who = toSelf ? user : target, wv = toSelf ? vU : vT;
         if (who.hp > 0 && Math.random() * 100 < chance) for (const [st, c] of mv.sx) await this.stage(who, wv, st, c);
@@ -418,7 +415,7 @@ class Battle {
     }
     v.stg[k] = U.clamp(cur + c, -6, 6);
     const amt = Math.abs(c) >= 3 ? '極大幅' : Math.abs(c) === 2 ? '大幅' : '';
-    await this.anim(this.sideOf(m), c > 0 ? 'up' : 'down', 450);
+    await this.statFx(m, c > 0);
     await this.msg(`${name} 的${STAGE_ZH[k]}${amt}${c > 0 ? '提高' : '降低'}了！`);
   }
 
@@ -441,7 +438,7 @@ class Battle {
       if (major === 'tox') vT.toxN = 0;
       this.draw();
       const txt = { par: '麻痺了，可能會無法行動！', slp: '睡著了！', frz: '被凍住了！', brn: '被灼傷了！', psn: '中毒了！', tox: '中了劇毒！' }[major];
-      await this.anim(this.sideOf(target), 'status', 400);
+      await this.statusFx(target, major);
       await this.msg(`${name} ${txt}`);
       return;
     }
@@ -494,8 +491,7 @@ class Battle {
   async checkFaints() {
     let changed = null;
     if (this.foe.hp <= 0) {
-      await this.anim('foe', 'faint', 600);
-      this.el.querySelector('.bmon.foe img').classList.add('gone');
+      await this.faint('foe');
       await this.msg(`${this.foeName()} 倒下了！`);
       await this.awardExp();
       const next = this.foeParty.findIndex(m => m.hp > 0);
@@ -511,14 +507,12 @@ class Battle {
         }
       }
       Game.markSeen(this.foe.sp);
-      this.setSprite('foe', this.foe);
-      this.draw();
       await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.foe)}！`);
+      await this.sendOut('foe', this.foe);
       changed = false;
     }
     if (this.me.hp <= 0) {
-      await this.anim('me', 'faint', 600);
-      this.el.querySelector('.bmon.me img').classList.add('gone');
+      await this.faint('me');
       await this.msg(`${Mon.name(this.me)} 倒下了！`);
       if (!G.party.some(m => m.hp > 0)) return 'lose';
       if (this.wildMon) {
@@ -559,15 +553,13 @@ class Battle {
   async switchTo(i, forced = false) {
     if (!forced && this.me.hp > 0) {
       await this.msg(`回來吧，${Mon.name(this.me)}！`);
-      this.el.querySelector('.bmon.me img').classList.add('gone');
-      await U.sleep(250);
+      await this.recall('me');
     }
     this.myIdx = i;
     this.vMe = newVol();
     this.participants.add(i);
-    this.setSprite('me', this.me);
-    this.draw();
     await this.msg(`去吧！${Mon.name(this.me)}！`);
+    await this.sendOut('me', this.me);
   }
 
   async useItem({ item, target }) {
@@ -599,31 +591,22 @@ class Battle {
       caught = shakes >= 4;
       shakes = Math.min(shakes, 3);
     }
-    const img = this.el.querySelector('.bmon.foe img');
-    const ball = document.createElement('div');
-    ball.className = 'pokeball throw ' + item;
-    this.el.querySelector('.bmon.foe').appendChild(ball);
-    await U.sleep(450);
-    img.classList.add('gone');
-    ball.classList.remove('throw');
-    for (let i = 0; i < shakes; i++) {
-      ball.classList.add('shake'); await U.sleep(500); ball.classList.remove('shake'); await U.sleep(300);
-    }
+    const ball = await this.catchAnim(item, shakes, caught);
     if (caught) {
-      ball.classList.add('caught');
       await this.msg(`抓到了！成功捕捉了 ${Mon.name(foe)}！`);
-      ball.remove();
+      await Sound.jingle('caught');
+      if (ball) ball.remove();
       return 'catch';
     }
-    ball.remove();
-    img.classList.remove('gone');
     await this.msg(['糟糕！寶可夢從球裡跑出來了！', '啊！差一點就抓到了！', '可惡！只差一點點！', '啊啊！還以為抓到了！'][shakes]);
     return null;
   }
 
   async finish(result) {
     const tr = this.trainer;
+    if (result === 'win') Sound.play(this.wildMon ? 'victory_wild' : tr.kind === 'gym' || tr.kind === 'champion' ? 'victory_gym' : 'victory_trainer');
     if (result === 'win' && tr) {
+      await this.trainerReturn();
       await this.msg(`打敗了 ${tr.title} ${tr.name}！`);
       if (tr.lose) await this.msg(`${tr.name}：「${tr.lose}」`);
       const last = this.foeParty[this.foeParty.length - 1];
@@ -653,8 +636,10 @@ class Battle {
       delete m._lvUp;
     }
     this.el.classList.add('hidden');
+    document.body.classList.remove('in-battle');
     UI.hideDialog();
     G.mode = 'world';
+    Game.updateMusic(true);
     return result;
   }
 }

@@ -23,8 +23,32 @@ const UI = (() => {
   }
   function hideDialog() { $('dialog').classList.add('hidden'); }
 
-  // 顯示訊息；auto: 打字完畢後自動前進的毫秒數
-  function say(text, { auto = 0 } = {}) {
+  // 依文字框寬度把訊息切成每頁 2 行（第三世代文字框的顯示方式）
+  function paginate(text) {
+    const box = $('dialog');
+    const width = (box.clientWidth || 660) - 24;
+    const size = parseFloat(getComputedStyle(box).fontSize) || 33;
+    const maxUnits = Math.max(8, Math.floor(width / size));
+    const lines = [];
+    for (const para of String(text).split('\n')) {
+      let cur = '', units = 0;
+      for (const ch of para) {
+        const u = ch.charCodeAt(0) < 256 ? .5 : 1;
+        if (units + u > maxUnits) { lines.push(cur); cur = ''; units = 0; }
+        cur += ch; units += u;
+      }
+      lines.push(cur);
+    }
+    const pages = [];
+    for (let i = 0; i < lines.length; i += 2) pages.push(lines.slice(i, i + 2).join('\n'));
+    return pages;
+  }
+  async function say(text, opts = {}) {
+    const pages = paginate(text);
+    for (let i = 0; i < pages.length; i++) await sayPage(pages[i], i < pages.length - 1 ? { ...opts, auto: opts.auto ? opts.auto : 0 } : opts);
+  }
+  // 顯示一頁訊息；auto: 打字完畢後自動前進的毫秒數
+  function sayPage(text, { auto = 0 } = {}) {
     return new Promise(res => {
       const dlg = $('dialog'), tx = $('dialog-text'), more = $('dialog-more');
       dlg.classList.remove('hidden');
@@ -44,7 +68,7 @@ const UI = (() => {
       if (speed <= 0) finish();
       const onKey = e => {
         if (e.repeat) return;
-        if (isOk(e) || isNo(e)) { if (!done) finish(); else close(); }
+        if (isOk(e) || isNo(e)) { if (!done) finish(); else { if (typeof Sound !== 'undefined') Sound.sfx('select'); close(); } }
       };
       const pop = pushKey(onKey);
       dlg.onclick = () => onKey({ key: 'z' });
@@ -52,9 +76,14 @@ const UI = (() => {
   }
 
   // 選項選單：回傳索引；取消回傳 -1
-  function choose(options, { prompt = null, cancel = true, cols = 1, start = 0, cls = '' } = {}) {
+  function choose(options, { prompt = null, cancel = true, cols = 1, start = 0, cls = '', onFocus = null } = {}) {
     return new Promise(res => {
       if (prompt !== null) showText(prompt);
+      const dlg = $('dialog');
+      dlg.classList.toggle('act', cls === 'battle-menu');
+      dlg.classList.toggle('mov', cls === 'move-menu');
+      const info = $('choice-info');
+      info.classList.toggle('hidden', !onFocus);
       const box = $('choices');
       box.className = cls;
       box.innerHTML = '';
@@ -70,12 +99,20 @@ const UI = (() => {
         box.appendChild(d);
         return d;
       });
-      const upd = () => els.forEach((e, i) => e.classList.toggle('sel', i === idx));
+      const upd = () => {
+        els.forEach((e, i) => e.classList.toggle('sel', i === idx));
+        if (onFocus) info.innerHTML = onFocus(idx) || '';
+      };
       upd();
-      const close = v => { pop(); box.classList.add('hidden'); box.innerHTML = ''; res(v); };
+      const close = v => {
+        pop(); box.classList.add('hidden'); box.innerHTML = '';
+        info.classList.add('hidden'); dlg.classList.remove('act', 'mov');
+        res(v);
+      };
       const pick = i => {
         const o = options[i];
         if (o && typeof o === 'object' && o.disabled) return;
+        if (typeof Sound !== 'undefined') Sound.sfx('select');
         close(i);
       };
       const n = options.length;

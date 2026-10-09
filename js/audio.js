@@ -136,6 +136,54 @@ const Sound = (() => {
     s.start(t, Math.random() * .5); s.stop(t + len + .01);
   }
 
+  // ---------- MIDI 音符（pokeemerald 曲） ----------
+  const MIDI_WAVE = { bass: 'tri', pad: 'sq12', brass: 'sq50', flute: 'tri', bell: 'sine', pluck: 'sq25', piano: 'sq25', lead: 'sq50' };
+  const MIDI_AMP = { bass: .5, pad: .16, brass: .2, flute: .32, bell: .3, pluck: .22, piano: .22, lead: .2 };
+  function midiNote(kind, n, t, d, v, out) {
+    if (kind === 'drum') {
+      const k = n <= 36 ? 'k' : (n >= 37 && n <= 40) ? 's' : (n >= 42 && n <= 46) || n >= 49 ? 'h' : 'k';
+      return drum(k, t, v * .9, out);
+    }
+    const o = ctx.createOscillator();
+    const wave = MIDI_WAVE[kind] || 'sq50';
+    if (wave === 'tri') o.type = 'triangle';
+    else if (wave === 'sine') o.type = 'sine';
+    else o.setPeriodicWave(waves[wave]);
+    o.frequency.setValueAtTime(freq(n), t);
+    const g = ctx.createGain();
+    const amp = v * (MIDI_AMP[kind] || .2);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(amp, t + .008);
+    if (['piano', 'pluck', 'bell'].includes(kind)) g.gain.exponentialRampToValueAtTime(Math.max(.0005, amp * .15), t + Math.max(.05, Math.min(d, 1.2)));
+    else g.gain.setValueAtTime(amp * .8, t + Math.max(.01, d * .8));
+    g.gain.linearRampToValueAtTime(0, t + d + .04);
+    o.connect(g); g.connect(out);
+    o.start(t); o.stop(t + d + .06);
+  }
+  // 回傳排程函式；real = base + 音符時間，到循環終點時把 base 往後推一段
+  function midiScheduler(song, out, loop) {
+    const notes = song.notes;
+    const loopS = song.loopS, loopE = song.hasLoop ? song.loopE : song.end;
+    let base = ctx.currentTime + .08, idx = 0;
+    return () => {
+      const horizon = ctx.currentTime + .3;
+      while (true) {
+        if (idx >= notes.length || notes[idx].t >= loopE) {
+          if (!loop || loopE - loopS < .5) return false;
+          base += loopE - loopS;
+          idx = notes.findIndex(n => n.t >= loopS);
+          if (idx < 0) return false;
+          continue;
+        }
+        const n = notes[idx];
+        const real = base + n.t;
+        if (real > horizon) return true;
+        if (real >= ctx.currentTime - .05) midiNote(Midi.inst(n.prog, n.ch), n.n, real, Math.min(n.d, 4), n.v, out);
+        idx++;
+      }
+    };
+  }
+
   // ---------- 編曲輔助 ----------
   // "A4:4 C5:2 r:2" → [[midi, 長度(16分音符)], ...]
   function parse(str) {
@@ -224,6 +272,8 @@ const Sound = (() => {
   SONGS.victory_trainer = SONGS.victory_wild;
   SONGS.victory_gym = { ...SONGS.victory_wild, bpm: 120 };
 
+  const MIDI_ALIAS = { evolve: 'evolved' };
+
   // 短旋律（不循環）
   const JINGLES = {
     heal: 'C5:2 E5:2 G5:2 C6:4 G5:2 C6:6',
@@ -255,7 +305,18 @@ const Sound = (() => {
       fileAudio.play().catch(() => { });
       return;
     }
-    const s = SONGS[name];
+    const midi = typeof Midi !== 'undefined' && Midi.get(MIDI_ALIAS[name] || name);
+    if (midi) {
+      const out = ctx.createGain(); out.connect(musicGain);
+      current = { out, name };
+      const step = midiScheduler(midi, out, true);
+      step();
+      timer = setInterval(() => { if (!step()) { clearInterval(timer); timer = null; } }, 60);
+      return;
+    }
+    const FALLBACK = { home: 'town', city: 'town', city2: 'town', town2: 'town', ever_grande: 'town', gym: 'town', lab: 'town', mart: 'center',
+      route2: 'route', route3: 'route', desert: 'route', snow: 'route', cave: 'route', victory_league: 'victory_gym' };
+    const s = SONGS[name] || SONGS[FALLBACK[name]];
     if (!s) return;
     const out = ctx.createGain(); out.connect(musicGain);
     const six = 60 / s.bpm / 4;
@@ -281,6 +342,15 @@ const Sound = (() => {
     if (Assets.sfx[name]) return fileSfx(name);
     const prev = currentName;
     stopMusic();
+    const midi = typeof Midi !== 'undefined' && Midi.get(MIDI_ALIAS[name] || name);
+    if (midi) {
+      const out = ctx.createGain(); out.connect(musicGain);
+      const step = midiScheduler(midi, out, false);
+      const iv = setInterval(() => { if (!step()) clearInterval(iv); }, 60);
+      step();
+      const ms = (midi.end + .3) * 1000;
+      return new Promise(r => setTimeout(() => { clearInterval(iv); out.disconnect(); if (prev) play(prev); r(); }, ms));
+    }
     const notes = parse(JINGLES[name] || JINGLES.save);
     const six = 60 / 140 / 4;
     let t = ctx.currentTime + .05;

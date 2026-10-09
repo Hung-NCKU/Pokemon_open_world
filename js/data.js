@@ -116,7 +116,7 @@ const CLIMATE = {
 const LEADERS = {
   kanto: [['小剛', 'rock'], ['小霞', 'water'], ['馬志士', 'electric'], ['莉佳', 'grass'], ['阿桔', 'poison'], ['娜姿', 'psychic'], ['夏伯', 'fire'], ['坂木', 'ground']],
   johto: [['阿速', 'flying'], ['阿筆', 'bug'], ['小茜', 'normal'], ['松葉', 'ghost'], ['阿四', 'fighting'], ['阿蜜', 'steel'], ['柳伯', 'ice'], ['小椿', 'dragon']],
-  hoenn: [['杜娟', 'rock'], ['藤樹', 'fighting'], ['鐵旋', 'electric'], ['亞莎', 'fire'], ['千里', 'normal'], ['娜琪', 'flying'], ['小楓與小南', 'psychic'], ['米可利', 'water']],
+  hoenn: [['杜娟', 'rock'], ['藤樹', 'fighting'], ['鐵旋', 'electric'], ['亞莎', 'fire'], ['千里', 'normal'], ['娜琪', 'flying'], ['小楓與小南', 'psychic'], ['亞當', 'water']],
   sinnoh: [['瓢太', 'rock'], ['菜種', 'grass'], ['阿李', 'fighting'], ['吉憲', 'water'], ['梅麗莎', 'ghost'], ['東瓜', 'steel'], ['小菘', 'ice'], ['電次', 'electric']],
   unova: [['天桐', 'grass'], ['蘆薈', 'normal'], ['亞堤', 'bug'], ['小菊兒', 'electric'], ['菊老大', 'ground'], ['風露', 'flying'], ['哈奇庫', 'ice'], ['夏卡', 'dragon']],
   kalos: [['紫羅蘭', 'bug'], ['查克洛', 'rock'], ['可爾妮', 'fighting'], ['福爺', 'grass'], ['希特隆', 'electric'], ['瑪綉', 'fairy'], ['葛吉花', 'psychic'], ['得撫', 'ice']],
@@ -153,3 +153,21 @@ const BIOME_TYPES = {
   desert: { ground: 4, rock: 2, fire: 2, bug: 1, dragon: .8, poison: .5 },
 };
 const BIOME_ZH = { tall: '草叢', water: '水面', cave: '岩地', snow: '雪原', desert: '沙漠' };
+
+// 對戰時的訓練家圖（Pokémon Showdown 圖庫）
+const TRAINER_BATTLE_SPRITES = ['youngster-gen3', 'lass-gen3', 'bugcatcher-gen3', 'hiker-gen3', 'swimmerm-gen3', 'psychic-gen3',
+  'blackbelt-gen3', 'birdkeeper-gen3', 'lady-gen3', 'acetrainer-gen3', 'hexmaniac-gen3', 'kindler-gen3', 'pokemaniac-gen3',
+  'camper-gen3', 'dragontamer-gen3', 'ninjaboy-gen3', 'acetrainer-gen3'];
+const LEADER_SPRITES = {
+  kanto: ['brock', 'misty', 'ltsurge', 'erika', 'koga', 'sabrina', 'blaine', 'giovanni'],
+  johto: ['falkner', 'bugsy', 'whitney', 'morty', 'chuck', 'jasmine', 'pryce', 'clair'],
+  hoenn: ['roxanne', 'brawly', 'wattson', 'flannery', 'norman', 'winona', 'tate', 'juan'],
+  sinnoh: ['roark', 'gardenia', 'maylene', 'crasherwake', 'fantina', 'byron', 'candice', 'volkner'],
+  unova: ['cilan', 'lenora', 'burgh', 'elesa', 'clay', 'skyla', 'brycen', 'drayden'],
+  kalos: ['viola', 'grant', 'korrina', 'ramos', 'clemont', 'valerie', 'olympia', 'wulfric'],
+  alola: ['ilima', 'lana', 'kiawe', 'mallow', 'sophocles', 'acerola', 'mina', 'ryuki'],
+  galar: ['milo', 'nessa', 'kabu', 'bea', 'opal', 'gordie', 'piers', 'raihan'],
+  paldea: ['katy', 'brassius', 'iono', 'kofu', 'larry', 'ryme', 'tulip', 'grusha'],
+};
+const CHAMP_SPRITES = { kanto: 'blue', johto: 'lance', hoenn: 'wallace', sinnoh: 'cynthia', unova: 'alder', kalos: 'diantha', alola: 'kukui', galar: 'leon', paldea: 'geeta' };
+const TRAINER_SPRITE_URL = n => `https://play.pokemonshowdown.com/sprites/trainers/${n}.png`;

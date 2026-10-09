@@ -14,6 +14,17 @@
 | X / Esc | 選單 / 返回 |
 | M | 世界地圖（隊伍有飛行屬性時按 F 飛翔） |
 
+### 使用綠寶石原版素材（本機）
+
+圖塊、角色、戰鬥介面、MIDI 音樂取自 [pret/pokeemerald](https://github.com/pret/pokeemerald)，需要在本機建置一次（不會推上 GitHub）：
+
+```
+git clone --depth 1 https://github.com/pret/pokeemerald .cache/pokeemerald
+python tools/build_assets.py
+```
+
+完成後會產生 `assets/gen3/`，遊戲會自動改用綠寶石的畫面與音樂；沒有建置時使用內建的原創像素圖與晶片音樂。
+
 ## 遊戲內容
 
 - **選擇出發地區**：關都、城都、豐緣、神奧、合眾、卡洛斯、阿羅拉、伽勒爾、帕底亞，各自從原作的出發城鎮開始，並選擇該地區的御三家。
