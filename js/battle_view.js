@@ -172,7 +172,7 @@ Object.assign(Battle.prototype, {
     const us = this.sideOf(user), ts = this.sideOf(target);
     const a = this.center(us), b = this.center(ts);
     const [proj, burst] = TYPE_FX[mv.t] || TYPE_FX.normal;
-    const self = SELF_TARGETS.has(mv.tg) || mv.c === 'st' && !mv.ail && mv.sx && mv.sx.every(([, c]) => c > 0);
+    const self = mv.tg === 'user';
     if (mv.c === 'ph') {
       // 物理：衝向對手 → 撞擊
       const img = this.el.querySelector(`.bmon.${us} img`);

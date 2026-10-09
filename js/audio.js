@@ -74,10 +74,10 @@ const Sound = (() => {
     sfxGain = ctx.createGain(); sfxGain.connect(master);
     applyVolume();
     // 方波（不同佔空比）
-    for (const d of [.125, .25, .5]) {
+    for (const [name, d] of [['sq12', .125], ['sq25', .25], ['sq50', .5]]) {
       const n = 48, re = new Float32Array(n), im = new Float32Array(n);
       for (let k = 1; k < n; k++) re[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * d);
-      waves['sq' + Math.round(d * 100)] = ctx.createPeriodicWave(re, im);
+      waves[name] = ctx.createPeriodicWave(re, im);
     }
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const ch = noiseBuf.getChannelData(0);
@@ -148,7 +148,7 @@ const Sound = (() => {
     const wave = MIDI_WAVE[kind] || 'sq50';
     if (wave === 'tri') o.type = 'triangle';
     else if (wave === 'sine') o.type = 'sine';
-    else o.setPeriodicWave(waves[wave]);
+    else o.setPeriodicWave(waves[wave] || waves.sq50);
     o.frequency.setValueAtTime(freq(n), t);
     const g = ctx.createGain();
     const amp = v * (MIDI_AMP[kind] || .2);
@@ -178,7 +178,9 @@ const Sound = (() => {
         const n = notes[idx];
         const real = base + n.t;
         if (real > horizon) return true;
-        if (real >= ctx.currentTime - .05) midiNote(Midi.inst(n.prog, n.ch), n.n, real, Math.min(n.d, 4), n.v, out);
+        if (real >= ctx.currentTime - .05) {
+          try { midiNote(Midi.inst(n.prog, n.ch), n.n, real, Math.min(n.d, 4), n.v, out); } catch (e) { /* 單一音符失敗就略過 */ }
+        }
         idx++;
       }
     };
@@ -293,7 +295,11 @@ const Sound = (() => {
     if (fileAudio) { fileAudio.pause(); fileAudio = null; }
     currentName = null;
   }
+  // 音樂出錯不能中斷遊戲流程
   function play(name) {
+    try { playInner(name); } catch (e) { console.warn('音樂播放失敗', name, e); }
+  }
+  function playInner(name) {
     if (name === currentName) return;
     if (!ctx) { pending = name; return; }
     stopMusic();
@@ -409,7 +415,7 @@ const Sound = (() => {
     if (Assets.sfx[name]) { fileSfx(name); return; }
     if (JINGLES[name]) return jingle(name);
     const f = SFX[name];
-    if (f) f(ctx.currentTime + .01);
+    try { if (f) f(ctx.currentTime + .01); } catch (e) { console.warn('音效播放失敗', name, e); }
   }
 
   return { init, play, stop: stopMusic, sfx, jingle, applyVolume, get current() { return currentName; } };

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>戰鬥引擎回歸測試</title>
+<style>
+  body { font-family: monospace; background: #111; color: #ddd; padding: 16px; }
+  .pass { color: #6f6; } .fail { color: #f66; } h1 { font-size: 18px; }
+  #battle, #dialog, #choices, #choice-info, #banner, #title, canvas { display: none; }
+</style>
+</head>
+<body>
+<h1>戰鬥引擎回歸測試</h1>
+<pre id="out">執行中……</pre>
+<div id="wrap"><div id="game"><canvas id="world"></canvas><div id="battle"></div><div id="title"></div><div id="banner"></div>
+  <div id="choices"></div><div id="choice-info"></div><div id="dialog"><div id="dialog-text"></div><div id="dialog-more"></div></div></div></div>
+<script>window.__errs = []; window.onerror = (m, s, l) => __errs.push(m + ' @' + l);</script>
+<script src="../data/pokedex.js"></script>
+<script src="../data/moves.js"></script>
+<script src="../data/showdown.js"></script>
+<script src="../js/util.js"></script>
+<script src="../js/data.js"></script>
+<script src="../js/mon.js"></script>
+<script src="../js/gen3.js"></script>
+<script src="../js/sprites.js"></script>
+<script src="../js/audio.js"></script>
+<script src="../js/world.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/battle.js"></script>
+<script src="../js/engine.js"></script>
+<script src="../js/battle_view.js"></script>
+<script src="../js/game.js"></script>
+<script>
+// 不顯示任何畫面、不等待
+Game.title = async () => { };
+U.sleep = () => Promise.resolve();
+UI.say = async () => { };
+UI.choose = async () => 0;
+UI.list = async () => 0;
+Battle.prototype.moveAnim = async () => { };
+Battle.prototype.anim = async () => { };
+
+const results = [];
+function check(name, cond, detail = '') { results.push({ name, ok: !!cond, detail }); }
+function moveId(sd) { return +Object.keys(SHOWDOWN.moves).find(k => SHOWDOWN.moves[k].id === sd); }
+
+// 建立一場 1 對 1 的戰鬥
+function setup(meSp, meLv, foeSp, foeLv) {
+  G.state = Game.newState('T', 'kanto', 1);
+  const me = Mon.create(meSp, meLv), foe = Mon.create(foeSp, foeLv);
+  me.moves = []; foe.moves = [];
+  G.state.party = [me];
+  const b = new Battle({ wild: foe });
+  b.setup();
+  b.order = ['me', 'foe'];
+  b.queued = { me: { type: 'move', idx: 0 }, foe: { idx: 0 } };
+  return b;
+}
+async function use(b, user, sd, slotPP = 10) {
+  const id = moveId(sd);
+  const slot = { id, pp: slotPP };
+  user.moves = [slot];
+  b.volOf(user).lockOn = 2; // 必定命中，避免命中率造成測試結果不穩定
+  await b.runMove(user, b.otherOf(user), { mv: md(id), slot });
+  return slot;
+}
+
+async function run() {
+  // 1. 近身戰：降低自己的防禦、特防，對手不變
+  {
+    const b = setup(68, 50, 143, 50);
+    await use(b, b.me, 'closecombat');
+    check('近身戰降低使用者的防禦與特防', b.vMe.stg.def === -1 && b.vMe.stg.spd === -1, JSON.stringify(b.vMe.stg));
+    check('近身戰不影響對手的能力', b.vFoe.stg.def === 0 && b.vFoe.stg.spd === 0, JSON.stringify(b.vFoe.stg));
+  }
+  // 2. 過熱：使用者特攻 -2
+  {
+    const b = setup(6, 50, 143, 50);
+    await use(b, b.me, 'overheat');
+    check('過熱降低使用者特攻 2 級', b.vMe.stg.spa === -2, JSON.stringify(b.vMe.stg));
+    check('過熱不影響對手的特攻', b.vFoe.stg.spa === 0);
+  }
+  // 3. 點到為止：剩 1 HP 的目標不會被打倒
+  {
+    let ok = true;
+    for (let i = 0; i < 20; i++) {
+      const b = setup(123, 80, 19, 3);
+      b.foe.hp = 1;
+      await use(b, b.me, 'falseswipe');
+      if (b.foe.hp !== 1) ok = false;
+    }
+    check('點到為止不會打倒剩 1 HP 的目標', ok);
+  }
+  // 4. 自爆：使用者倒下
+  {
+    const b = setup(74, 30, 143, 30);
+    await use(b, b.me, 'selfdestruct');
+    check('自爆後使用者倒下', b.me.hp === 0, 'hp=' + b.me.hp);
+    check('自爆對目標造成傷害', b.foe.hp < Mon.maxHp(b.foe));
+  }
+  // 5. 雙倍奉還：沒有受到物理攻擊時失敗；受到後回敬 2 倍
+  {
+    const b = setup(68, 50, 143, 50);
+    const before = b.foe.hp;
+    await use(b, b.me, 'counter');
+    check('雙倍奉還在未受到物理攻擊時失敗', b.foe.hp === before);
+    b.vMe.hitBy = [{ by: 'foe', dmg: 30, cat: 'Physical' }];
+    await use(b, b.me, 'counter');
+    check('雙倍奉還回敬 2 倍物理傷害', before - b.foe.hp === 60, '造成 ' + (before - b.foe.hp));
+    const b2 = setup(68, 50, 143, 50);
+    b2.vMe.hitBy = [{ by: 'foe', dmg: 30, cat: 'Special' }];
+    const h2 = b2.foe.hp;
+    await use(b2, b2.me, 'counter');
+    check('雙倍奉還不回敬特殊攻擊', b2.foe.hp === h2);
+  }
+  // 6. 打草結的威力依目標體重（卡比獸 460kg → 120）
+  {
+    const b = setup(1, 50, 143, 50);
+    check('打草結對卡比獸威力 120', b.basePower(b.me, b.foe, md(moveId('grassknot'))) === 120);
+    const b2 = setup(1, 50, 10, 50);
+    check('打草結對綠毛蟲威力 20', b2.basePower(b2.me, b2.foe, md(moveId('grassknot'))) === 20);
+  }
+  // 7. 破壞光線：下一回合需要休息
+  {
+    const b = setup(143, 50, 143, 50);
+    await use(b, b.me, 'hyperbeam');
+    check('破壞光線命中後需要休息', b.vMe.recharge === true);
+  }
+  // 8. 日光束：第一回合蓄力不造成傷害，晴天直接發動
+  {
+    const b = setup(3, 50, 143, 50);
+    const hp = b.foe.hp;
+    await use(b, b.me, 'solarbeam');
+    check('日光束第一回合蓄力', b.vMe.charging && b.foe.hp === hp);
+    const b2 = setup(3, 50, 143, 50);
+    b2.field.weather = 'sunnyday';
+    const hp2 = b2.foe.hp;
+    await use(b2, b2.me, 'solarbeam');
+    check('晴天時日光束直接發動', b2.foe.hp < hp2);
+  }
+  // 9. 守住擋下攻擊
+  {
+    const b = setup(143, 50, 143, 50);
+    b.order = ['foe', 'me'];
+    await use(b, b.foe, 'protect');
+    const hp = b.foe.hp;
+    await use(b, b.me, 'tackle');
+    check('守住擋下攻擊', b.foe.hp === hp);
+  }
+  // 10. 屬性免疫：地面招式打不到飛行，變化招式電磁波對地面無效
+  {
+    const b = setup(50, 50, 16, 50);
+    const hp = b.foe.hp;
+    await use(b, b.me, 'earthquake');
+    check('地震打不到飛行屬性', b.foe.hp === hp);
+    const b2 = setup(25, 50, 50, 50);
+    await use(b2, b2.me, 'thunderwave');
+    check('電磁波對地面屬性無效', !b2.foe.st);
+  }
+  // 11. 招式支援狀態
+  {
+    const none = Object.keys(MOVES).filter(id => md(id).support === 'none').map(id => md(id).id);
+    const partial = Object.keys(MOVES).filter(id => md(id).support === 'partial').map(id => md(id).id);
+    const full = Object.keys(MOVES).length - none.length - partial.length;
+    check('招式支援狀態統計', true, `完整 ${full}、部分 ${partial.length}、未支援 ${none.length}\n    未支援：${none.join(', ')}\n    部分：${partial.join(', ')}`);
+  }
+  // 12. 隨機對戰不出錯
+  {
+    let err = null;
+    try {
+      for (let i = 0; i < 40; i++) {
+        const b = setup(U.ri(1, 1025), U.ri(5, 70), U.ri(1, 1025), U.ri(5, 70));
+        b.me.moves = Mon.movesFor(b.me.sp, b.me.lv).map(id => ({ id, pp: MOVES[id].pp }));
+        b.foe.moves = Mon.movesFor(b.foe.sp, b.foe.lv).map(id => ({ id, pp: MOVES[id].pp }));
+        for (let t = 0; t < 30; t++) {
+          const r = await b.doTurn({ type: 'move', idx: U.ri(0, b.me.moves.length - 1) });
+          if (r) break;
+        }
+      }
+    } catch (e) { err = e.stack; }
+    check('40 場隨機對戰沒有例外', !err, err || '');
+  }
+  const pass = results.filter(r => r.ok).length;
+  document.getElementById('out').innerHTML = results.map(r => `<span class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✔' : '✘'} ${r.name}</span>${r.detail ? '\n    ' + r.detail.replace(/</g, '&lt;') : ''}`).join('\n')
+    + `\n\n${pass}/${results.length} 通過` + (__errs.length ? '\n錯誤：' + __errs.join('\n') : '');
+  document.title = pass === results.length ? 'PASS' : 'FAIL';
+}
+window.addEventListener('load', () => setTimeout(() => run().catch(e => { document.getElementById('out').textContent = 'EXC ' + e.stack; }), 50));
+</script>
+</body>
+</html>
