@@ -417,8 +417,13 @@ const Game = {
     g.font = 'bold 20px "Microsoft JhengHei"'; g.textAlign = 'center';
     for (const k of REGION_KEYS) {
       const [x, y, r] = REGION_POS[k];
-      g.fillStyle = 'rgba(0,0,0,.55)'; g.fillText(REGIONS[k].n, x + 1, y - r - 3);
-      g.fillStyle = '#fff'; g.fillText(REGIONS[k].n, x, y - r - 4);
+      // 地區名稱與等級帶
+      const [lo, hi] = World.regionBand(k);
+      for (const [txt, dy, size] of [[REGIONS[k].n, -18, 20], [`Lv.${lo}–${hi}`, 0, 16]]) {
+        g.font = `bold ${size}px "Cubic11", "Microsoft JhengHei"`;
+        g.fillStyle = 'rgba(0,0,0,.6)'; g.fillText(txt, x + 1, y - r + dy + 1);
+        g.fillStyle = dy ? '#fff' : '#ffe080'; g.fillText(txt, x, y - r + dy);
+      }
     }
     g.fillStyle = '#f22'; g.beginPath(); g.arc(G.state.x, G.state.y, 6, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
@@ -580,13 +585,16 @@ const Game = {
     const [name, type] = LEADERS[t.region][t.gym];
     const got = (G.state.badges[t.region] || []).includes(t.gym);
     const title = REGIONS[t.region].gen === 7 ? '' : '道館館主';
-    if (got) { await UI.say(`${name}：「你的實力我已經見識過了。繼續加油吧！」`); return; }
-    await UI.say(`這裡是${t.name}道館，館主是擅長${TYPES[type].n}屬性的${name}！`);
-    const c = await UI.choose(['挑戰', '離開'], { prompt: `要挑戰${title}${name}嗎？（建議等級 ${World.levelAt(t.cx, t.cy) + 4}）` });
+    const rematch = got && G.state.champs[t.region];
+    if (got && !rematch) { await UI.say(`${name}：「你的實力我已經見識過了。成為${REGIONS[t.region].n}冠軍之後，再來找我重賽吧！」`); return; }
+    if (rematch) await UI.say(`${name}：「新冠軍！我也變強了，再來比一場吧！」`);
+    else await UI.say(`這裡是${t.name}道館，館主是擅長${TYPES[type].n}屬性的${name}！\n（館主的隊伍會配合你的徽章數調整，目前 ${Game.badgeCount()} 枚）`);
+    const c = await UI.choose([rematch ? '重賽' : '挑戰', '離開'], { prompt: `要挑戰${title}${name}嗎？（對手約 Lv.${World.gymLevel(t)}）` });
     if (c !== 0) return;
-    await UI.say(`${name}：「歡迎你，挑戰者！就讓我用${TYPES[type].n}屬性寶可夢來試試你的實力吧！」`);
+    if (!rematch) await UI.say(`${name}：「歡迎你，挑戰者！就讓我用${TYPES[type].n}屬性寶可夢來試試你的實力吧！」`);
     const party = World.gymParty(t);
-    const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: 100, sprite: LEADER_SPRITES[t.region][t.gym], lose: '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
+    const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: rematch ? 150 : 100, sprite: LEADER_SPRITES[t.region][t.gym], lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
+    if (r === 'win' && rematch) { Game.save(true); return; }
     if (r === 'win') {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
       Sound.jingle('badge');
@@ -602,7 +610,8 @@ const Game = {
       await UI.say(`警衛：「要挑戰${reg.n}寶可夢聯盟，必須收集${reg.n}地區的 8 枚徽章。」\n（目前 ${Game.badgeCount(t.region)}／8）`);
       return;
     }
-    const c = await UI.choose(['挑戰', '離開'], { prompt: `要挑戰${reg.n}冠軍 ${reg.champ} 嗎？（建議等級 ${World.levelAt(t.cx, t.cy) + 10}）` });
+    const champLv = World.championParty(t).reduce((a, m) => Math.max(a, m.lv), 0);
+    const c = await UI.choose(['挑戰', '離開'], { prompt: `要挑戰${reg.n}冠軍 ${reg.champ} 嗎？（對手最高 Lv.${champLv}${G.state.champs[t.region] ? '，重賽' : ''}）` });
     if (c !== 0) return;
     await UI.say(`${reg.champ}：「歡迎來到${reg.n}寶可夢聯盟。讓我看看你和寶可夢之間的羈絆吧！」`);
     const party = World.championParty(t);

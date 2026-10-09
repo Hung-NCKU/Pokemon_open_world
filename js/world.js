@@ -44,6 +44,7 @@ const World = {
 
   generate(seed, homeRegion) {
     this.seed = seed;
+    this._ring = null;
     const rng = mulberry32(seed);
     const tiles = this.tiles = new Uint8Array(WW * WH);
     const regionMap = this.regionMap = new Uint8Array(WW * WH);
@@ -260,11 +261,43 @@ const World = {
     }
   },
 
-  // 依起點距離決定野生寶可夢與訓練家的等級
+  // 地區與出發地區之間隔了幾個地區（依 REGION_LINKS 的連接）
+  regionRing(region) {
+    if (!this._ring) {
+      const start = this.homeTown.region;
+      this._ring = { [start]: 0 };
+      const q = [start];
+      while (q.length) {
+        const r = q.shift();
+        for (const [a, b] of REGION_LINKS) {
+          const n = a === r ? b : b === r ? a : null;
+          if (n && this._ring[n] === undefined) { this._ring[n] = this._ring[r] + 1; q.push(n); }
+        }
+      }
+    }
+    return this._ring[region] ?? 3;
+  },
+  // 地區的等級帶：出發地區 Lv.3 起，每隔一個地區提高一階；地區內從家鄉往聯盟逐漸變強
+  regionBand(region) {
+    const base = [3, 20, 35, 50, 60][Math.min(4, this.regionRing(region))];
+    return [base, base + 30];
+  },
+  // 野生寶可夢與訓練家的等級（固定的區域等級帶；山地、岩地、外海是危險地帶）
   levelAt(x, y) {
-    const h = this.homeTown;
-    const d = Math.hypot(x - h.cx, y - h.cy);
-    return U.clamp(Math.floor(3 + d / 8.5), 2, 100);
+    const region = this.regionAt(x, y);
+    const [lo, hi] = this.regionBand(region);
+    const home = this.towns.find(t => t.region === region && t.kind === 'home');
+    const league = this.towns.find(t => t.region === region && t.kind === 'league');
+    let k = 0;
+    if (home && league) {
+      const total = Math.hypot(league.cx - home.cx, league.cy - home.cy) || 1;
+      k = U.clamp(Math.hypot(x - home.cx, y - home.cy) / total, 0, 1);
+    }
+    let L = lo + (hi - lo) * k;
+    const t = this.tile(x, y);
+    if (t === T.MOUNT || t === T.CAVE) L += 5;
+    if (t === T.DEEP) L += 8;
+    return U.clamp(Math.floor(L), 2, 100);
   },
 
   buildPools() {
@@ -344,10 +377,18 @@ const World = {
     return party;
   },
 
+  // 道館的強度依玩家的徽章總數決定（可以用任意順序挑戰）；成為該地區冠軍後是重賽隊伍
+  gymLevel(town) {
+    const badges = typeof Game !== 'undefined' && G.state ? Game.badgeCount() : 0;
+    const rematch = G.state && G.state.champs && G.state.champs[town.region];
+    if (rematch) return Math.min(100, 70 + Math.floor(badges / 4));
+    return Math.min(85, 12 + badges * 6);
+  },
   gymParty(town) {
-    const rnd = mulberry32(this.seed + town.id * 7919);
+    const L = this.gymLevel(town);
+    const tier = Math.floor(L / 6);
+    const rnd = mulberry32(this.seed + town.id * 7919 + tier * 31);
     const [, type] = LEADERS[town.region][town.gym];
-    const L = this.levelAt(town.cx, town.cy) + 4;
     const n = U.clamp(2 + Math.floor(L / 14), 2, 6);
     const gen = REGIONS[town.region].gen;
     const party = [];
@@ -365,7 +406,10 @@ const World = {
 
   championParty(town) {
     const rnd = mulberry32(this.seed + town.id * 104729);
-    const L = Math.min(100, this.levelAt(town.cx, town.cy) + 10);
+    // 冠軍：不低於該地區等級帶上限，也隨徽章數變強；重賽時更強
+    const badges = G.state ? Game.badgeCount() : 0;
+    const rematch = G.state && G.state.champs && G.state.champs[town.region];
+    const L = Math.min(100, Math.max(this.regionBand(town.region)[1] + 8, 20 + badges * 5) + (rematch ? 10 : 0));
     const reg = REGIONS[town.region];
     const party = [];
     const used = new Set();
