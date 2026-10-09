@@ -18,6 +18,7 @@
 <script src="../data/pokedex.js"></script>
 <script src="../data/moves.js"></script>
 <script src="../data/showdown.js"></script>
+<script src="../data/items.js"></script>
 <script src="../js/util.js"></script>
 <script src="../js/data.js"></script>
 <script src="../js/mon.js"></script>
@@ -163,6 +164,57 @@ async function run() {
     const partial = Object.keys(MOVES).filter(id => md(id).support === 'partial').map(id => md(id).id);
     const full = Object.keys(MOVES).length - none.length - partial.length;
     check('招式支援狀態統計', true, `完整 ${full}、部分 ${partial.length}、未支援 ${none.length}\n    未支援：${none.join(', ')}\n    部分：${partial.join(', ')}`);
+  }
+  // 13. 努力值：依物種實際產出，總和不超過 510
+  {
+    const m = Mon.create(1, 10);
+    m.ev = [252, 252, 5, 0, 0, 0]; // 合計 509
+    Mon.gainEV(m, Mon.create(74, 5)); // 小拳石：防禦 +1
+    check('努力值依物種產出（小拳石給防禦）', m.ev[2] === 6, JSON.stringify(m.ev));
+    const m2 = Mon.create(1, 10);
+    m2.ev = [252, 252, 5, 0, 0, 0];
+    Mon.gainEV(m2, Mon.create(144, 50)); // 急凍鳥：特防 +3
+    const total = m2.ev.reduce((a, b) => a + b, 0);
+    check('努力值總和不超過 510', total === 510, `合計 ${total}`);
+    const m3 = Mon.create(1, 10);
+    m3.ev = [0, 251, 0, 0, 0, 0];
+    Mon.gainEV(m3, Mon.create(68, 50)); // 怪力：攻擊 +3
+    check('單項努力值不超過 252', m3.ev[1] === 252, JSON.stringify(m3.ev));
+  }
+  // 14. 進化條件
+  {
+    G.state = Game.newState('T', 'kanto', 1);
+    const fairy = moveId('charm'), tackle = moveId('tackle');
+    const RealDate = Date;
+    const at = h => { window.Date = class extends RealDate { getHours() { return h; } }; };
+    const eevee = Mon.create(133, 30);
+    eevee.happy = 200;
+    eevee.moves = [{ id: tackle, pp: 35 }];
+    at(23);
+    check('伊布夜晚親密度高 → 月亮伊布', Mon.pickEvo(eevee, Mon.evoCandidates(eevee)) === 197);
+    eevee.moves.push({ id: fairy, pp: 20 });
+    check('會妖精招式的伊布 → 仙子伊布（優先於月亮伊布）', Mon.pickEvo(eevee, Mon.evoCandidates(eevee)) === 700);
+    at(12);
+    eevee.moves = [{ id: tackle, pp: 35 }];
+    check('伊布白天親密度高 → 太陽伊布', Mon.pickEvo(eevee, Mon.evoCandidates(eevee)) === 196);
+    eevee.happy = 50;
+    check('伊布親密度不足時升級不進化', Mon.evoCandidates(eevee).length === 0);
+    check('伊布使用葉之石 → 葉伊布', Mon.pickEvo(eevee, Mon.evoCandidates(eevee, 'leaf-stone')) === 470);
+    window.Date = RealDate;
+    const kirlia = Mon.create(281, 30);
+    kirlia.gender = 'F';
+    check('雌性奇魯莉安不能用覺醒之石進化', Mon.evoCandidates(kirlia, 'dawn-stone').length === 0);
+    kirlia.gender = 'M';
+    check('雄性奇魯莉安用覺醒之石 → 艾路雷朵', Mon.pickEvo(kirlia, Mon.evoCandidates(kirlia, 'dawn-stone')) === 475);
+    const w = Mon.create(265, 7);
+    const a = Mon.pickEvo(w, Mon.evoCandidates(w)), b = Mon.pickEvo(w, Mon.evoCandidates(w));
+    check('刺尾蟲的分歧進化對同一個體固定', a === b && (a === 266 || a === 268));
+    const onix = Mon.create(95, 30);
+    check('大岩蛇使用金屬膜 → 大鋼蛇（改編自通訊交換）', Mon.pickEvo(onix, Mon.evoCandidates(onix, 'metal-coat')) === 208);
+    const ty = Mon.create(236, 20);
+    const st = Mon.stats(ty);
+    const want = st[1] > st[2] ? 106 : st[1] < st[2] ? 107 : 237;
+    check('無畏小子依攻擊與防禦的大小進化', Mon.pickEvo(ty, Mon.evoCandidates(ty)) === want);
   }
   // 12. 隨機對戰不出錯
   {

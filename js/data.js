@@ -63,20 +63,10 @@ const ITEMS = {
   'rare-candy': { n: '神奇糖果', price: 4800, kind: 'candy', d: '讓寶可夢提升 1 級。' },
 };
 
-// 進化道具（含通訊交換用的連接繩）
-const EVO_ITEMS = {
-  'fire-stone': '火之石', 'water-stone': '水之石', 'thunder-stone': '雷之石', 'leaf-stone': '葉之石',
-  'moon-stone': '月之石', 'sun-stone': '日之石', 'shiny-stone': '光之石', 'dusk-stone': '暗之石',
-  'dawn-stone': '覺醒之石', 'ice-stone': '冰之石', 'linking-cord': '連接繩',
-  'sweet-apple': '甜甜蘋果', 'tart-apple': '酸酸蘋果', 'syrupy-apple': '蜜汁蘋果',
-  'cracked-pot': '破裂的茶壺', 'chipped-pot': '缺損的茶壺', 'galarica-cuff': '伽勒豆蔻手環',
-  'galarica-wreath': '伽勒豆蔻花圈', 'black-augurite': '黑奇石', 'peat-block': '泥炭塊',
-  'auspicious-armor': '慶祝之鎧', 'malicious-armor': '咒術之鎧', 'unremarkable-teacup': '凡作茶碗',
-  'masterpiece-teacup': '傑作茶碗', 'metal-alloy': '複合金屬', 'scroll-of-darkness': '惡之掛軸',
-  'scroll-of-waters': '水之掛軸',
-};
+// 進化道具：名稱取自 PokéAPI（data/items.js）。原作需通訊交換或攜帶升級的道具，改為直接使用。
+const EVO_ITEMS = Object.assign({ 'linking-cord': '聯繫繩' }, window.ITEMNAMES || {});
 for (const [id, n] of Object.entries(EVO_ITEMS)) {
-  ITEMS[id] = { n, price: id === 'linking-cord' ? 3000 : 2100, kind: 'evo', d: '能讓某些寶可夢進化的道具。' };
+  ITEMS[id] = { n, price: id === 'linking-cord' ? 3000 : 2100, kind: 'evo', d: id === 'linking-cord' ? '原作需要通訊交換才能進化的寶可夢，使用後即可進化。' : '能讓某些寶可夢進化的道具。' };
 }
 
 const SHOP_LIST = ['poke-ball', 'great-ball', 'ultra-ball', 'potion', 'super-potion', 'hyper-potion', 'max-potion',

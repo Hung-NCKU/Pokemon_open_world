@@ -255,7 +255,7 @@ class Battle {
       if (m._lvUp && m.hp > 0) {
         delete m._lvUp;
         const c = Mon.evoCandidates(m);
-        if (c.length) await Game.evolve(m, c[0].to);
+        if (c.length) await Game.evolve(m, Mon.pickEvo(m, c));
       }
       delete m._lvUp;
     }

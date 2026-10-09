@@ -41,6 +41,13 @@ def get(path):
             time.sleep(1 + attempt * 2)
 
 
+def safe_get(path):
+    try:
+        return get(path)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def url_id(url):
     return int(url.rstrip("/").split("/")[-1])
 
@@ -63,6 +70,61 @@ def zh_text(entries, key):
         if e["language"]["name"] == "en":
             return " ".join(e[key].split())
     return ""
+
+
+TOWER_ITEM = {"tower-of-darkness": "scroll-of-darkness", "tower-of-waters": "scroll-of-waters"}
+
+
+def convert_evo(d):
+    """PokéAPI evolution_details → 遊戲用的條件。單機無法達成的條件改編並以 adapt 標示。"""
+    trig = (d.get("trigger") or {}).get("name", "other")
+    c = {}
+    if trig == "use-item" and d.get("item"):
+        c["item"] = d["item"]["name"]
+    elif trig == "trade":
+        held = d.get("held_item")
+        c["item"] = held["name"] if held else "linking-cord"
+        c["adapt"] = "trade"
+    elif trig in TOWER_ITEM:
+        c["item"] = TOWER_ITEM[trig]
+        c["adapt"] = "tower"
+    if d.get("held_item") and trig != "trade":
+        c["item"] = d["held_item"]["name"]
+        c["adapt"] = "held"
+    if d.get("min_level"):
+        c["lvl"] = d["min_level"]
+    if d.get("min_happiness"):
+        c["happy"] = d["min_happiness"]
+    if d.get("min_affection"):
+        c["happy"] = 220
+        c["adapt"] = "affection"
+    if d.get("time_of_day"):
+        c["time"] = d["time_of_day"]
+    if d.get("gender") is not None:
+        c["gender"] = d["gender"]  # 1 雌性、2 雄性
+    if d.get("known_move"):
+        c["move"] = url_id(d["known_move"]["url"])
+    if d.get("known_move_type"):
+        c["mtype"] = d["known_move_type"]["name"]
+    if d.get("relative_physical_stats") is not None:
+        c["rps"] = d["relative_physical_stats"]
+    if d.get("party_species"):
+        c["partySp"] = url_id(d["party_species"]["url"])
+    if d.get("party_type"):
+        c["partyType"] = d["party_type"]["name"]
+    if d.get("trade_species"):
+        c["adapt"] = "trade"
+    for flag, name in (("needs_overworld_rain", "rain"), ("turn_upside_down", "upside"), ("location", "location"), ("min_beauty", "beauty")):
+        if d.get(flag):
+            c["adapt"] = name
+    if trig not in ("level-up", "use-item", "trade") and trig not in TOWER_ITEM:
+        c["adapt"] = trig
+    # 沒有任何可在遊戲中判定的條件時，改為升級時進化
+    if not any(k in c for k in ("lvl", "item", "happy", "move", "mtype")):
+        c["lvl"] = 30
+        c.setdefault("adapt", trig)
+        c["fb"] = 1  # 補位用的條件，有其他條件時會被移除
+    return c
 
 
 def pmap(fn, items, workers=24):
@@ -92,35 +154,29 @@ def main():
                 walk(nxt)
                 continue
             details = nxt["evolution_details"] or [{}]
-            # 優先採用道具進化，其次等級，其次其它
-            pick = None
+            # 保留所有條件組合（任一組成立即可進化）
+            conds = []
             for d in details:
-                if d.get("trigger", {}).get("name") == "use-item" and d.get("item"):
-                    pick = d
-                    break
-            if not pick:
-                for d in details:
-                    if d.get("min_level"):
-                        pick = d
-                        break
-            if not pick:
-                pick = details[0]
-            trig = (pick.get("trigger") or {}).get("name", "other")
-            e = {"to": tid}
-            if trig == "use-item" and pick.get("item"):
-                e["item"] = pick["item"]["name"]
-            elif trig == "trade":
-                e["item"] = "linking-cord"
-            elif pick.get("min_level"):
-                e["lvl"] = pick["min_level"]
-            elif pick.get("min_happiness") or pick.get("min_affection"):
+                c = convert_evo(d)
+                if c not in conds:
+                    conds.append(c)
+            # 有其他條件時移除補位條件；有原作條件時移除同類的改編條件（例如親密度與好感度）
+            if len(conds) > 1:
+                conds = [c for c in conds if not c.get("fb")] or conds
+            if any(not c.get("adapt") for c in conds):
+                conds = [c for c in conds if not c.get("adapt") or c["adapt"] in ("trade", "held")]
+            # 優先列出原作條件
+            conds.sort(key=lambda c: 1 if c.get("adapt") else 0)
+            e = {"to": tid, "c": conds}
+            # 摘要欄位（野生等級推算、圖鑑顯示用）
+            lv = [c["lvl"] for c in conds if "lvl" in c and not c.get("item")]
+            if lv:
+                e["lvl"] = min(lv)
+            it = [c["item"] for c in conds if c.get("item")]
+            if it:
+                e["item"] = it[0]
+            if any(c.get("happy") for c in conds):
                 e["happy"] = 1
-            else:
-                e["lvl"] = 30
-            if pick.get("time_of_day"):
-                e["time"] = pick["time_of_day"]
-            if pick.get("relative_physical_stats") is not None:
-                e["rps"] = pick["relative_physical_stats"]
             evo.setdefault(sid, []).append(e)
             pre[tid] = sid
             walk(nxt)
@@ -157,6 +213,7 @@ def main():
                 learn.append([max(1, lv), mid])
                 all_moves.add(mid)
         stats = {st["stat"]["name"]: st["base_stat"] for st in p["stats"]}
+        effort = {st["stat"]["name"]: st["effort"] for st in p["stats"]}
         genus = ""
         for lang in ("zh-hant", "zh-hans", "en"):
             g = [x["genus"] for x in s["genera"] if x["language"]["name"] == lang]
@@ -170,6 +227,10 @@ def main():
             "t": [t["type"]["name"] for t in sorted(p["types"], key=lambda t: t["slot"])],
             "s": [stats["hp"], stats["attack"], stats["defense"],
                   stats["special-attack"], stats["special-defense"], stats["speed"]],
+            # 打倒時給予的努力值（HP、攻擊、防禦、特攻、特防、速度）
+            "ey": [effort["hp"], effort["attack"], effort["defense"],
+                   effort["special-attack"], effort["special-defense"], effort["speed"]],
+            "gr8": s["gender_rate"],  # 雌性比例（八分之幾），-1 為無性別
             "cr": s["capture_rate"],
             "xp": p["base_experience"] or 60,
             "gr": s["growth_rate"]["name"],
@@ -201,6 +262,17 @@ def main():
 
     for pid in out:
         out[pid]["wm"] = wild_min(pid)
+
+    # 進化道具的中文名稱
+    item_names = sorted({c["item"] for es in evo.values() for e in es for c in e["c"] if c.get("item")})
+    print(f"下載進化道具 ({len(item_names)})...")
+    items = {}
+    for name, it in zip(item_names, pmap(lambda n: safe_get(f"item/{n}"), item_names)):
+        items[name] = zh_name(it["names"], name) if it else name
+    with open(os.path.join(ROOT, "data", "items.js"), "w", encoding="utf-8") as f:
+        f.write("window.ITEMNAMES=")
+        json.dump(items, f, ensure_ascii=False, separators=(",", ":"))
+        f.write(";\n")
 
     print(f"下載招式 ({len(all_moves)})...")
     move_ids = sorted(all_moves)

@@ -68,6 +68,7 @@ const Mon = {
       iv: Array.from({ length: 6 }, () => U.ri(0, 31)),
       ev: [0, 0, 0, 0, 0, 0],
       nat: U.ri(0, 24),
+      gender: Mon.genderOf(id),
       happy: s.hap,
       st: null,
       shiny: opts.shiny ?? Math.random() < 1 / 4096,
@@ -88,24 +89,75 @@ const Mon = {
     return SPR + (back ? 'back/' : '') + (shiny ? 'shiny/' : '') + id + '.png';
   },
 
-  // 等級提升或使用道具時的進化候選
+  // 單一條件組是否成立（item：使用道具時傳入的道具；null 表示升級時判定）
+  evoCondMet(m, c, item = null, party = null) {
+    if (item) { if (c.item !== item) return false; }
+    else if (c.item) return false;
+    if (c.lvl && m.lv < c.lvl) return false;
+    if (c.happy && (m.happy || 0) < c.happy) return false;
+    if (c.time) {
+      const h = new Date().getHours();
+      const ok = c.time === 'day' ? h >= 6 && h < 18 : c.time === 'night' ? h < 6 || h >= 18 : c.time === 'dusk' ? h >= 17 && h < 19 : true;
+      if (!ok) return false;
+    }
+    if (c.gender === 1 && m.gender !== 'F') return false;
+    if (c.gender === 2 && m.gender !== 'M') return false;
+    if (c.move && !m.moves.some(x => x.id === c.move)) return false;
+    if (c.mtype && !m.moves.some(x => MOVES[x.id] && MOVES[x.id].t === c.mtype)) return false;
+    if (c.rps !== undefined) {
+      const st = Mon.stats(m);
+      if (Math.sign(st[1] - st[2]) !== c.rps) return false;
+    }
+    party = party || (typeof G !== 'undefined' && G.state ? G.party : []);
+    if (c.partySp && !party.some(p => p !== m && p.sp === c.partySp)) return false;
+    if (c.partyType && !party.some(p => p !== m && Mon.types(p).includes(c.partyType))) return false;
+    return true;
+  },
+  // 等級提升或使用道具時的進化候選（任一條件組成立即可）；依條件明確程度排序
   evoCandidates(m, item = null) {
-    const evs = POKEDEX[m.sp].ev || [];
-    const night = U.isNight();
-    const st = Mon.stats(m);
-    return evs.filter(e => {
-      if (!POKEDEX[e.to]) return false;
-      if (item) return e.item === item;
-      if (e.item) return false;
-      if (e.time === 'day' && night) return false;
-      if (e.time === 'night' && !night) return false;
-      if (e.rps !== undefined) {
-        const r = Math.sign(st[1] - st[2]);
-        if (r !== e.rps) return false;
+    const out = [];
+    for (const e of POKEDEX[m.sp].ev || []) {
+      if (!POKEDEX[e.to]) continue;
+      const conds = e.c || [e];
+      let best = -1;
+      for (const c of conds) {
+        if (!Mon.evoCondMet(m, c, item)) continue;
+        // 條件越多越優先；需要特定招式的條件再加權（最新世代：會妖精招式的伊布優先進化為仙子伊布）
+        const score = Object.keys(c).filter(k => !['adapt', 'fb'].includes(k)).length + (c.move || c.mtype ? 1 : 0);
+        best = Math.max(best, score);
       }
-      if (e.happy) return m.happy >= 160;
-      return e.lvl && m.lv >= e.lvl;
-    });
+      if (best >= 0) out.push({ ...e, score: best });
+    }
+    return out.sort((a, b) => b.score - a.score);
+  },
+  // 多個候選同樣明確時（例如刺尾蟲），依個體固定決定，不隨機
+  pickEvo(m, cands) {
+    if (!cands.length) return null;
+    const top = cands.filter(c => c.score === cands[0].score);
+    if (top.length === 1) return top[0].to;
+    let h = 0;
+    for (const ch of String(m.uid)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return top[h % top.length].to;
+  },
+  // 圖鑑用的進化條件說明
+  evoText(c) {
+    const parts = [];
+    if (c.item) parts.push(`使用${ITEMS[c.item] ? ITEMS[c.item].n : c.item}`);
+    if (c.lvl && !c.fb) parts.push(`Lv.${c.lvl}`);
+    if (c.happy) parts.push('親密度高');
+    if (c.time) parts.push({ day: '白天', night: '夜晚', dusk: '黃昏' }[c.time] || c.time);
+    if (c.gender) parts.push(c.gender === 1 ? '雌性' : '雄性');
+    if (c.move) parts.push(`學會${MOVES[c.move] ? MOVES[c.move].n : '特定招式'}`);
+    if (c.mtype) parts.push(`學會${TYPES[c.mtype] ? TYPES[c.mtype].n : c.mtype}屬性招式`);
+    if (c.rps !== undefined) parts.push(c.rps > 0 ? '攻擊＞防禦' : c.rps < 0 ? '攻擊＜防禦' : '攻擊＝防禦');
+    if (c.partySp) parts.push(`隊伍中有${POKEDEX[c.partySp] ? POKEDEX[c.partySp].n : '特定寶可夢'}`);
+    if (c.partyType) parts.push(`隊伍中有${TYPES[c.partyType] ? TYPES[c.partyType].n : ''}屬性寶可夢`);
+    if (c.fb) parts.push(`Lv.${c.lvl}`);
+    let s = parts.join('・') || '升級';
+    const ADAPT = { trade: '原作需通訊交換', held: '原作需攜帶道具升級', tower: '原作需挑戰塔', affection: '原作需好感度', spin: '原作需旋轉',
+      location: '原作需在特定地點升級', rain: '原作需下雨', upside: '原作需倒拿主機', beauty: '原作需美麗度' };
+    if (c.adapt) s += `（改編：${ADAPT[c.adapt] || '原作的特殊條件無法重現'}）`;
+    return s;
   },
 
   // 最新世代經驗值公式（含學習裝置：未上場者獲得一半）
@@ -117,14 +169,20 @@ const Mon = {
     return Math.max(1, Math.floor(e));
   },
 
-  // EV：打倒對手獲得其最高種族值項目的努力值
+  // EV：依打倒的寶可夢實際的努力值產出（PokéAPI stats[].effort）；單項上限 252、總和上限 510
   gainEV(m, foe) {
-    const b = POKEDEX[foe.sp].s;
-    let best = 0;
-    for (let i = 1; i < 6; i++) if (b[i] > b[best]) best = i;
-    const pts = b[best] >= 100 ? 2 : 1;
+    const y = POKEDEX[foe.sp].ey || [0, 0, 0, 0, 0, 0];
     m.ev = m.ev || [0, 0, 0, 0, 0, 0];
-    const total = m.ev.reduce((a, c) => a + c, 0);
-    if (total < 510 && m.ev[best] < 252) m.ev[best] = Math.min(252, m.ev[best] + pts);
+    for (let i = 0; i < 6; i++) {
+      const total = m.ev.reduce((a, c) => a + c, 0);
+      const add = Math.min(y[i], 252 - m.ev[i], 510 - total);
+      if (add > 0) m.ev[i] += add;
+    }
   },
+  genderOf(id) {
+    const r = POKEDEX[id].gr8;
+    if (r === undefined || r < 0) return null;
+    return Math.random() * 8 < r ? 'F' : 'M';
+  },
+  genderMark(m) { return m.gender === 'F' ? '♀' : m.gender === 'M' ? '♂' : ''; },
 };

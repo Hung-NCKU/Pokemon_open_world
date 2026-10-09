@@ -91,12 +91,14 @@ const Game = {
       await say(`${name} 學會了 ${mv.n}！`);
       return;
     }
+    if (md(mid).support !== 'full') await say(`提醒：${mv.n} ${SUPPORT_ZH[md(mid).support]}。`);
     await say(`${name} 想要學習新招式 ${mv.n}，但是 ${name} 已經學會 4 個招式了。`);
     while (true) {
       const c = await UI.choose(['忘記一個招式', '放棄學習'], { prompt: `要忘記一個招式來學習 ${mv.n} 嗎？`, cancel: false });
       if (c === 0) {
-        const opts = m.moves.map(x => ({ html: `${typeTag(MOVES[x.id].t)} ${U.esc(MOVES[x.id].n)} <small>威力 ${MOVES[x.id].p || '—'}</small>` }));
-        opts.push({ html: `<b>${typeTag(mv.t)} ${U.esc(mv.n)} <small>威力 ${mv.p || '—'}</small>（不學）</b>` });
+        const sup = id => `<small>${SUPPORT_ZH[md(id).support]}</small>`;
+        const opts = m.moves.map(x => ({ html: `${typeTag(MOVES[x.id].t)} ${U.esc(MOVES[x.id].n)} <small>威力 ${MOVES[x.id].p || '—'}</small>${sup(x.id)}` }));
+        opts.push({ html: `<b>${typeTag(mv.t)} ${U.esc(mv.n)} <small>威力 ${mv.p || '—'}</small>${sup(mid)}（不學）</b>` });
         const i = await UI.choose(opts, { prompt: `要忘記哪一個招式？\n新招式：${mv.n}　${mv.d || ''}` });
         if (i >= 0 && i < 4) {
           const old = MOVES[m.moves[i].id].n;
@@ -172,10 +174,10 @@ const Game = {
       await Game.giveExp(m, Mon.expFor(s.gr, m.lv + 1) - m.exp);
       const c = Mon.evoCandidates(m);
       delete m._lvUp;
-      if (c.length) await Game.evolve(m, U.pick(c).to);
+      if (c.length) await Game.evolve(m, Mon.pickEvo(m, c));
     } else if (it.kind === 'evo') {
       const c = Mon.evoCandidates(m, id);
-      await Game.evolve(m, U.pick(c).to);
+      await Game.evolve(m, Mon.pickEvo(m, c));
     }
   },
   itemUsable(m, id, inBattle) {
@@ -237,13 +239,14 @@ const Game = {
       <td><div class="sbar"><div style="width:${Math.min(100, s.s[i] / 1.6)}%"></div></div></td><td class="dim">種族 ${s.s[i]}／個體 ${m.iv[i]}／努力 ${m.ev?.[i] || 0}</td></tr>`).join('');
     const moves = m.moves.map(x => {
       const d = MOVES[x.id];
-      return `<div class="mv">${typeTag(d.t)} <b>${U.esc(d.n)}</b> <span class="dim">${d.c === 'ph' ? '物理' : d.c === 'sp' ? '特殊' : '變化'}｜威力 ${d.p || '—'}｜命中 ${d.a || '—'}｜PP ${x.pp}/${d.pp}</span><div class="dim small">${U.esc(d.d || '')}</div></div>`;
+      return `<div class="mv">${typeTag(d.t)} <b>${U.esc(d.n)}</b> <span class="dim">${d.c === 'ph' ? '物理' : d.c === 'sp' ? '特殊' : '變化'}｜威力 ${d.p || '—'}｜命中 ${d.a || '—'}｜PP ${x.pp}/${d.pp}</span><b class="small">${SUPPORT_ZH[md(x.id).support]}</b><div class="dim small">${U.esc(d.d || '')}</div></div>`;
     }).join('');
     await UI.panel(`<div class="summary">
       <div class="left"><img class="big" src="${Mon.sprite(m.sp, { shiny: m.shiny })}">
         <div class="nm">No.${U.pad3(s.id)} ${U.esc(Mon.name(m))}${m.shiny ? ' ✨' : ''}</div>
         <div>${s.t.map(typeTag).join('')}</div>
-        <div class="dim">Lv.${m.lv}　性格：${NATURES[m.nat]}</div>
+        <div class="dim">Lv.${m.lv} ${Mon.genderMark(m)}　性格：${NATURES[m.nat]}</div>
+        <div class="dim">努力值合計 ${(m.ev || []).reduce((a, b) => a + b, 0)}／510</div>
         <div class="dim">距離升級還需 ${next} 經驗值</div>
         <div class="dim">親密度 ${m.happy}</div>
       </div>
@@ -296,12 +299,14 @@ const Game = {
       start = i;
       const id = ids[i], s = POKEDEX[id];
       if (!G.state.seen[id]) continue;
-      const evo = (s.ev || []).map(e => `→ ${G.state.seen[e.to] ? POKEDEX[e.to].n : '？？？'}（${e.lvl ? 'Lv.' + e.lvl : e.item ? ITEMS[e.item]?.n || e.item : e.happy ? '親密度' : '特殊'}${e.time ? (e.time === 'day' ? '・白天' : '・夜晚') : ''}）`).join('<br>');
+      // 進化條件：列出所有條件組，改編的條件會註明原作的方式
+      const evo = (s.ev || []).map(e => `→ ${G.state.seen[e.to] ? POKEDEX[e.to].n : '？？？'}：${(e.c || [e]).map(c => Mon.evoText(c)).join(' 或 ')}`).join('<br>');
+      const ey = (s.ey || []).map((v, k) => v ? `${STAT_ZH[k]}+${v}` : '').filter(Boolean).join(' ');
       await UI.panel(`<div class="summary"><div class="left"><img class="big" src="${Mon.sprite(id)}"><div class="nm">No.${U.pad3(id)} ${U.esc(s.n)}</div>
         <div class="dim">${U.esc(s.gen)}</div><div>${s.t.map(typeTag).join('')}</div>${s.lg ? `<div class="legend">${s.lg === 1 ? '傳說的寶可夢' : '幻之寶可夢'}</div>` : ''}</div>
         <div class="right"><p>${G.state.caught[id] ? U.esc(s.fl) : '捕捉後可以查看更多資料。'}</p>
         <table class="stats">${s.s.map((v, k) => `<tr><td>${STAT_ZH[k]}</td><td>${v}</td><td><div class="sbar"><div style="width:${Math.min(100, v / 1.6)}%"></div></div></td></tr>`).join('')}<tr><td>總和</td><td>${Mon.bst(id)}</td></tr></table>
-        <p class="dim">捕捉率 ${s.cr}　${evo ? '<br>' + evo : ''}</p></div></div>`);
+        <p class="dim">捕捉率 ${s.cr}　打倒後的努力值：${ey || '無'}${evo ? '<br>' + evo : ''}</p></div></div>`);
     }
   },
 
@@ -851,6 +856,8 @@ const Game = {
   start(state, fresh = false) {
     G.state = state;
     G.state.flags = G.state.flags || {};
+    // 舊存檔的寶可夢補上性別
+    for (const m of [...state.party, ...state.box]) if (!('gender' in m)) m.gender = Mon.genderOf(m.sp);
     UI.showText('正在生成世界……');
     World.generate(state.seed, state.region);
     World.renderMap();
