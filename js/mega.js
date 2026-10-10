@@ -125,6 +125,6 @@ Story.eventEntity = async function (e) {
   Game.giveItem(e.item, 1);
   Sound.sfx('item');
   await UI.say(`發現了${ITEMS[e.item].n}！`);
-  if (!G.state.bag['mega-ring'] && !FORMS[MEGA_STONES[e.item].form].primal) await UI.say('（好像需要超級手環才能使用。聽說成為冠軍就能得到……）');
+  if (!G.state.bag['mega-ring'] && MEGA_STONES[e.item] && !FORMS[MEGA_STONES[e.item].form].primal) await UI.say('（好像需要超級手環才能使用。聽說成為冠軍就能得到……）');
   Game.save(true);
 };

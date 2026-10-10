@@ -22,6 +22,7 @@
 <script src="../data/abilities.js"></script>
 <script src="../data/tms.js"></script>
 <script src="../data/forms.js"></script>
+<script src="../data/zmoves.js"></script>
 <script src="../js/util.js"></script>
 <script src="../js/data.js"></script>
 <script src="../js/abilities.js"></script>
@@ -45,6 +46,7 @@
 <script src="../js/battle.js"></script>
 <script src="../js/engine.js"></script>
 <script src="../js/mega.js"></script>
+<script src="../js/zmove.js"></script>
 <script src="../js/battle_view.js"></script>
 <script src="../js/game.js"></script>
 <script>
@@ -781,6 +783,37 @@ async function run() {
     check('御三家的超級石：小火龍 → 噴火龍進化石', /^charizardite/.test(Mega.starterStone(4)));
     const ms = [...World.events.values()].filter(e => e.kind === 'megastone');
     check('各地區散落超級石（豐緣有兩顆寶珠）', ms.length >= 20 && ms.some(e => e.item === 'red-orb') && ms.some(e => e.item === 'blue-orb'), String(ms.length));
+  }
+  // Z 招式
+  {
+    check('Z 招式資料：18 種屬性，火 → 超強極限爆焰彈、火Ｚ', Object.keys(ZMOVES).length === 18 && ZMOVES.fire.n === '超強極限爆焰彈' && ITEMS['firium-z'].n === '火Ｚ');
+    check('Z 招式威力表（第七世代）', ZMove.power(40) === 100 && ZMove.power(90) === 175 && ZMove.power(120) === 190 && ZMove.power(150) === 200);
+    const b = setup(6, 50, 143, 50);
+    b.initEngine();
+    G.state.bag['z-ring'] = 1;
+    b.me.item = 'firium-z';
+    b.me.moves = [{ id: moveId('flamethrower'), pp: 10 }, { id: moveId('scratch'), pp: 10 }];
+    check('攜帶火Ｚ並有火屬性攻擊招式時可以使用 Z 招式', b.canZ(b.me));
+    check('只有同屬性的攻擊招式能變成 Z 招式', ZMove.eligible(b, b.me, md(moveId('flamethrower'))) && !ZMove.eligible(b, b.me, md(moveId('scratch'))));
+    b._zMe = true;
+    const r = b.resolveMove(b.me, b.vMe, 0);
+    check('噴射火焰 → 超強極限爆焰彈（威力 175）', r.mv.isZ && r.mv.n === '超強極限爆焰彈' && r.mv.bp === 175);
+    check('每場一次，用過後不能超級進化或太晶化', !b.canZ(b.me) && b.gimmickUsed('me'));
+    const b2 = setup(6, 50, 143, 50); b2.initEngine();
+    b2.me.item = 'firium-z'; b2.me.moves = [{ id: moveId('flamethrower'), pp: 10 }];
+    delete G.state.bag['z-ring'];
+    check('沒有 Z 手環不能使用 Z 招式', !b2.canZ(b2.me));
+    // 打在守住上只受 1/4 傷害
+    U.seed(5);
+    const b3 = setup(6, 50, 143, 50); b3.initEngine(); G.state.bag['z-ring'] = 1;
+    b3.me.item = 'firium-z'; b3.me.moves = [{ id: moveId('flamethrower'), pp: 10 }];
+    b3.foe.moves = [{ id: moveId('protect'), pp: 10 }]; b3.aiChoose = () => ({ idx: 0 });
+    const hp0 = b3.foe.hp;
+    await b3.doTurn({ type: 'move', idx: 0, z: true });
+    U.unseed();
+    check('Z 招式穿過守住，造成少量傷害', b3.foe.hp < hp0 && hp0 - b3.foe.hp < hp0 / 3, `${hp0 - b3.foe.hp}/${hp0}`);
+    const zc = [...World.events.values()].filter(e => e.id && e.id.startsWith('zc_'));
+    check('阿羅拉散落著道館沒有的 Z 純晶', zc.length >= 8 && zc.every(e => World.regionAt(e.x, e.y) === 'alola'), String(zc.length));
   }
   // 地點專屬生態
   {

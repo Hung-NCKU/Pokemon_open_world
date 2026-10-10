@@ -1114,6 +1114,8 @@ Object.assign(Battle.prototype, {
     // 最終修正（穿透無視牆壁）
     const sd = this.sides[this.sideKey(target)];
     if (!crit && ua !== 'infiltrator' && !['brickbreak', 'psychicfangs', 'ragingbull'].includes(mv.id) && (sd.auroraveil || (phys ? sd.reflect : sd.lightscreen))) base = Math.floor(base / 2);
+    // Z 招式打在守住上：只受到 1/4 傷害
+    if (mv.isZ && mv.zHitProtect) base = Math.floor(base / 4);
     let fMod = 1;
     if (ua === 'tinted-lens' && eff < 1) fMod *= 2;
     if (['filter', 'solid-rock', 'prism-armor'].includes(ta) && eff > 1) fMod *= .75;

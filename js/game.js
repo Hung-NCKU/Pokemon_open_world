@@ -950,6 +950,11 @@ const Game = {
 獲得了太晶珠！
 （戰鬥中選招式時按 R 讓寶可夢太晶化；用過後到寶可夢中心充能）`);
       }
+      // 阿羅拉：同屬性的 Z 純晶
+      if (t.region === 'alola' && window.ZMOVES && ZMOVES[type] && !G.state.bag[ZMOVES[type].item]) {
+        Game.giveItem(ZMOVES[type].item, 1);
+        await UI.say(`獲得了${ITEMS[ZMOVES[type].item].n}！`);
+      }
       if (typeof TM !== 'undefined') {
         const tm = TM.give(TM.forType(type).mv);
         if (tm) { Sound.sfx('item'); await UI.say(`${name}：「這個也送給你吧！」

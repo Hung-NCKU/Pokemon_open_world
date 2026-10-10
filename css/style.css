@@ -232,3 +232,4 @@ body.in-battle #choices .choice.sel::before { color: #484848; font-size: 22px; l
 #choice-info .tera-btn { display: inline-block; margin-top: 4px; padding: 0 8px; border-radius: 6px; background: #c8d8e8; color: #506070; cursor: pointer; font-size: 18px; }
 #choice-info .tera-btn.on { background: linear-gradient(90deg, #f8a8f8, #a8f8f8, #f8f8a8); color: #303040; box-shadow: 0 0 6px #fff; }
 #choice-info .mega-btn.on { background: linear-gradient(90deg, #f8d040, #f87878, #a878f8); }
+#choice-info .z-btn.on { background: linear-gradient(90deg, #f8f080, #f8b030, #f86030); }
