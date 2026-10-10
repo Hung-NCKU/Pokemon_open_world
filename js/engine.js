@@ -639,7 +639,7 @@ Object.assign(Battle.prototype, {
   },
 
   viewMove(mv) {
-    return { t: mv.type === '???' ? 'normal' : mv.type, c: mv.cat === 'Physical' ? 'ph' : mv.cat === 'Special' ? 'sp' : 'st', tg: mv.target === 'self' ? 'user' : 'selected-pokemon',
+    return { id: mv.baseId || mv.id, isZ: !!mv.isZ, t: mv.type === '???' ? 'normal' : mv.type, c: mv.cat === 'Physical' ? 'ph' : mv.cat === 'Special' ? 'sp' : 'st', tg: mv.target === 'self' ? 'user' : 'selected-pokemon',
       sx: mv.boosts ? Object.entries(mv.boosts) : null, ail: mv.status };
   },
 
