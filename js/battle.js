@@ -278,6 +278,8 @@ class Battle {
       G.state.money += money;
       await this.msg(`獲得了 ${money} 元的獎金！`);
     }
+    // 打倒野生寶可夢：掉落素材（招式機器的材料）
+    if (result === 'win' && this.wildMon && typeof TM !== 'undefined') await this.msg(TM.drop(this.wildMon));
     if (result === 'win' || result === 'catch') {
       G.party.forEach((m, i) => { if (this.participants.has(i) && m.hp > 0) m.happy = Math.min(255, m.happy + 1); });
     }

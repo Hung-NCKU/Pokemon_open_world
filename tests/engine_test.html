@@ -20,10 +20,12 @@
 <script src="../data/showdown.js"></script>
 <script src="../data/items.js"></script>
 <script src="../data/abilities.js"></script>
+<script src="../data/tms.js"></script>
 <script src="../js/util.js"></script>
 <script src="../js/data.js"></script>
 <script src="../js/abilities.js"></script>
 <script src="../js/mon.js"></script>
+<script src="../js/tm.js"></script>
 <script src="../js/gen3.js"></script>
 <script src="../js/sprites.js"></script>
 <script src="../js/audio.js"></script>
@@ -493,6 +495,29 @@ async function run() {
     const old = Game.newState('T', 'kanto', 4); old.party.push(Mon.create(4, 5)); delete old.legendsCaught; old.caught[150] = 1;
     Game.validateState(old);
     check('舊存檔：已捕捉的傳說不會再出現', old.legendsCaught[150] === 1 && !old.legendsCaught[4]);
+  }
+  // 招式學習器與製作
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4);
+    G.state.party.push(Mon.create(4, 20), Mon.create(1, 20));
+    check('招式學習器資料：朱／紫編號、至少 30 個', TM.LIST.length >= 30 && TM.LIST.every(t => /^TM\d{3}$/.test(t.no)), String(TM.LIST.length));
+    check('相容名單：小火龍可學噴射火焰，妙蛙種子不行', TM.compatible({ sp: 4 }, 53) && !TM.compatible({ sp: 1 }, 53));
+    check('掉落的素材依進化鏈最初形態（火恐龍 → 小火龍的素材）', /小火龍的素材/.test(TM.drop(Mon.create(5, 20))) && G.state.mats[4] >= 1);
+    const flame = TM.BY_MOVE[53], r = TM.recipe(flame);
+    G.state.mats = { 4: r.need }; G.state.money = 99999;
+    check('沒有配方時不能製作', !TM.craft(flame) && G.state.mats[4] === r.need);
+    G.state.tmRecipes[53] = 1;
+    check('有配方、素材與金錢時可以製作，並消耗素材與金錢', TM.craft(flame) && !G.state.mats[4] && G.state.money === 99999 - r.money && G.state.bag[flame.id] === 1);
+    check('素材不足時不能製作', !TM.craft(flame));
+    check('館主的招式學習器與道館同屬性', MOVES[TM.forType('electric').mv].t === 'electric');
+    const realPick = Game.partyMenu;
+    Game.partyMenu = async () => 0;
+    G.party[0].moves = G.party[0].moves.slice(0, 3);
+    await TM.use(flame.id);
+    check('使用招式學習器：學會招式並消耗', G.party[0].moves.some(x => x.id === 53) && !G.state.bag[flame.id]);
+    Game.partyMenu = realPick;
+    G.state = keep;
   }
   // 12. 隨機對戰不出錯
   {

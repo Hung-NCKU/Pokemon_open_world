@@ -51,7 +51,7 @@ const Game = {
       if (err) return `寶可夢資料不正確（${err}）`;
     }
     const def = { name: '主角', dir: 'down', surf: false, box: [], bag: {}, money: 0, badges: {}, champs: {}, seen: {}, caught: {},
-      defeated: {}, visited: {}, flags: {}, repel: 0, steps: 0, playMs: 0, center: null, starter: s.party[0].sp };
+      defeated: {}, visited: {}, flags: {}, repel: 0, steps: 0, playMs: 0, center: null, starter: s.party[0].sp, mats: {} };
     for (const [k, v] of Object.entries(def)) {
       const bad = s[k] === undefined || (typeof v === 'object' && v !== null && (typeof s[k] !== 'object' || s[k] === null || Array.isArray(v) !== Array.isArray(s[k])));
       if (bad) s[k] = v;
@@ -501,6 +501,12 @@ const Game = {
         UI.hideDialog();
         continue;
       }
+      if (it.kind === 'tm') {
+        if (battle) { await UI.say('現在不能使用這個道具。'); continue; }
+        await TM.use(id);
+        UI.hideDialog();
+        continue;
+      }
       const t = await Game.partyMenu({ battle, pick: m => Game.itemUsable(m, id, !!battle) });
       if (t < 0) continue;
       if (battle) return { item: id, target: t };
@@ -806,7 +812,14 @@ const Game = {
     const t = b.town;
     if (b.kind === 'center') {
       await UI.say('歡迎來到寶可夢中心。');
-      const c = await UI.choose(['治療寶可夢', '使用電腦', '離開'], { prompt: '這裡可以讓你的寶可夢恢復健康。' });
+      const c0 = await UI.choose(['治療寶可夢', '使用電腦', '招式機器', '離開'], { prompt: '這裡可以讓你的寶可夢恢復健康。' });
+      if (c0 === 2) {
+        const k = await UI.choose(['製作招式學習器', '查看素材', '取消'], { prompt: '這是招式機器。可以用寶可夢的素材製作招式學習器。' });
+        if (k === 0) await TM.machine();
+        if (k === 1) await TM.materials();
+        return;
+      }
+      const c = c0 === 3 ? 2 : c0;
       if (c === 0) {
         await UI.say('那麼，請把你的寶可夢交給我一會兒。');
         Game.healParty();
@@ -877,6 +890,11 @@ const Game = {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
       Sound.jingle('badge');
       await UI.say(`獲得了${t.name}道館的徽章！（${REGIONS[t.region].n}徽章 ${Game.badgeCount(t.region)}／8）`);
+      if (typeof TM !== 'undefined') {
+        const tm = TM.give(TM.forType(type).mv);
+        if (tm) { Sound.sfx('item'); await UI.say(`${name}：「這個也送給你吧！」
+獲得了 ${ITEMS[tm.id].n}！（可以在寶可夢中心的招式機器製作）`); }
+      }
       if (Game.badgeCount(t.region) === 8) await UI.say(`收集齊了${REGIONS[t.region].n}地區的 8 枚徽章！可以挑戰${REGIONS[t.region].n}寶可夢聯盟了！`);
       Game.save(true);
     }

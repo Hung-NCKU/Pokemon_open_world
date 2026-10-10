@@ -2,19 +2,21 @@
 // 左右切換口袋、上下選擇道具；回傳選到的道具 id 或 null
 const BagUI = (() => {
   const POCKETS = [
-    { n: '道具', frame: 1, has: id => !isBall(id) && !isBerry(id) && !isKey(id) },
+    { n: '道具', frame: 1, has: id => !isBall(id) && !isBerry(id) && !isKey(id) && !isTM(id) },
     { n: '精靈球', frame: 2, has: id => isBall(id) },
+    { n: '招式學習器', frame: 3, has: id => isTM(id) },
     { n: '樹果', frame: 4, has: id => isBerry(id) },
     { n: '重要物品', frame: 5, has: id => isKey(id) },
   ];
   const isBall = id => ITEMS[id] && ITEMS[id].kind === 'ball';
   const isBerry = id => id.endsWith('-berry');
   const isKey = id => ITEMS[id] && ITEMS[id].kind === 'key';
+  const isTM = id => ITEMS[id] && ITEMS[id].kind === 'tm';
   let pocket = 0;
-  const cursor = [0, 0, 0, 0];
+  const cursor = [0, 0, 0, 0, 0];
 
   function icon(id) {
-    const i = Gen3.on && GEN3.itemIcons ? GEN3.itemIcons[id] : undefined;
+    const i = Gen3.on && GEN3.itemIcons ? GEN3.itemIcons[isTM(id) ? 'tm' : id] : undefined;
     if (i !== undefined) {
       const x = (i % 16) * 24, y = Math.floor(i / 16) * 24;
       return `<div class="bag-ic" style="background-image:url(${Gen3.base}item_icons.png);background-position:${-x * 3}px ${-y * 3}px;background-size:${16 * 24 * 3}px auto"></div>`;
