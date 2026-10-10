@@ -57,6 +57,9 @@ const Game = {
       if (bad) s[k] = v;
     }
     if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    // 箱子名稱與桌布
+    if (!Array.isArray(s.boxMeta)) s.boxMeta = [];
+    s.boxMeta = s.boxMeta.map((x, i) => (x && typeof x.n === 'string' && typeof x.wp === 'string' ? { n: x.n.slice(0, 8), wp: x.wp } : { n: `箱子 ${i + 1}`, wp: 'forest' }));
     // 蛋籃與野餐
     if (!Array.isArray(s.eggs)) s.eggs = [];
     s.eggs = s.eggs.filter(e => e && e.mon && Number.isFinite(e.steps) && !Game.validateMon(e.mon)).slice(0, 6);
@@ -106,6 +109,7 @@ const Game = {
     if (m.fused !== undefined && (typeof m.fused !== 'object' || Game.validateMon(m.fused))) { delete m.fused; delete m.form; }
     if (m.form !== undefined && (!Forms.get(m) || FORMS[m.form].mega || FORMS[m.form].battle || FORMS[m.form].gmax || FORMS[m.form].ultra || FORMS[m.form].primal)) delete m.form;
     if (m.form && FORMS[m.form] && FORMS[m.form].fusion && !m.fused) delete m.form;
+    if (m.boxPos !== undefined && !(m.boxPos && int(m.boxPos.b, 0, 999) && int(m.boxPos.i, 0, 29))) delete m.boxPos;
     if (m.marks !== undefined && !(Array.isArray(m.marks) && m.marks.every(x => MARKS.includes(x)))) delete m.marks;
     if (m.ivHT !== undefined && !(Array.isArray(m.ivHT) && m.ivHT.length === 6)) delete m.ivHT;
     else if (m.ivHT) m.ivHT = m.ivHT.map(v => (v ? 1 : 0));
@@ -628,6 +632,8 @@ const Game = {
   },
 
   async pcMenu() {
+    // 綠寶石版寄放系統：箱子畫面
+    if (Game.emeraldUI('storage')) { await StorageUI.open(); return; }
     while (true) {
       const c = await UI.choose(['寄放寶可夢', '領取寶可夢', '離開'], { prompt: `已連接到寶可夢寄放系統。（箱子裡有 ${G.state.box.length} 隻）` });
       if (c === 0) {

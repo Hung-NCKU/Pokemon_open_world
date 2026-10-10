@@ -46,6 +46,7 @@
 <script src="../js/menus.js"></script>
 <script src="../js/mapui.js"></script>
 <script src="../js/summaryui.js"></script>
+<script src="../js/storageui.js"></script>
 <script src="../js/battle.js"></script>
 <script src="../js/engine.js"></script>
 <script src="../js/battle_view.js"></script>
@@ -1141,6 +1142,22 @@ async function run() {
       G.state.bag['fire-tera-shard'] = 10;
       check('太晶碎塊：10 個可以改變太晶屬性', ITEMS['fire-tera-shard'].tera === 'fire');
     }
+  }
+  // 寄放系統（箱子）
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 1); G.state.party = [Mon.create(4, 5)];
+    for (let i = 0; i < 35; i++) G.state.box.push(Mon.create(1 + i, 5));
+    G.state.box[3].boxPos = { b: 2, i: 7 };
+    const grid = StorageUI.layout();
+    check('箱子：每箱 30 格，至少 14 個箱子', grid.length >= 14 && grid.every(b => b.length === 30));
+    check('箱子：指定位置的寶可夢留在原位，其他依序放入空格', grid[2][7] === G.state.box[3] && grid[0][0] === G.state.box[0] && grid[1][3] === G.state.box[34]);
+    check('箱子：每隻寶可夢都有位置且不重複', new Set(G.state.box.map(m => m.boxPos.b * 30 + m.boxPos.i)).size === 35);
+    check('箱子：有名稱與桌布', G.state.boxMeta[0].n === '箱子 1' && G.state.boxMeta[0].wp === 'forest');
+    const sv = JSON.parse(JSON.stringify(G.state)); sv.box[0].boxPos = { b: -1, i: 99 }; sv.boxMeta[1] = 'x';
+    const ps = Game.parseSave(JSON.stringify(sv));
+    check('存檔：不正確的箱子位置、名稱會被修正', ps.ok && ps.state.box[0].boxPos === undefined && ps.state.boxMeta[1].n === '箱子 2');
+    G.state = keep;
   }
   // 地點專屬生態
   {
