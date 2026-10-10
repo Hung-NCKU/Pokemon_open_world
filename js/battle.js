@@ -239,6 +239,7 @@ class Battle {
   }
 
   async awardExp() {
+    if (G.tower) return; // 對戰塔：使用複本，不拿經驗值
     const foe = this.foe;
     const tr = !!this.trainer;
     const got = [];

@@ -42,6 +42,7 @@
 <script src="../js/events.js"></script>
 <script src="../js/regions.js"></script>
 <script src="../js/regions2.js"></script>
+<script src="../js/battletower.js"></script>
 <script src="../data/towns.js"></script>
 <script src="../js/town_events.js"></script>
 <script src="../js/weather.js"></script>
@@ -1814,6 +1815,45 @@ async function run() {
     UI.choose = keepChoose; UI.say = keepSay;
     G.state = keep;
   }
+  // 對戰塔（世界配置第 6 版）
+  {
+    const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;
+    G.state = Game.newState('T', 'kanto', 4);
+    G.state.party = [Mon.create(6, 80), Mon.create(9, 30), Mon.create(3, 15), Mon.create(25, 12)];
+    G.state.champs = { kanto: 1 };
+    World.generate(20261010, 'kanto');
+    check('對戰塔：第 6 版的世界在每個地區的聯盟旁都有對戰塔', REGION_KEYS.every(r => [...World.landmarks.values()].some(l => l.event === 'battletower' && l.region === r)));
+    World.generate(20261010, 'kanto', 5);
+    check('對戰塔：第 5 版以前的世界沒有對戰塔（舊存檔不變）', ![...World.landmarks.values()].some(l => l.event === 'battletower'));
+    World.generate(20261010, 'kanto');
+    const o = BattleTower.opponent(0, 0);
+    check('對戰塔：對手 3 隻 Lv.50、完全進化、攜帶道具', o.party.length === 3 && o.party.every(m => m.lv === 50 && m.item && !POKEDEX[m.sp].lg));
+    // 挑戰：選前三隻，贏 7 場
+    let picks = [0, 1, 2], seenLv = [], saved = 0;
+    UI.choose = async (opts, o2) => (o2 && /選擇參賽/.test(o2.prompt) ? picks.shift() : 0);
+    UI.say = async () => { };
+    const realSave = Game.save; Game.save = s2 => { if (!G.tower) saved++; return true; };
+    Game.battle = async opt => { seenLv.push(G.party.map(m => m.lv).join(',')); return 'win'; };
+    const lv0 = G.state.party.map(m => m.lv).join(',');
+    await BattleTower.challenge();
+    Game.save = realSave;
+    check('對戰塔：用 Lv.50 的複本連戰 7 場，原本的隊伍不變', seenLv.length === 7 && seenLv.every(x => x === '50,50,50') && G.state.party.map(m => m.lv).join(',') === lv0 && G.state.party.length === 4, seenLv[0] + ' / ' + G.state.party.map(m => m.lv).join(','));
+    check('對戰塔：7 連勝得到 11 BP，連勝與最高紀錄都記錄', G.state.bp === 11 && G.state.towerStreak === 7 && G.state.towerBest === 7, `${G.state.bp} ${G.state.towerStreak} ${G.state.towerBest}`);
+    // 輸了：連勝歸零，最高紀錄保留
+    picks = [0, 1, 2];
+    let k = 0;
+    Game.battle = async () => (k++ < 2 ? 'win' : 'lose');
+    await BattleTower.challenge();
+    check('對戰塔：輸了連勝歸零，最高紀錄保留', G.state.towerStreak === 0 && G.state.towerBest === 9 && G.state.bp === 13, `${G.state.towerStreak} ${G.state.towerBest} ${G.state.bp}`);
+    // 兌換
+    UI.choose = async (opts) => (opts[0].disabled ? opts.length - 1 : (UI.choose._n = (UI.choose._n || 0) + 1) === 1 ? 0 : opts.length - 1);
+    const rc = G.state.bag['rare-candy'] || 0;
+    await BattleTower.exchange();
+    check('對戰塔：用 BP 兌換道具', (G.state.bag['rare-candy'] || 0) === rc + 1 && G.state.bp === 10);
+    check('對戰塔：進行中不會存檔', saved === 1);
+    Game.battle = keepBattle; UI.choose = keepChoose; UI.say = keepSay;
+    G.state = keep;
+  }
   // 合眾到帕底亞的專屬內容（世界配置第 5 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;
@@ -1824,7 +1864,7 @@ async function run() {
     G.state = Game.newState('T', 'unova', 495); G.state.party = [Mon.create(495, 20)];
     World.generate(20261010, 'unova', 5);
     const lm5 = [...World.landmarks.values()].filter(l => R5.includes(l.region));
-    const want = R5.reduce((a, r) => a + LANDMARKS[r].length, 0);
+    const want = R5.reduce((a, r) => a + LANDMARKS[r].filter(l => !l.ver || l.ver <= 5).length, 0);
     const names = World.towns.filter(t => t.region === 'unova' && t.kind === 'gym').sort((a, b) => a.gym - b.gym).map(t => t.name);
     check('第 5 版：合眾的道館城鎮使用原作名稱（三曜市……雙龍市）', names[0] === '三曜市' && names[7] === '雙龍市', names.join(' '));
     check('第 5 版：合眾到帕底亞的地標大多放置成功', lm5.length >= want - 2, `${lm5.length}/${want}`);

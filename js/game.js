@@ -31,6 +31,8 @@ const Game = {
   },
   // 存檔：寫入前把上一份有效的存檔保留為備份
   save(silent = false) {
+    // 對戰塔進行中：隊伍是 Lv.50 的複本，不能存檔
+    if (G.tower) return true;
     try {
       const prev = localStorage.getItem(SAVE_KEY);
       if (prev && Game.parseSave(prev).ok) localStorage.setItem(SAVE_KEY + '_bak', prev);
@@ -73,6 +75,8 @@ const Game = {
       if (bad) s[k] = v;
     }
     if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    // 對戰塔：BP、連勝紀錄
+    for (const k of ['bp', 'towerStreak', 'towerBest']) if (s[k] !== undefined && !(Number.isInteger(s[k]) && s[k] >= 0)) s[k] = 0;
     // 世界配置版本：沒有記錄的是舊存檔（第 1 版），保留原本的世界
     if (!Number.isInteger(s.worldVer) || s.worldVer < 1 || s.worldVer > WORLD_VER) s.worldVer = 1;
     // 箱子名稱與桌布
