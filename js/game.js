@@ -94,7 +94,8 @@ const Game = {
     if (!int(m.happy, 0, 255)) m.happy = POKEDEX[m.sp].hap;
     // 培育欄位：薄荷（0–24 的性格）、極限特訓（6 項旗標）
     if (m.mint !== undefined && !int(m.mint, 0, 24)) delete m.mint;
-    if (m.form !== undefined && !Forms.get(m)) delete m.form;
+    if (m._megaFrom !== undefined && typeof Mega !== 'undefined') Mega.revert(m);
+    if (m.form !== undefined && (!Forms.get(m) || FORMS[m.form].mega)) delete m.form;
     if (m.marks !== undefined && !(Array.isArray(m.marks) && m.marks.every(x => MARKS.includes(x)))) delete m.marks;
     if (m.ivHT !== undefined && !(Array.isArray(m.ivHT) && m.ivHT.length === 6)) delete m.ivHT;
     else if (m.ivHT) m.ivHT = m.ivHT.map(v => (v ? 1 : 0));
@@ -996,6 +997,13 @@ const Game = {
       if (!G.state.hofTime) { const ms = G.state.playMs; G.state.hofTime = `${Math.floor(ms / 3600000)}:${String(Math.floor(ms / 60000) % 60).padStart(2, '0')}`; }
       await UI.say(`恭喜！${G.state.name} 成為了${reg.n}地區的冠軍！你和寶可夢的名字已被記錄在名人堂中！`);
       if (first) { Game.giveItem('master-ball', 1); await UI.say('獲得了大師球！'); }
+      if (!G.state.bag['mega-ring'] && typeof Mega !== 'undefined') {
+        Game.giveItem('mega-ring', 1);
+        const st = Mega.starterStone(G.state.starter);
+        if (st) Game.giveItem(st, 1);
+        await UI.say(`${reg.champ}：「這是給新冠軍的禮物。」\n獲得了超級手環${st ? '和' + ITEMS[st].n : ''}！\n（寶可夢攜帶超級石時，在戰鬥中選招式時按 M 超級進化）`);
+        await UI.say('聽說各地區都散落著其他的超級石……');
+      }
       Game.save(true);
     }
   },

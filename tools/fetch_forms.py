@@ -78,8 +78,73 @@ def learnset(p):
     return out
 
 
+def mega_stones():
+    """Showdown items.js 的 megaStone 欄位：道具 → (物種, 形態)；紅色／藍色寶珠 → 原始回歸。"""
+    import re
+    src = open(os.path.join(ROOT, ".cache", "showdown", "items.js"), encoding="utf-8").read()
+    out = []
+    pat = r'([a-z0-9]+):\{name:"([^"]+)",spritenum:\d+,megaStone:\{([^:"]+):"([^"]+)"\}'
+    for m in re.finditer(pat, src):
+        _, name, base, form = m.groups()
+        out.append((name, base, form))
+    out.append(("Red Orb", "Groudon", "Groudon-Primal"))
+    out.append(("Blue Orb", "Kyogre", "Kyogre-Primal"))
+    return out
+
+
+def slug(s):
+    return s.lower().replace(" ", "-").replace(".", "").replace("'", "").replace("é", "e")
+
+
+def fetch_form(name, base_zh, region):
+    p = get(f"pokemon/{name}")
+    stats = {s["stat"]["name"]: s["base_stat"] for s in p["stats"]}
+    effort = {s["stat"]["name"]: s["effort"] for s in p["stats"]}
+    order = ["hp", "attack", "defense", "special-attack", "special-defense", "speed"]
+    fname = ""
+    if p.get("forms"):
+        f = get(f"pokemon-form/{p['forms'][0]['name']}")
+        fname = zh(f.get("names", []), "")
+    return p, {
+        "id": p["id"], "t": [t["type"]["name"] for t in sorted(p["types"], key=lambda t: t["slot"])],
+        "s": [stats[k] for k in order], "ey": [effort[k] for k in order],
+        "ab": [[a["ability"]["name"], 1 if a["is_hidden"] else 0] for a in sorted(p["abilities"], key=lambda a: a["slot"])],
+        "w": p["weight"], "fn": fname,
+    }
+
+
 def main():
     forms = {}
+    # 超級進化與原始回歸
+    stones = {}
+    species_by_en = {}
+    for sid in range(1, 1026):
+        sp = get(f"pokemon-species/{sid}", SPECIES_CACHE)
+        species_by_en[sp["name"]] = (sid, zh(sp["names"], sp["name"]))
+    for item_name, base, form in mega_stones():
+        fslug, bslug = slug(form), slug(base)
+        if bslug not in species_by_en:
+            continue
+        sid, base_zh = species_by_en[bslug]
+        try:
+            p, d = fetch_form(fslug, base_zh, "")
+        except Exception:  # noqa: BLE001
+            print("  PokéAPI 沒有：", fslug)
+            continue
+        islug = slug(item_name)
+        try:
+            it = get(f"item/{islug}")
+            iname = zh(it.get("names", []), item_name)
+        except Exception:  # noqa: BLE001
+            iname = item_name
+        primal = fslug.endswith("-primal")
+        n = d.pop("fn") or (("原始" if primal else "超級") + base_zh)
+        suf = fslug.rsplit("-", 1)[-1]
+        if suf in ("x", "y", "z") and not n.endswith(("Ｘ", "Ｙ", "Ｚ", "X", "Y", "Z")):
+            n += {"x": "Ｘ", "y": "Ｙ", "z": "Ｚ"}[suf]
+        forms[fslug] = {**d, "base": sid, "region": "", "n": n, "l": [], "mega": islug, "primal": 1 if primal else 0}
+        stones[islug] = {"n": iname, "form": fslug, "base": sid}
+        print(" ", fslug, n, islug, iname)
     for sid in range(1, 1026):
         sp = get(f"pokemon-species/{sid}", SPECIES_CACHE)
         base_zh = zh(sp["names"], sp["name"])
@@ -116,6 +181,7 @@ def main():
     with open(out, "w", encoding="utf-8") as f:
         f.write("// 由 tools/fetch_forms.py 產生（PokéAPI）：地區形態與洛托姆的形態\n")
         f.write("window.FORMS=" + json.dumps(forms, ensure_ascii=False, separators=(",", ":")) + ";\n")
+        f.write("window.MEGA_STONES=" + json.dumps(stones, ensure_ascii=False, separators=(",", ":")) + ";\n")
     print(f"形態 {len(forms)} 種 → {out}")
 
 

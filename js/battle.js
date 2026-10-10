@@ -103,9 +103,18 @@ class Battle {
         const tt = TYPES[Mon.teraType(me)];
         window.__teraToggle = () => { teraOn = !teraOn; const el = document.querySelector('#choice-info .tera-btn'); if (el) el.classList.toggle('on', teraOn); };
         const info2 = i => info(i) + (canTera ? `<br><span class="tera-btn${teraOn ? ' on' : ''}" onclick="event.stopPropagation();window.__teraToggle()">R 太晶化 ${tt.n}</span>` : '');
-        const onKey = e => { if (canTera && (e.key === 'r' || e.key === 'R') && !e.repeat) { teraOn = !teraOn; } return false; };
-        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info2, onKey });
-        if (i >= 0) return { type: 'move', idx: i, tera: canTera && teraOn };
+        // 超級進化：持有超級手環與對應的超級石時，按 M 切換（和太晶化擇一）
+        const canMega = this.canMega && this.canMega(me);
+        let megaOn = false;
+        window.__megaToggle = () => { megaOn = !megaOn; if (megaOn) teraOn = false; const el = document.querySelector('#choice-info .mega-btn'); if (el) el.classList.toggle('on', megaOn); };
+        const info3 = i => info2(i) + (canMega ? `<br><span class="tera-btn mega-btn${megaOn ? ' on' : ''}" onclick="event.stopPropagation();window.__megaToggle()">M 超級進化</span>` : '');
+        const onKey = e => {
+          if (canTera && (e.key === 'r' || e.key === 'R') && !e.repeat) { teraOn = !teraOn; if (teraOn) megaOn = false; }
+          if (canMega && (e.key === 'm' || e.key === 'M') && !e.repeat) { megaOn = !megaOn; if (megaOn) teraOn = false; }
+          return false;
+        };
+        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info3, onKey });
+        if (i >= 0) return { type: 'move', idx: i, tera: canTera && teraOn && !megaOn, mega: canMega && megaOn };
       } else if (c === 1) {
         const r = await Game.bagMenu({ battle: this });
         if (r) return { type: 'item', ...r };
@@ -276,6 +285,8 @@ class Battle {
     // 太晶珠用過後要到寶可夢中心充能
     if (this.teraUsed && this.teraUsed.me) G.state.teraCharged = false;
     this.tera = null;
+    // 超級進化、原始回歸在戰鬥結束後恢復
+    if (typeof Mega !== 'undefined') { G.party.forEach(m => Mega.revert(m)); this.foeParty.forEach(m => Mega.revert(m)); }
     if (result === 'win') Sound.play(this.wildMon ? 'victory_wild' : tr.kind === 'gym' || tr.kind === 'champion' ? 'victory_gym' : 'victory_trainer');
     if (result === 'win' && tr) {
       await this.trainerReturn();

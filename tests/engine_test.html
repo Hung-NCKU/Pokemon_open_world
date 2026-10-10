@@ -44,6 +44,7 @@
 <script src="../js/summaryui.js"></script>
 <script src="../js/battle.js"></script>
 <script src="../js/engine.js"></script>
+<script src="../js/mega.js"></script>
 <script src="../js/battle_view.js"></script>
 <script src="../js/game.js"></script>
 <script>
@@ -751,6 +752,35 @@ async function run() {
     const ps = Game.parseSave(JSON.stringify(bad));
     check('存檔：與物種不符的形態會被移除', ps.ok && ps.state.party[0].form === undefined);
     G.state = keep;
+  }
+  // 超級進化與原始回歸
+  {
+    check('超級石資料：至少 80 種，噴火龍進化石Ｘ → 超級噴火龍Ｘ', Object.keys(MEGA_STONES).length >= 80 && MEGA_STONES['charizardite-x'].form === 'charizard-mega-x' && FORMS['charizard-mega-x'].n === '超級噴火龍Ｘ');
+    const b = setup(6, 50, 143, 50);
+    b.initEngine();
+    G.state.bag['mega-ring'] = 1;
+    b.me.item = 'charizardite-x';
+    const ab0 = b.me.ability, hp0 = Mon.maxHp(b.me), atk0 = Mon.stats(b.me)[1];
+    check('攜帶超級石且有超級手環時可以超級進化', b.canMega(b.me));
+    await b.megaEvolve(b.me);
+    check('超級噴火龍Ｘ：火＋龍、硬爪、攻擊上升、HP 不變', Mon.types(b.me).join() === 'fire,dragon' && b.me.ability === 'tough-claws' && Mon.stats(b.me)[1] > atk0 && Mon.maxHp(b.me) === hp0);
+    check('每場戰鬥只能超級進化一次，且不能再太晶化', !b.canMega(b.me) && (await b.terastallize(b.me), !b.isTera(b.me)));
+    await b.finish('run');
+    check('戰鬥結束後恢復原本的形態與特性', !b.me.form && b.me.ability === ab0);
+    const b2 = setup(6, 50, 143, 50); b2.initEngine();
+    delete G.state.bag['mega-ring']; b2.me.item = 'charizardite-y';
+    check('沒有超級手環不能超級進化', !b2.canMega(b2.me));
+    const b3 = setup(383, 70, 143, 50); b3.initEngine();
+    b3.me.item = 'red-orb';
+    await b3.primalCheck(b3.me);
+    await b3.abilityStart(b3.me);
+    check('原始回歸：固拉多攜帶朱紅色寶珠 → 原始固拉多、大日照', b3.me.form === 'groudon-primal' && Mon.types(b3.me).join() === 'ground,fire' && b3.field.weather === 'sunnyday' && b3.field.weatherT === 99);
+    const sv = JSON.parse(JSON.stringify(G.state)); sv.party[0].form = 'charizard-mega-x'; sv.party[0].moves = [{ id: 33, pp: 35 }];
+    const ps = Game.parseSave(JSON.stringify(sv));
+    check('存檔不會保留超級形態', ps.ok && !ps.state.party[0].form, JSON.stringify(ps.error || ps.state.party[0].form || ''));
+    check('御三家的超級石：小火龍 → 噴火龍進化石', /^charizardite/.test(Mega.starterStone(4)));
+    const ms = [...World.events.values()].filter(e => e.kind === 'megastone');
+    check('各地區散落超級石（豐緣有兩顆寶珠）', ms.length >= 20 && ms.some(e => e.item === 'red-orb') && ms.some(e => e.item === 'blue-orb'), String(ms.length));
   }
   // 地點專屬生態
   {

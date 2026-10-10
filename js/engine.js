@@ -224,7 +224,9 @@ Object.assign(Battle.prototype, {
     }
     if (foeAction.heal) { await this.aiHeal(); }
     if (foeAction.switchTo !== undefined) { await this.foeSwitch(foeAction.switchTo); }
-    // 太晶化：在所有招式之前（玩家先、對手後）
+    // 超級進化、太晶化：在所有招式之前（玩家先、對手後）
+    if (action.type === 'move' && action.mega && this.megaEvolve) await this.megaEvolve(this.me);
+    if (!foeAction.heal && foeAction.switchTo === undefined && this.aiMega && this.aiMega()) await this.megaEvolve(this.foe);
     if (action.type === 'move' && action.tera) await this.terastallize(this.me);
     if (!foeAction.heal && foeAction.switchTo === undefined && this.aiTera()) await this.terastallize(this.foe);
     // 2. 招式依優先度 → 速度 → 隨機排序（戲法空間時速度反轉）
@@ -1598,6 +1600,7 @@ Object.assign(Battle.prototype, {
       else if (this.itm(m) !== 'heavy-duty-boots') await this.setStatus(m, side.toxicspikes >= 2 ? 'tox' : 'psn', null, true);
     }
     if (side.stickyweb && grounded && m.hp > 0 && this.itm(m) !== 'heavy-duty-boots') { await this.msg(`${this.label(m)} 被黏黏網纏住了！`); await this.boost(m, { spe: -1 }, null, true); }
+    if (m.hp > 0 && this.primalCheck) await this.primalCheck(m);
     if (m.hp > 0) await this.abilityStart(m);
   },
 
@@ -1618,6 +1621,9 @@ Object.assign(Battle.prototype, {
     };
     switch (a) {
       case 'drizzle': return setW('raindance', 'damp-rock', '開始下雨了！');
+      // 原始回歸的特性：持續到離場（以 99 回合表示）
+      case 'desolate-land': this.field.weather = 'sunnyday'; this.field.weatherT = 99; return this.abilityMsg(m, '日照變得非常強烈了！');
+      case 'primordial-sea': this.field.weather = 'raindance'; this.field.weatherT = 99; return this.abilityMsg(m, '開始下起了傾盆大雨！');
       case 'drought': case 'orichalcum-pulse': return setW('sunnyday', 'heat-rock', '日照變強了！');
       case 'sand-stream': return setW('sandstorm', 'smooth-rock', '開始颳沙暴了！');
       case 'snow-warning': return setW('snowscape', 'icy-rock', '開始下雪了！');
