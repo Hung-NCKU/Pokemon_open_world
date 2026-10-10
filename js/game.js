@@ -422,6 +422,7 @@ const Game = {
   },
 
   async partyMenu({ battle = null, forced = false, pick = null } = {}) {
+    Game.coverUI(); // 打開時收起對話框（戰鬥中的「○○ 要做什麼？」等），回到選單時會重新顯示
     let start = battle ? battle.myIdx : 0;
     while (true) {
       const rows = G.party.map((m, i) => ({ html: Game.partyRow(m, i, battle && i === battle.myIdx ? '<span class="tag">戰鬥中</span>' : ''), disabled: pick ? !pick(m) : false }));
@@ -529,6 +530,7 @@ const Game = {
   },
 
   async bagMenu({ battle = null } = {}) {
+    Game.coverUI(); // 打開時收起對話框（戰鬥中的「○○ 要做什麼？」等），回到選單時會重新顯示
     let start = 0;
     while (true) {
       let id;
