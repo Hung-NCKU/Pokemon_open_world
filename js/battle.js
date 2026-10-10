@@ -250,6 +250,7 @@ class Battle {
       Mon.gainEV(m, foe);
       if (m.lv >= 100) continue;
       const part = this.participants.has(i);
+      if (!part && G.state.expShareOff) continue; // 學習裝置關閉：只有上場的獲得經驗值
       let amt = Mon.expGain(foe, m, tr, part);
       if (m.item === 'lucky-egg') amt = Math.floor(amt * 1.5);
       got.push([m, amt, part]);

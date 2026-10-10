@@ -113,7 +113,7 @@ Story.legend = async function (l) {
   if (l.lm && l.lm.need && !LegendGate.ok(l.lm)) { await UI.say(LegendGate.text(l.lm, POKEDEX[l.sp].n)); return; }
   return _storyLegend.call(this, l.lm ? { ...l, lm: { ...l.lm, need: null }, _lm: l.lm } : l).then(r => {
     // 捕捉的旗標仍記在原本的地標上
-    if (l.lm && G.state.legendsCaught && G.state.legendsCaught[l.sp]) G.state.flags['lm_' + l.lm.id] = 1;
+    if (l.lm && Story.legendDone(l.sp)) G.state.flags['lm_' + l.lm.id] = 1;
     return r;
   });
 };

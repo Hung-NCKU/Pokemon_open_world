@@ -392,7 +392,7 @@ const World = {
   // 地圖上仍存在（尚未被捕捉）的傳說
   legendAt(x, y) {
     const l = this.legends && this.legends.get(x + ',' + y);
-    return l && !(G.state && G.state.legendsCaught && G.state.legendsCaught[l.sp]) ? l : null;
+    return l && !(G.state && Story.legendDone(l.sp)) ? l : null;
   },
 
   // 從 (x,y) 找最近的道路或城鎮，沿途鋪成道路（水面鋪橋）

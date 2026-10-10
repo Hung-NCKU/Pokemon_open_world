@@ -193,6 +193,8 @@ const Story = {
   },
 
   // 傳說與幻之寶可夢（地圖上的實體）：捕捉後就從世界上消失，只有一隻
+  // 傳說／幻之寶可夢已經捕捉或打倒（不再出現）
+  legendDone(sp) { const s = G.state; return !!((s.legendsCaught && s.legendsCaught[sp]) || (s.legendsGone && s.legendsGone[sp])); },
   async legend(l) {
     const s = G.state, sp = POKEDEX[l.sp];
     const lm = l.lm;
@@ -212,7 +214,14 @@ const Story = {
       s.legendsCaught[l.sp] = 1;
       if (lm) s.flags['lm_' + lm.id] = 1;
       Game.save(true);
-    } else if (r === 'win') await UI.say(`${sp.n} 倒下後靜靜地待在原地……恢復後還可以再挑戰。`);
+    } else if (r === 'win') {
+      // 打倒之後：傳說／幻之寶可夢消失（和捕捉一樣，不會再出現在地圖上）
+      s.legendsGone = s.legendsGone || {};
+      s.legendsGone[l.sp] = 1;
+      if (lm) s.flags['lm_' + lm.id] = 1;
+      await UI.say(`${sp.n} 發出一聲長鳴，消失在遠方了……`);
+      Game.save(true);
+    }
     else if (r === 'run') await UI.say(`${sp.n} 仍然在原地。`);
   },
 
@@ -224,7 +233,7 @@ const Story = {
     await UI.say(`這裡是${lm.n}。`);
     // 洞窟解謎：推開石頭走到深處（沒有室內素材時直接進行原本的事件）
     const cave = CAVE_PUZZLES[lm.id];
-    if (cave && typeof Interior !== 'undefined' && Interior.canCave(cave) && (lm.event === 'fossil' || s.flags[key] || (s.legendsCaught && s.legendsCaught[lm.sp]))) {
+    if (cave && typeof Interior !== 'undefined' && Interior.canCave(cave) && (lm.event === 'fossil' || s.flags[key] || Story.legendDone(lm.sp))) {
       await UI.say('大石頭擋住了洞窟的去路……推動石頭，找出通往深處的路吧！\n（走進石頭就能推動；卡住的話，離開洞窟再進來石頭會回到原位）');
       return Interior.enterCave(lm, cave, () => Story.caveGoal(lm));
     }
@@ -255,7 +264,7 @@ const Story = {
       return;
     }
     // 傳說寶可夢站在入口前（見 Story.legend）；入口本身只有景色
-    if (s.flags[key] || (s.legendsCaught && s.legendsCaught[lm.sp])) { await UI.say('這裡已經恢復了平靜。'); return; }
+    if (s.flags[key] || Story.legendDone(lm.sp)) { await UI.say('這裡已經恢復了平靜。'); return; }
     await UI.say(`${lm.n}的深處傳來強大的氣息……傳說的寶可夢就在入口前。`);
   },
 };

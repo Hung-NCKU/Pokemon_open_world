@@ -113,7 +113,7 @@ const MapUI = (() => {
         }
         // 古代石板解讀後：標示夢幻的位置
         if (s.flags.mewhint && World.legends) {
-          const mew = [...World.legends.values()].find(l => l.sp === 151 && !(s.legendsCaught && s.legendsCaught[151]));
+          const mew = [...World.legends.values()].find(l => l.sp === 151 && !Story.legendDone(151));
           if (mew && (tick >> 3) % 2) { const [mx, my] = toMap(mew.x, mew.y); g.fillStyle = 'rgb(255,120,200)'; g.fillRect(mx - 2, my - 2, 5, 5); g.fillStyle = '#fff'; g.fillRect(mx - 1, my - 1, 3, 3); }
         }
         const [px, py] = toMap(s.x, s.y);

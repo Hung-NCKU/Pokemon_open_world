@@ -1854,6 +1854,37 @@ async function run() {
     window.INTERIORS_FORCE = false;
     G.state = keep;
   }
+  // 學習裝置：一開始就有，可以切換；傳說寶可夢打倒後消失
+  {
+    const keep = G.state;
+    const ns = Game.newState('T', 'kanto', 4);
+    check('學習裝置：新遊戲一開始就在背包裡', ns.bag['exp-share'] === 1);
+    const old = Game.newState('T', 'kanto', 4); old.party = [Mon.create(4, 5)]; delete old.bag['exp-share'];
+    check('學習裝置：舊存檔讀入時補上', !Game.validateState(old) && old.bag['exp-share'] === 1);
+    // 關閉時沒上場的不拿經驗值
+    const run = async off => {
+      G.state = Game.newState('T', 'kanto', 4);
+      const a = Mon.create(4, 20), c = Mon.create(1, 10);
+      G.state.party = [a, c]; G.state.expShareOff = off;
+      const b = new Battle({ wild: Mon.create(16, 20) }); b.setup();
+      b.msg = async () => { }; const realGive = Game.giveExp; const got = [];
+      Game.giveExp = async (m, amt) => { got.push(m === c ? 'c' : 'a'); };
+      b.foe.hp = 0; await b.awardExp();
+      Game.giveExp = realGive;
+      return got.join('');
+    };
+    check('學習裝置：開啟時沒上場的也拿經驗值，關閉時只有上場的', (await run(false)) === 'ac' && (await run(true)) === 'a');
+    // 傳說：打倒之後消失
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(6, 90)];
+    World.generate(20261010, 'kanto');
+    const l = [...World.legends.values()].find(x => !x.lm);
+    const keepBattle = Game.battle, keepSay = UI.say;
+    Game.battle = async () => 'win'; UI.say = async () => { };
+    await Story.legend(l);
+    Game.battle = keepBattle; UI.say = keepSay;
+    check('傳說／幻之寶可夢：打倒之後消失，不會再出現', !World.legendAt(l.x, l.y) && Story.legendDone(l.sp));
+    G.state = keep;
+  }
   // 對戰塔（世界配置第 6 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;

@@ -61,6 +61,7 @@ const ITEMS = {
   'ether': { n: 'PP單項小補劑', price: 1200, kind: 'pp', d: '回復所有招式 10 PP。' },
   'repel': { n: '除蟲噴霧', price: 400, kind: 'repel', steps: 100, d: '100 步內不會遇到野生寶可夢。' },
   'rare-candy': { n: '神奇糖果', price: 4800, kind: 'candy', d: '讓寶可夢提升 1 級。' },
+  'exp-share': { n: '學習裝置', price: 0, kind: 'key', d: '開啟時，沒有上場的夥伴也能獲得一半的經驗值。在背包裡使用可以切換開關。' },
 };
 
 // 進化道具：名稱取自 PokéAPI（data/items.js）。原作需通訊交換或攜帶升級的道具，改為直接使用。

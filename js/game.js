@@ -23,7 +23,7 @@ const Game = {
     return {
       v: SAVE_VER, worldVer: WORLD_VER, seed, region, name, x: 0, y: 0, dir: 'down', surf: false,
       party: [], box: [],
-      bag: { 'poke-ball': 5, 'potion': 3 },
+      bag: { 'poke-ball': 5, 'potion': 3, 'exp-share': 1 },
       money: 3000, badges: {}, champs: {}, seen: {}, caught: {},
       defeated: {}, visited: {}, center: null, repel: 0, steps: 0, playMs: 0,
       flags: {}, starter,
@@ -75,6 +75,8 @@ const Game = {
       if (bad) s[k] = v;
     }
     if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    // 學習裝置：一開始就有（舊存檔補上）
+    if (!s.bag['exp-share']) s.bag['exp-share'] = 1;
     // 對戰塔：BP、連勝紀錄
     for (const k of ['bp', 'towerStreak', 'towerBest']) if (s[k] !== undefined && !(Number.isInteger(s[k]) && s[k] >= 0)) s[k] = 0;
     // 世界配置版本：沒有記錄的是舊存檔（第 1 版），保留原本的世界
@@ -98,6 +100,7 @@ const Game = {
     if (!['up', 'down', 'left', 'right'].includes(s.dir)) s.dir = 'down';
     for (const k of Object.keys(s.bag)) if (!Number.isInteger(s.bag[k]) || s.bag[k] <= 0) delete s.bag[k];
     // 舊存檔：已捕捉過的傳說／幻之寶可夢不再出現在地圖上
+    if (s.legendsGone !== undefined && (!s.legendsGone || typeof s.legendsGone !== 'object' || Array.isArray(s.legendsGone))) s.legendsGone = {};
     if (!s.legendsCaught || typeof s.legendsCaught !== 'object' || Array.isArray(s.legendsCaught)) {
       s.legendsCaught = {};
       for (const id of Object.keys(s.caught)) if (POKEDEX[id] && POKEDEX[id].lg) s.legendsCaught[id] = 1;
@@ -570,6 +573,13 @@ const Game = {
       if (typeof FUSION !== 'undefined' && FUSION.some(f => f.item === id)) {
         if (battle) { await UI.say('現在不能使用這個道具。'); continue; }
         await Fusion.use(id);
+        UI.hideDialog();
+        continue;
+      }
+      if (id === 'exp-share') {
+        G.state.expShareOff = !G.state.expShareOff;
+        Sound.sfx('select');
+        await UI.say(G.state.expShareOff ? '關閉了學習裝置。\n只有上場的寶可夢會獲得經驗值。' : '開啟了學習裝置！\n沒有上場的夥伴也能獲得一半的經驗值。');
         UI.hideDialog();
         continue;
       }
