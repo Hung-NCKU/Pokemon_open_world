@@ -247,6 +247,30 @@ async function run() {
     m.iv = [0, 0, 0, 0, 0, 0];
     await Game.applyItem(m, 'gold-bottle-cap');
     check('金色王冠：所有能力視為個體值 31', Mon.stats(m)[5] > after[5]);
+    // 王冠的 HP 補差額：滿血仍是滿血、受傷補上增加量、瀕死不會復活
+    for (const [hp0, name] of [['full', '滿血'], [10, '受傷'], [0, '瀕死']]) {
+      const t = Mon.create(25, 60); t.iv = [0, 0, 0, 0, 0, 0]; delete t.ivHT;
+      const max0 = Mon.maxHp(t);
+      t.hp = hp0 === 'full' ? max0 : hp0;
+      await Game.applyItem(t, 'gold-bottle-cap');
+      const max1 = Mon.maxHp(t), want = hp0 === 'full' ? max1 : hp0 === 0 ? 0 : 10 + max1 - max0;
+      check(`王冠特訓後 HP 正確（${name}）`, max1 > max0 && t.hp === want, `${t.hp}/${max1}`);
+    }
+    const fainted = Mon.create(25, 60); fainted.ev = [0, 0, 0, 0, 0, 0]; fainted.hp = 0;
+    await Game.applyItem(fainted, 'hp-up');
+    check('瀕死時使用 HP 增強劑不會復活', fainted.hp === 0);
+    // 勁敵依序出現：拿到 6 枚徽章才開始任務時，直接進行第三場並略過第二場
+    {
+      const keep = G.state, realBattle = Game.battle, seen = [];
+      Game.battle = async o => { seen.push(o.trainer.party.length); return 'win'; };
+      G.state = Game.newState('T', 'kanto', 4);
+      G.state.flags.q_start = 1; G.state.flags.rival1 = 1;
+      G.state.badges = { kanto: [0, 1, 2, 3, 4, 5] };
+      const kt = World.towns.find(t => t.region === 'kanto');
+      await Story.onEnterTown(kt); await Story.onEnterTown(kt);
+      check('勁敵事件不會倒序（6 枚徽章時只打第三場）', seen.length === 1 && G.state.flags.rival3 === 1 && G.state.flags.rival2 === 'skip', JSON.stringify(G.state.flags));
+      Game.battle = realBattle; G.state = keep;
+    }
     const forgot = Mon.create(1, 30);
     const lost = forgot.moves[0].id;
     forgot.moves = forgot.moves.slice(1);
@@ -284,6 +308,12 @@ async function run() {
     check('座標超出世界判定無效', !mut(x => { x.x = -5; }).ok);
     const fixed = mut(x => { x.party[0].ev = [300, 0, 0, 0, 0, 0]; x.party[0].hp = 99999; x.party[0].moves[0].pp = 999; });
     check('努力值、HP、PP 超出範圍時自動修正', fixed.ok && fixed.state.party[0].ev[0] === 0 && fixed.state.party[0].hp === Mon.maxHp(fixed.state.party[0]) && fixed.state.party[0].moves[0].pp === MOVES[fixed.state.party[0].moves[0].id].pp);
+    // 巢狀資料與培育欄位
+    const nb = mut(x => { x.badges = { kanto: null, johto: [0, 0, 9, 'x', 3], nowhere: [1] }; x.champs = { kanto: 1, zzz: 1 }; });
+    check('徽章資料錯誤時自動修正，計算徽章不會出錯', nb.ok && !('kanto' in nb.state.badges) && nb.state.badges.johto.join() === '0,3' && !nb.state.badges.nowhere && !nb.state.champs.zzz
+      && (() => { const k = G.state; G.state = nb.state; try { return Game.badgeCount() === 2; } finally { G.state = k; } })());
+    const nm = mut(x => { x.party[0].mint = 'abc'; x.party[0].ivHT = 'yes'; });
+    check('不正確的薄荷、極限特訓欄位會被移除，能力值仍是數字', nm.ok && nm.state.party[0].mint === undefined && nm.state.party[0].ivHT === undefined && Mon.stats(nm.state.party[0]).every(Number.isFinite));
     const ok2 = Game.parseSave(JSON.stringify(good));
     check('驗證後的能力值都是數字', ok2.ok && ok2.state.party.every(m => Mon.stats(m).every(Number.isFinite)));
     // 主存檔損毀時改用備份
@@ -434,28 +464,32 @@ async function run() {
     G.state.flags.q_start = 1;
     for (let i = 1; i <= 10; i++) G.state.caught[i] = 1;
     check('捕捉 10 種後任務前進', Story.questStage(G.state) === 2);
-    // 實際跑遭遇流程：強制觸發傳說判定，600 次都不能出現事件專屬的傳說寶可夢
+    // 傳說與幻之寶可夢：每種只在地圖上固定放一隻，野外遭遇不會出現
     const far = World.towns.find(t => World.regionBand(t.region)[0] >= 35) || World.towns[0];
-    const rollLegends = () => {
-      const realChance = U.chance;
-      U.chance = p => p < .01 ? true : realChance(p);
-      const got = new Set();
-      try {
-        for (let i = 0; i < 600; i++) {
-          const b = ['tall', 'cave', 'water', 'snow', 'desert'][i % 5];
-          got.add(World.rollWild(far.cx + (i % 7), far.cy + (i % 5), b).sp);
-        }
-      } finally { U.chance = realChance; }
-      return got;
-    };
-    const got = rollLegends();
-    check('實際遭遇流程中不會出現三聖鳥與超夢', ![...EVENT_LEGENDS].some(id => got.has(id)), `遭遇到 ${got.size} 種`);
-    // 反向驗證：拿掉排除條件時，這個測試必須能抓到事件傳說
-    const saved = [...EVENT_LEGENDS];
-    EVENT_LEGENDS.clear();
-    const got2 = rollLegends();
-    saved.forEach(id => EVENT_LEGENDS.add(id));
-    check('反向驗證：拿掉排除條件時會遭遇到事件傳說（測試有效）', saved.some(id => got2.has(id)), saved.filter(id => got2.has(id)).map(id => POKEDEX[id].n).join('、'));
+    const got = new Set();
+    for (let i = 0; i < 600; i++) {
+      const b = ['tall', 'cave', 'water', 'snow', 'desert'][i % 5];
+      got.add(World.rollWild(far.cx + (i % 7), far.cy + (i % 5), b).sp);
+    }
+    check('野外遭遇不會出現任何傳說／幻之寶可夢', ![...got].some(id => POKEDEX[id].lg), [...got].filter(id => POKEDEX[id].lg).map(id => POKEDEX[id].n).join('、'));
+    const want = Object.values(POKEDEX).filter(sp => sp.lg && !(sp.pre && POKEDEX[sp.pre] && POKEDEX[sp.pre].lg)).map(sp => sp.id);
+    const placed = [...World.legends.values()];
+    const count = {};
+    placed.forEach(l => count[l.sp] = (count[l.sp] || 0) + 1);
+    check('每種傳說／幻之寶可夢在地圖上剛好一隻', want.every(id => count[id] === 1) && placed.length === want.length,
+      `${placed.length}/${want.length}，缺：${want.filter(id => !count[id]).map(id => POKEDEX[id].n).join('、')}`);
+    const bad = placed.filter(l => !World.inside(l.x, l.y) || BLOCKED.has(World.tile(l.x, l.y)) || World.doors.has(l.x + ',' + l.y) || World.trainers.has(l.x + ',' + l.y));
+    check('傳說站在可以抵達的格子上', !bad.length, bad.map(l => POKEDEX[l.sp].n).join('、'));
+    const ev = placed.filter(l => EVENT_LEGENDS.has(l.sp));
+    check('事件傳說站在地標入口前', ev.length === EVENT_LEGENDS.size && ev.every(l => l.lm && l.lm.sp === l.sp));
+    const mew = placed.find(l => l.sp === 151);
+    check('傳說擋住去路（不能走上去）', mew && !Game.walkable(mew.x, mew.y));
+    G.state.legendsCaught = { 151: 1 };
+    check('捕捉後就從地圖上消失', mew && !World.legendAt(mew.x, mew.y));
+    G.state.legendsCaught = {};
+    const old = Game.newState('T', 'kanto', 4); old.party.push(Mon.create(4, 5)); delete old.legendsCaught; old.caught[150] = 1;
+    Game.validateState(old);
+    check('舊存檔：已捕捉的傳說不會再出現', old.legendsCaught[150] === 1 && !old.legendsCaught[4]);
   }
   // 12. 隨機對戰不出錯
   {

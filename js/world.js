@@ -83,6 +83,7 @@ const World = {
     this.stampTowns();
     this.alignTrees();
     this.placeLandmarks(rng);
+    this.placeLegends(rng);
     this.alignTrees();
     this.buildPools();
   },
@@ -279,6 +280,55 @@ const World = {
       this.landmarks.set(x + ',' + y, { ...lm, x, y, region });
     }
   },
+  // 傳說與幻之寶可夢：每種只有一隻，以實體站在固定位置（依世界種子決定）
+  // 只放沒有進化前型態的物種（科斯莫古、熊徒弟等靠進化取得最終型態）；關都的事件傳說站在地標入口前
+  placeLegends(rng) {
+    this.legends = new Map();
+    const genRegion = {};
+    for (const [k, r] of Object.entries(REGIONS)) genRegion[r.gen] = k;
+    const species = Object.values(POKEDEX).filter(s => s.lg && !(s.pre && POKEDEX[s.pre] && POKEDEX[s.pre].lg)).sort((a, b) => a.id - b.id);
+    const taken = (x, y) => [...this.legends.values()].some(l => Math.abs(l.x - x) + Math.abs(l.y - y) < 10);
+    const landTiles = new Set([T.GRASS, T.TALL, T.FLOWER, T.SNOW, T.SNOWTALL, T.DESERT, T.CAVE, T.SAND]);
+    for (const s of species) {
+      const region = genRegion[s.g] || 'kanto';
+      const [lo, hi] = this.regionBand(region);
+      const bst = Mon.bst(s.id);
+      const lv = U.clamp(Math.max(50, hi + 5) + (bst >= 670 ? 10 : 0), 50, 90);
+      // 事件傳說：站在地標入口前
+      const lm = [...this.landmarks.values()].find(l => l.sp === s.id);
+      if (lm) {
+        this.legends.set(lm.x + ',' + (lm.y + 1), { sp: s.id, x: lm.x, y: lm.y + 1, lv: lm.lv || lv, region, lm });
+        continue;
+      }
+      const water = s.t[0] === 'water';
+      const home = this.towns.find(t => t.region === region && t.kind === 'home');
+      const league = this.towns.find(t => t.region === region && t.kind === 'league');
+      const total = Math.hypot(league.cx - home.cx, league.cy - home.cy) || 1;
+      const [rx, ry, rr] = REGION_POS[region];
+      let best = null;
+      for (let tries = 0; tries < 3000 && !best; tries++) {
+        const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * rr * (water ? 1.35 : 1);
+        const x = Math.round(rx + Math.cos(a) * d), y = Math.round(ry + Math.sin(a) * d);
+        if (!this.inside(x, y - 1) || !this.inside(x, y + 1) || this.regionAt(x, y) !== region) continue;
+        // 遠離家鄉（地區後半段）、不在城鎮附近、不和其他傳說擠在一起
+        if (Math.hypot(x - home.cx, y - home.cy) / total < .45 && tries < 2500) continue;
+        if (this.towns.some(t => Math.abs(t.cx - x) < 14 && Math.abs(t.cy - y) < 12) || taken(x, y)) continue;
+        if (this.trainers.has(x + ',' + y) || this.landmarks.has(x + ',' + y)) continue;
+        const t = this.tile(x, y);
+        if (water ? (t === T.WATER || t === T.DEEP) : landTiles.has(t)) best = [x, y];
+      }
+      if (!best) continue;
+      const [x, y] = best;
+      if (!water) this.connectToRoad(x, y);
+      this.legends.set(x + ',' + y, { sp: s.id, x, y, lv, region });
+    }
+  },
+  // 地圖上仍存在（尚未被捕捉）的傳說
+  legendAt(x, y) {
+    const l = this.legends && this.legends.get(x + ',' + y);
+    return l && !(G.state && G.state.legendsCaught && G.state.legendsCaught[l.sp]) ? l : null;
+  },
+
   // 從 (x,y) 找最近的道路或城鎮，沿途鋪成道路（水面鋪橋）
   connectToRoad(sx, sy) {
     const R = 60, W2 = R * 2 + 1;
@@ -395,12 +445,7 @@ const World = {
     let L = U.clamp(this.levelAt(x, y) + U.ri(-2, 2), 2, 100);
     const pool = this.pools[biome];
     const night = U.isNight();
-    // 傳說／幻之寶可夢：極低機率
-    if (L >= 35 && U.chance(1 / 350)) {
-      // 有專屬事件的傳說寶可夢（三聖鳥、超夢）不會隨機出現
-      const legends = pool.filter(p => p.lg && p.wm <= L && !(typeof EVENT_LEGENDS !== 'undefined' && EVENT_LEGENDS.has(p.id)));
-      if (legends.length) return Mon.create(U.pick(legends).id, L, { hidden: .03 });
-    }
+    // 傳說與幻之寶可夢不會在野外隨機出現（每種只有一隻，站在地圖上的固定位置）
     const local = U.chance(.75);
     const build = (useGen, useLevel) => pool.filter(p => !p.lg && (!useGen || p.g === gen) && (!useLevel || p.wm <= L)).map(p => {
       let w = p.w;

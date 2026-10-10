@@ -147,7 +147,8 @@ const Story = {
     const s = G.state;
     if (town.region !== 'kanto' || !s.flags.q_start) return;
     const kb = (s.badges.kanto || []).length;
-    if (kb >= 6 && !s.flags.rival3) await Story.rival(3);
+    // 依序進行；已經跳過的階段（例如拿到 6 枚徽章才開始任務）明確略過，不會倒序出現
+    if (kb >= 6 && !s.flags.rival3) { if (!s.flags.rival2) s.flags.rival2 = 'skip'; await Story.rival(3); }
     else if (kb >= 2 && !s.flags.rival2) await Story.rival(2);
   },
   // 大木博士（真新鎮研究所）
@@ -187,6 +188,30 @@ const Story = {
     await UI.say(hints[i] || `大木博士：「下一步：${Story.questText(s)}」`);
   },
 
+  // 傳說與幻之寶可夢（地圖上的實體）：捕捉後就從世界上消失，只有一隻
+  async legend(l) {
+    const s = G.state, sp = POKEDEX[l.sp];
+    const lm = l.lm;
+    if (lm && lm.need === 'birds' && (s.badges.kanto || []).length < 4) { await UI.say(`${sp.n} 散發著強大的氣息……以現在的實力好像還無法接近。\n（需要 4 枚關都徽章）`); return; }
+    if (lm && lm.need === 'champion' && !s.champs.kanto) { await UI.say(`${sp.n} 靜靜地看著你……「只有關都的冠軍才能接近。」`); return; }
+    if (typeof playCry === 'function') playCry(l.sp);
+    await UI.say(`${sp.lg === 2 ? '幻之寶可夢' : '傳說的寶可夢'}「${sp.n}」出現在眼前！`);
+    const top = Math.max(...G.party.map(m => m.lv));
+    if (top < l.lv - 15) {
+      const c = await UI.choose(['挑戰', '先離開'], { prompt: `牠的力量深不可測（約 Lv.${l.lv}）。要挑戰嗎？`, cancel: false });
+      if (c !== 0) return;
+    }
+    const wild = Mon.create(l.sp, l.lv, { perfect: 31, hidden: 0 });
+    const r = await Game.battle({ wild, biome: World.tile(l.x, l.y) === T.WATER || World.tile(l.x, l.y) === T.DEEP ? 'water' : 'cave' });
+    if (r === 'catch') {
+      s.legendsCaught = s.legendsCaught || {};
+      s.legendsCaught[l.sp] = 1;
+      if (lm) s.flags['lm_' + lm.id] = 1;
+      Game.save(true);
+    } else if (r === 'win') await UI.say(`${sp.n} 倒下後靜靜地待在原地……恢復後還可以再挑戰。`);
+    else if (r === 'run') await UI.say(`${sp.n} 仍然在原地。`);
+  },
+
   // 地標事件
   async landmark(lm) {
     const s = G.state;
@@ -203,13 +228,8 @@ const Story = {
       await UI.say(`獲得了${ITEMS[fid].n}！拿去給大木博士看看吧。`);
       return;
     }
-    if (s.flags[key]) { await UI.say('這裡已經恢復了平靜。'); return; }
-    if (lm.need === 'birds' && (s.badges.kanto || []).length < 4) { await UI.say('裡面傳來強大的氣息……但以現在的實力好像還無法深入。\n（需要 4 枚關都徽章）'); return; }
-    if (lm.need === 'champion' && !s.champs.kanto) { await UI.say('入口被守衛擋住了。「只有關都的冠軍才能進入。」'); return; }
-    await UI.say(`在${lm.n}的深處感覺到了強大的氣息……！`);
-    const wild = Mon.create(lm.sp, lm.lv, { perfect: 20 });
-    const r = await Game.battle({ wild, biome: lm.sea ? 'water' : 'cave' });
-    if (r === 'catch') { s.flags[key] = 1; Game.save(true); }
-    else if (r === 'win') await UI.say(`${POKEDEX[lm.sp].n} 消失了蹤影……再來一次或許還會遇到。`);
+    // 傳說寶可夢站在入口前（見 Story.legend）；入口本身只有景色
+    if (s.flags[key] || (s.legendsCaught && s.legendsCaught[lm.sp])) { await UI.say('這裡已經恢復了平靜。'); return; }
+    await UI.say(`${lm.n}的深處傳來強大的氣息……傳說的寶可夢就在入口前。`);
   },
 };

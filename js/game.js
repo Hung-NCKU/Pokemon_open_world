@@ -57,6 +57,21 @@ const Game = {
       if (bad) s[k] = v;
     }
     if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    // 巢狀資料：徽章是各地區 0–7 的不重複整數陣列；冠軍、旗標等是物件
+    for (const k of Object.keys(s.badges)) {
+      const b = s.badges[k];
+      if (!REGIONS[k] || !Array.isArray(b)) { delete s.badges[k]; continue; }
+      s.badges[k] = [...new Set(b.filter(v => Number.isInteger(v) && v >= 0 && v <= 7))];
+    }
+    for (const k of Object.keys(s.champs)) if (!REGIONS[k]) delete s.champs[k];
+    for (const k of ['repel', 'steps', 'playMs']) if (!Number.isFinite(s[k]) || s[k] < 0) s[k] = 0;
+    if (!['up', 'down', 'left', 'right'].includes(s.dir)) s.dir = 'down';
+    for (const k of Object.keys(s.bag)) if (!Number.isInteger(s.bag[k]) || s.bag[k] <= 0) delete s.bag[k];
+    // 舊存檔：已捕捉過的傳說／幻之寶可夢不再出現在地圖上
+    if (!s.legendsCaught || typeof s.legendsCaught !== 'object' || Array.isArray(s.legendsCaught)) {
+      s.legendsCaught = {};
+      for (const id of Object.keys(s.caught)) if (POKEDEX[id] && POKEDEX[id].lg) s.legendsCaught[id] = 1;
+    }
     return null;
   },
   // 驗證單隻寶可夢；無法修正的錯誤回傳原因，可修正的直接修正
@@ -77,6 +92,10 @@ const Game = {
     if (m.ev.reduce((a, b) => a + b, 0) > 510) m.ev = [0, 0, 0, 0, 0, 0];
     if (!Number.isFinite(m.exp) || m.exp < 0) m.exp = Mon.expFor(POKEDEX[m.sp].gr, m.lv);
     if (!int(m.happy, 0, 255)) m.happy = POKEDEX[m.sp].hap;
+    // 培育欄位：薄荷（0–24 的性格）、極限特訓（6 項旗標）
+    if (m.mint !== undefined && !int(m.mint, 0, 24)) delete m.mint;
+    if (m.ivHT !== undefined && !(Array.isArray(m.ivHT) && m.ivHT.length === 6)) delete m.ivHT;
+    else if (m.ivHT) m.ivHT = m.ivHT.map(v => (v ? 1 : 0));
     const max = Mon.stats(m)[0];
     if (!Number.isFinite(max)) return '能力值無法計算';
     if (!Number.isFinite(m.hp)) m.hp = max;
@@ -284,7 +303,7 @@ const Game = {
       const add = Math.min(10, 252 - m.ev[k], 510 - m.ev.reduce((a, b) => a + b, 0));
       const before = Mon.maxHp(m);
       m.ev[k] += add;
-      if (k === 0) m.hp += Mon.maxHp(m) - before;
+      if (k === 0 && m.hp > 0) m.hp += Mon.maxHp(m) - before;
       await UI.say(`${name} 的${STAT_ZH[k]}努力值提高了！（${m.ev[k]}／252）`);
     } else if (it.kind === 'expcandy') {
       await UI.say(`${name} 獲得了 ${EXP_CANDY[id]} 點經驗值！`);
@@ -306,6 +325,8 @@ const Game = {
       await UI.say(`${name} 的特性變成了${Abil.name(m.ability)}！`);
     } else if (it.kind === 'bottlecap') {
       // 極限特訓（第九世代需 Lv.50 以上）：銀色王冠選一項個體值變為最高，金色王冠全部
+      // HP 上限增加的部分補到目前 HP（瀕死的不會因此復活）
+      const before = Mon.maxHp(m);
       if (id === 'gold-bottle-cap') { m.ivHT = [1, 1, 1, 1, 1, 1]; await UI.say(`${name} 的所有能力都經過了極限特訓！`); }
       else {
         const c = await UI.choose(STAT_ZH.map((s, i) => ({ label: `${s}（個體值 ${m.iv[i]}）`, disabled: (m.ivHT || [])[i] || m.iv[i] === 31 })), { prompt: '要特訓哪一項能力？', cancel: false });
@@ -313,8 +334,7 @@ const Game = {
         m.ivHT[c] = 1;
         await UI.say(`${name} 的${STAT_ZH[c]}經過了極限特訓！`);
       }
-      const before = Mon.maxHp(m);
-      m.hp += Mon.maxHp(m) - before;
+      if (m.hp > 0) m.hp += Mon.maxHp(m) - before;
     }
   },
   itemUsable(m, id, inBattle) {
@@ -836,9 +856,10 @@ const Game = {
         await UI.say(`四天王 ${e.name}：「我是四天王的${e.name}，擅長${TYPES[e.type].n}屬性。來吧！」`);
         const r = await Game.battle({ trainer: { title: '四天王', name: e.name, party: World.eliteParty(t, i), kind: 'gym', money: 150, sprite: e.sprite, lose: '……你通過了。前進吧。' }, biome: 'gym' });
         if (r !== 'win') return;
-        if (i < e4.length - 1) {
+        {
+          const last = i === e4.length - 1;
           while (true) {
-            const n = await UI.choose(['前往下一個房間', '寶可夢', '背包'], { prompt: `打敗了四天王 ${e.name}！（${i + 1}／4）`, cancel: false });
+            const n = await UI.choose([last ? '前往冠軍的房間' : '前往下一個房間', '寶可夢', '背包'], { prompt: `打敗了四天王 ${e.name}！（${i + 1}／4）${last ? '\n接下來是冠軍戰，先整頓隊伍吧。' : ''}`, cancel: false });
             if (n === 0) break;
             if (n === 1) await Game.partyMenu();
             if (n === 2) await Game.bagMenu();
@@ -960,6 +981,7 @@ const Game = {
     const t = World.tile(x, y);
     if (BLOCKED.has(t) || t === T.DOOR) return false;
     if (World.trainers.has(x + ',' + y)) return false;
+    if (World.legendAt && World.legendAt(x, y)) return false;
     if (t === T.WATER || t === T.DEEP) return G.state.surf || Game.canSurf();
     return true;
   },
@@ -972,6 +994,8 @@ const Game = {
     if (b) return Game.enterBuilding(b);
     const lm = World.landmarks && World.landmarks.get(fx + ',' + fy);
     if (lm) return Story.landmark(lm);
+    const lg = World.legendAt && World.legendAt(fx, fy);
+    if (lg) return Story.legend(lg);
     const tr = World.trainers.get(fx + ',' + fy);
     if (tr) {
       if (s.defeated[tr.x + ',' + tr.y]) {
@@ -1013,6 +1037,8 @@ const Game = {
     const tx = s.x + d[0], ty = s.y + d[1];
     if (World.doors.has(tx + ',' + ty) && dir === 'up') { Game.flow(() => Game.enterBuilding(World.doors.get(tx + ',' + ty))); G.keys.clear(); return; }
     if (World.landmarks && World.landmarks.has(tx + ',' + ty)) { Sound.sfx('door'); Game.flow(() => Story.landmark(World.landmarks.get(tx + ',' + ty))); G.keys.clear(); return; }
+    const lg = World.legendAt && World.legendAt(tx, ty);
+    if (lg) { Game.flow(() => Story.legend(lg)); G.keys.clear(); return; }
     if (!Game.walkable(tx, ty)) return;
     const run = G.keys.has('Shift');
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: s.surf ? 120 : run ? 85 : 160 };
@@ -1051,6 +1077,8 @@ const Game = {
     for (let y = y0 - 1; y <= y0 + VH + 1; y++) for (let x = x0; x <= x0 + VW; x++) {
       const tr = World.trainers.get(x + ',' + y);
       if (tr) people.push({ y: y * TILE, tr });
+      const lg = World.legendAt && World.legendAt(x, y);
+      if (lg) people.push({ y: y * TILE, lg });
     }
     people.push({ y: py, player: true });
     people.sort((a, b) => a.y - b.y);
@@ -1062,6 +1090,7 @@ const Game = {
         World.drawPerson(g, px - ox, py - oy, s.dir, { pal: Spr.PLAYER, sheet }, walking, { surf: s.surf, tick: G.frame });
         continue;
       }
+      if (p.lg) { Game.drawLegend(g, p.lg, p.lg.x * TILE - ox, p.lg.y * TILE - oy); continue; }
       const tr = p.tr;
       const names = Gen3.on ? GEN3.trainers : [];
       const sheet = names.length ? 'npc_' + names[tr.cls % names.length] : null;
@@ -1078,9 +1107,30 @@ const Game = {
     if (G.flash) { g.fillStyle = (G.frame >> 2) % 2 ? '#000' : '#fff'; g.fillRect(0, 0, cv.width, cv.height); }
   },
 
+  // 地圖上的傳說寶可夢：正面圖約 96px，腳底對齊格子下緣，緩慢上下浮動
+  legendImg: new Map(),
+  drawLegend(g, l, x, y) {
+    let img = Game.legendImg.get(l.sp);
+    if (!img) {
+      img = new Image();
+      const s = monSprite({ sp: l.sp }, false);
+      img.onerror = () => { img.onerror = null; img.src = Mon.sprite(l.sp, {}); };
+      img.src = s.url.replace(/animated\/(.*)\.gif$/, '$1.png');
+      Game.legendImg.set(l.sp, img);
+    }
+    if (!img.complete || !img.naturalWidth) return;
+    const w = 96, h = img.naturalHeight * w / img.naturalWidth;
+    const bob = Math.round(Math.sin(G.frame / 20) * 3);
+    g.fillStyle = 'rgba(0,0,0,.25)';
+    g.beginPath(); g.ellipse(x + TILE / 2, y + TILE - 4, 20, 6, 0, 0, Math.PI * 2); g.fill();
+    g.imageSmoothingEnabled = false;
+    g.drawImage(img, x + (TILE - w) / 2, y + TILE - h + 8 + bob, w, h);
+  },
+
   // ---------- 標題 / 新遊戲 ----------
   async title() {
     G.mode = 'title';
+    Sound.play('title');   // 音訊在第一次按鍵或點擊後才能開始（瀏覽器限制），之後自動播放
     const loaded = Game.loadSave();
     const scr = document.getElementById('title');
     scr.classList.remove('hidden');
@@ -1115,34 +1165,45 @@ const Game = {
         if (ok !== 0) continue;
       }
       scr.classList.add('hidden');
-      return Game.newGame();
+      if (await Game.newGame() !== false) return;
+      // 在輸入名字時返回：回到標題選單
+      UI.hideDialog();
+      scr.classList.remove('hidden');
     }
   },
 
+  // 新遊戲設定：每一步都可以按 X／Esc 回到上一步（名字 → 地區 → 夥伴）；在名字返回時回傳 false
   async newGame() {
-    const bg = document.getElementById('title');
     await UI.say('歡迎來到寶可夢的世界！');
     await UI.say('這個世界上住著被稱為「寶可夢」的不可思議的生物。在這片廣大的世界裡，九個地區相連在一起，全部 1025 種寶可夢都生活在某個角落。');
-    const name = await UI.input('首先，請告訴我你的名字。', '小智');
     const keys = Object.keys(REGIONS);
-    const r = await UI.list({
-      title: '要從哪個地區開始冒險？',
-      rows: keys.map(k => `<div class="grow"><b>${REGIONS[k].n}地區</b>　<span class="dim">第 ${REGIONS[k].gen} 世代・從${REGIONS[k].home}出發・${REGIONS[k].prof}</span></div>
-        ${REGIONS[k].starters.map(id => `<img class="icon" src="${Mon.sprite(id)}">`).join('')}`),
-      cancel: false,
-    });
-    const region = keys[r];
-    const reg = REGIONS[region];
-    await UI.say(`${reg.prof}：「${name}，歡迎來到${reg.n}地區！我是${reg.prof}。」`);
-    let starter;
-    while (true) {
-      const i = await UI.list({
-        title: `${reg.prof}：「選一隻作為你的夥伴吧！」`,
-        rows: reg.starters.map(id => `<img class="big-icon" src="${Mon.sprite(id)}"><div class="grow"><b>${POKEDEX[id].n}</b> ${POKEDEX[id].t.map(typeTag).join('')}<div class="dim small">${U.esc(POKEDEX[id].gen)}　${U.esc(POKEDEX[id].fl)}</div></div>`),
-        cancel: false,
-      });
-      const ok = await UI.choose(['是', '否'], { prompt: `確定要選擇 ${POKEDEX[reg.starters[i]].n} 嗎？` });
-      if (ok === 0) { starter = reg.starters[i]; break; }
+    let step = 1, name = '小智', r = 0, region, reg, starter;
+    while (step < 4) {
+      if (step === 1) {
+        UI.hideDialog();
+        const v = await UI.input('首先，請告訴我你的名字。', name, { cancel: true });
+        if (v === null) return false;
+        name = v; step = 2;
+      } else if (step === 2) {
+        const i = await UI.list({
+          title: '要從哪個地區開始冒險？',
+          rows: keys.map(k => `<div class="grow"><b>${REGIONS[k].n}地區</b>　<span class="dim">第 ${REGIONS[k].gen} 世代・從${REGIONS[k].home}出發・${REGIONS[k].prof}</span></div>
+            ${REGIONS[k].starters.map(id => `<img class="icon" src="${Mon.sprite(id)}">`).join('')}`),
+          start: r,
+        });
+        if (i < 0) { step = 1; continue; }
+        r = i; region = keys[r]; reg = REGIONS[region];
+        await UI.say(`${reg.prof}：「${name}，歡迎來到${reg.n}地區！我是${reg.prof}。」`);
+        step = 3;
+      } else {
+        const i = await UI.list({
+          title: `${reg.prof}：「選一隻作為你的夥伴吧！」`,
+          rows: reg.starters.map(id => `<img class="big-icon" src="${Mon.sprite(id)}"><div class="grow"><b>${POKEDEX[id].n}</b> ${POKEDEX[id].t.map(typeTag).join('')}<div class="dim small">${U.esc(POKEDEX[id].gen)}　${U.esc(POKEDEX[id].fl)}</div></div>`),
+        });
+        if (i < 0) { UI.hideDialog(); step = 2; continue; }
+        const ok = await UI.choose(['是', '否'], { prompt: `確定要選擇 ${POKEDEX[reg.starters[i]].n} 嗎？` });
+        if (ok === 0) { starter = reg.starters[i]; step = 4; }
+      }
     }
     UI.showText('正在生成世界……');
     await U.sleep(50);
@@ -1150,7 +1211,7 @@ const Game = {
     const m = Mon.create(starter, 5);
     m.happy = 120;
     st.party.push(m);
-    st.seen[starter] = 1; st.caught[starter] = 1;
+    st.seen[starter] = 1; st.caught[starter] = 1; st.legendsCaught = {};
     Game.start(st, true);
     await UI.say(`${reg.prof}：「${POKEDEX[starter].n} 和你看起來很合得來呢！」`);
     await UI.say(`${reg.prof}：「這個世界很廣闊。往遠處走，寶可夢會越來越強。收集各地區的徽章、挑戰聯盟，並且完成這本圖鑑吧！」`);
@@ -1218,6 +1279,8 @@ window.addEventListener('load', () => {
     else if ((e.key === 'x' || e.key === 'X' || e.key === 'Escape') && !G.move) Game.flow(() => Game.mainMenu());
     else if ((e.key === 'm' || e.key === 'M') && !G.move) Game.flow(() => Game.mapMenu());
   });
+  // 點擊／觸控也能解除瀏覽器的音訊限制
+  window.addEventListener('pointerdown', () => Sound.init(), true);
   window.addEventListener('keyup', e => { G.keys.delete(e.key); G.keys.delete(e.key.toLowerCase()); G.keys.delete(e.key.toUpperCase()); });
   window.addEventListener('blur', () => G.keys.clear());
 

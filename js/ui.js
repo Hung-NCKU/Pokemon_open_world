@@ -194,16 +194,19 @@ const UI = (() => {
     });
   }
 
-  function input(prompt, def = '') {
+  // cancel: true 時可按 Esc 或「返回」取消，回傳 null
+  function input(prompt, def = '', { cancel = false } = {}) {
     return new Promise(res => {
       const m = document.createElement('div');
       m.className = 'modal input-modal';
-      m.innerHTML = `<div class="body"><p>${U.esc(prompt)}</p><input maxlength="10" value="${U.esc(def)}"><button>確定</button></div>`;
+      m.innerHTML = `<div class="body"><p>${U.esc(prompt)}</p><input maxlength="10" value="${U.esc(def)}"><button class="ok">確定</button>${cancel ? '<button class="back">返回</button>' : ''}</div>`;
       $('game').appendChild(m);
       const inp = m.querySelector('input');
       const done = () => { pop(); const v = inp.value.trim() || def; m.remove(); res(v); };
-      inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') done(); };
-      m.querySelector('button').onclick = done;
+      const back = () => { pop(); m.remove(); res(null); };
+      inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') done(); else if (e.key === 'Escape' && cancel) back(); };
+      m.querySelector('.ok').onclick = done;
+      if (cancel) m.querySelector('.back').onclick = back;
       const pop = pushKey(() => { });
       setTimeout(() => inp.focus(), 30);
     });
