@@ -111,6 +111,7 @@ const Story = {
   questSummary(s) {
     const lines = [`【${REGIONS[s.region].n}】${Story.questText(s, s.region)}`];
     if (s.region !== 'kanto' && s.flags.q_start) lines.push(`【關都・大木博士】${Story.questText(s, 'kanto')}`);
+    if (typeof Hidden !== 'undefined') { const [f, n] = Hidden.count(); lines.push(`【探索】隱藏道具 ${f}／${n}（走近時地面會閃光，面向那一格按確認）；目前天氣：${Weather.KINDS[Weather.here()].n}`); }
     return lines.join('\n');
   },
   // 非關都地區的博士
@@ -169,7 +170,7 @@ const Story = {
       Game.giveItem(q.reward[0], q.reward[1]);
       await UI.say(`大木博士：「做得好！這是給你的謝禮。」\n獲得了 ${q.reward[1]} 個${ITEMS[q.reward[0]].n}！`);
     }
-    if (s.flags.fossil && !s.flags.fossil_revived) {
+    if (s.flags.fossil && !s.flags.fossil_revived && G.state.bag[s.flags.fossil]) {
       const fid = s.flags.fossil;
       const sp = fid === 'helix-fossil' ? 138 : 140;
       await UI.say(`大木博士：「這是${ITEMS[fid].n}！讓我用研究所的機器讓它復活……」`);

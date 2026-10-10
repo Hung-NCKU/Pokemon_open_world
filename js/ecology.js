@@ -107,6 +107,7 @@ Object.assign(World, {
     const table = this.zoneTable(Math.floor(x / ZONE), Math.floor(y / ZONE), biome)
       .filter(t => !(t.slot === 'day' && night) && !(t.slot === 'night' && !night));
     let id = table.length ? U.weighted(table).id : this.pickForLevel(U.rand, L);
+    if (typeof Weather !== 'undefined') id = Weather.adjustWild(id, x, y, biome, L);
     id = this.evolveFor(id, L);
     const form = Forms.wild(id, this.regionAt(x, y));
     // 野生寶可夢：隱藏特性 3%、有 5% 機率攜帶樹果

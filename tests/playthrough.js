@@ -116,6 +116,7 @@
   }
 
   async function run() {
+    Weather.force('clear');
     const t0 = performance.now();
     G.state = Game.newState('機器人', 'kanto', 4);
     const m = Mon.create(4, 5); G.state.party.push(m); G.state.seen[4] = 1; G.state.caught[4] = 1;

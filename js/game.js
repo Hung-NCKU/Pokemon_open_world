@@ -1109,6 +1109,8 @@ const Game = {
     const b = dbl ? new DoubleBattle(opts) : new Battle(opts);
     b.raid = opts.raid ? { ...opts.raid } : null;
     const kind = opts.trainer ? (opts.trainer.kind || 'trainer') : opts.raid ? 'raid' : 'wild';
+    // 野外的天氣帶進對戰（道館、室內、團體戰除外）
+    if (!G.room && !opts.raid && opts.biome !== 'gym' && !(opts.trainer && opts.trainer.field)) b.owWeather = Weather.KINDS[Weather.here()].battle || null;
     const who = opts.trainer ? opts.trainer.name : opts.wild ? POKEDEX[opts.wild.sp].n + opts.wild.lv : '';
     Telemetry.event('戰鬥開始', { kind, who, dbl });
     const t0 = performance.now();
@@ -1231,6 +1233,8 @@ const Game = {
     if (b) return Game.enterBuilding(b);
     const sign = World.signs && World.signs.get(fx + ',' + fy);
     if (sign) return UI.say(sign);
+    const hid = Hidden.at(fx, fy);
+    if (hid) return Hidden.pickUp(hid);
     const lm = World.landmarks && World.landmarks.get(fx + ',' + fy);
     if (lm) return Story.landmark(lm);
     const lg = World.legendAt && World.legendAt(fx, fy);
@@ -1337,6 +1341,7 @@ const Game = {
       if (b.x + b.w < x0 - 1 || b.x > x0 + VW + 1 || b.y + b.h < y0 - 1 || b.y > y0 + VH + 1) continue;
       World.drawBuilding(g, b, ox, oy);
     }
+    Hidden.draw(g, ox, oy);
     // 人物依 y 座標排序繪製（下方的人物蓋住上方）
     const people = [];
     for (let y = y0 - 1; y <= y0 + VH + 1; y++) for (let x = x0; x <= x0 + VW; x++) {
@@ -1373,6 +1378,7 @@ const Game = {
       const gi = (Gen3.on && Gen3.single(tt === T.TALL ? 'tall' : 'snowtall')) || World.tileCache[tt][0];
       g.drawImage(gi, 0, gi.height * .5, gi.width, gi.height * .5, px - ox, py - oy + TILE * .5, TILE, TILE * .5);
     }
+    Weather.draw(g, cv);
     if (U.isNight()) { g.fillStyle = 'rgba(20,30,90,.33)'; g.fillRect(0, 0, cv.width, cv.height); }
     if (G.flash) { g.fillStyle = (G.frame >> 2) % 2 ? '#000' : '#fff'; g.fillRect(0, 0, cv.width, cv.height); }
   },

@@ -57,7 +57,7 @@ const TOWN_DESIGNS = {
       '.####.,,,.####..',
       '................',
     ],
-    houses: { a: ['amber', 'fossilchoice'] },
+    houses: { a: ['amber', 'museum'] },
     signs: { 1: '深灰市\n灰色岩石之城\n（左邊是深灰博物館）' },
   },
   華藍市: {

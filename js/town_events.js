@@ -1,15 +1,13 @@
 // 關都城鎮小屋裡的人（data/towns.js 的 houses 指定）：原作的經典事件與實用服務
 // 名稱依神奇寶貝百科（52poke）：奈奈美、姓名鑑定師、招式回憶處、遺忘爺爺、寶可夢發燒友俱樂部會長、格鬥道場（空手道大王 武德）
 ITEMS['old-amber'] = { n: '秘密琥珀', price: 0, kind: 'key', d: '封存著古代寶可夢遺傳因子的琥珀。紅蓮島的研究所可以讓牠復活。' };
-ITEMS['helix-fossil'] = { n: '貝殼化石', price: 0, kind: 'key', d: '古代寶可夢的化石，看起來像貝殼的一部分。紅蓮島的研究所可以讓牠復活。' };
-ITEMS['dome-fossil'] = { n: '甲殼化石', price: 0, kind: 'key', d: '古代寶可夢的化石，看起來像甲殼的一部分。紅蓮島的研究所可以讓牠復活。' };
 
 const TownEvents = (() => {
   // 每個事件的人物：名稱與行走圖
   const DEF = {
     daisy: { n: '奈奈美', gfx: 'woman_2' }, rivalhome: { n: '青綠的家人', gfx: 'girl_3' },
     namerater: { n: '姓名鑑定師', gfx: 'gentleman' }, oldman: { n: '老爺爺', gfx: 'old_man' },
-    amber: { n: '博物館的研究員', gfx: 'scientist_1' }, fossilchoice: { n: '化石愛好者', gfx: 'man_1' },
+    amber: { n: '博物館的研究員', gfx: 'scientist_1' }, museum: { n: '博物館的導覽員', gfx: 'man_1' },
     trade_jynx: { n: '想交換的人', gfx: 'man_1' }, tips_cerulean: { n: '女孩', gfx: 'lass' },
     fanclub: { n: '寶可夢發燒友俱樂部會長', gfx: 'pokefan_m' }, trade_farfetchd: { n: '想交換的女孩', gfx: 'girl_3' },
     eevee: { n: '玉虹公寓的住戶', gfx: 'woman_2' }, stones: { n: '收集石頭的人', gfx: 'cook' },
@@ -80,15 +78,7 @@ const TownEvents = (() => {
       }
       return say('amber', '紅蓮島的研究所，聽說可以讓化石裡的寶可夢復活。');
     },
-    async fossilchoice() {
-      if (!once('fossilchoice')) return say('fossilchoice', '化石真是浪漫啊！你一定要讓牠復活喔。');
-      await say('fossilchoice', '我在月見山挖到了兩塊化石，可以送你其中一塊。');
-      const c = await UI.choose(['貝殼化石', '甲殼化石', '不用了'], { prompt: '要哪一塊化石？' });
-      if (c < 0 || c > 1) return;
-      const id = c === 0 ? 'helix-fossil' : 'dome-fossil';
-      done('fossilchoice'); Game.giveItem(id, 1);
-      return UI.say(`獲得了${ITEMS[id].n}！`);
-    },
+    museum: () => say('museum', '北邊的月見山裡，聽說還埋著古代寶可夢的化石。找到的話，大木博士或紅蓮島的研究所都能讓牠復活喔！'),
     // 交換
     trade_jynx: () => trade('trade_jynx'), trade_farfetchd: () => trade('trade_farfetchd'), trade_seel: () => trade('trade_seel'),
     tips_cerulean: () => say('tips_cerulean', '華藍市北邊的洞窟裡，聽說住著非常強大的寶可夢……'),
@@ -186,6 +176,8 @@ const TownEvents = (() => {
       if (c < 0 || c >= have.length) return;
       const id = have[c];
       if (--G.state.bag[id] <= 0) delete G.state.bag[id];
+      // 月見山的化石（大木博士的任務）在這裡復活，也算完成任務
+      if (G.state.flags.fossil === id) G.state.flags.fossil_revived = 1;
       await say('fossil', '……成功了！古代的寶可夢復活了！');
       return receive(Mon.create(FOSSILS[id], 20));
     },

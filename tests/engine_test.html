@@ -43,6 +43,8 @@
 <script src="../js/regions.js"></script>
 <script src="../data/towns.js"></script>
 <script src="../js/town_events.js"></script>
+<script src="../js/weather.js"></script>
+<script src="../js/hidden.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/search.js"></script>
 <script src="../js/bagui.js"></script>
@@ -100,6 +102,8 @@ async function use(b, user, sd, slotPP = 10) {
 }
 
 async function run() {
+  // 天氣依現實時間變化；測試時固定為晴朗，天氣的測試再個別指定
+  Weather.force('clear');
   // 1. 近身戰：降低自己的防禦、特防，對手不變
   {
     const b = setup(68, 50, 143, 50);
@@ -1401,6 +1405,43 @@ async function run() {
     check('城鎮事件：格鬥道場打贏空手道大王後選快拳郎，只送一次', fought === 1 && G.party.filter(m => m.sp === 107 || m.sp === 106).length === 1 && G.party.some(m => m.sp === 107));
     UI.choose = keepChoose; UI.input = keepInput; Game.partyMenu = keepPick; Game.battle = keepBattle;
     World.generate(20261010, 'kanto');
+    G.state = keep;
+  }
+  // 天氣與隱藏道具
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(4, 30)];
+    World.generate(20261010, 'kanto');
+    // 天氣的機率依氣候：寒冷的神奧會下雪，關都不會（雪地以外）
+    Weather.force(null);
+    const day = Weather.PERIOD, kinds = r => new Set([...Array(400).keys()].map(i => Weather.forRegion(r, i * day)));
+    const sin = kinds('sinnoh'), kan = kinds('kanto');
+    check('天氣：寒冷的神奧會下雪，溫和的關都不會下雪', sin.has('snow') && !kan.has('snow') && kan.has('rain') && kan.has('clear'), [...sin].join() + ' / ' + [...kan].join());
+    check('天氣：同一時段同一地區的天氣固定', Weather.forRegion('kanto', 5 * day) === Weather.forRegion('kanto', 5 * day + 1000));
+    // 雨天：水、電、蟲屬性變多
+    const spot = (() => { for (let y = 0; y < WH; y++) for (let x = 0; x < WW; x++) if (World.tile(x, y) === T.TALL && World.regionAt(x, y) === 'kanto' && !World.townAt(x, y)) return [x, y]; })();
+    const share = w => { Weather.force(w); U.seed(42); let n = 0; for (let i = 0; i < 300; i++) { const m = World.rollWild(spot[0], spot[1], 'tall'); if (POKEDEX[m.sp].t.some(t => ['water', 'electric', 'bug'].includes(t))) n++; } return n / 300; };
+    const dry = share('clear'), wet = share('rain');
+    check('天氣：下雨時水、電、蟲屬性的野生寶可夢變多', wet > dry + .1, `${dry.toFixed(2)} → ${wet.toFixed(2)}`);
+    // 雨天的對戰一開始就下雨
+    Weather.force('rain');
+    G.state.x = spot[0]; G.state.y = spot[1];
+    let wx = null;
+    const realRun = Battle.prototype.run;
+    Battle.prototype.run = async function () { wx = this.owWeather; return 'run'; };
+    await Game.battle({ wild: Mon.create(16, 5), biome: 'tall' });
+    Battle.prototype.run = realRun;
+    check('天氣：野外下雨時，對戰也會下雨', wx === 'raindance');
+    Weather.force('clear');
+    // 隱藏道具：每個地區都有、不在城鎮裡、撿一次
+    const hs = [...World.hidden.values()];
+    const per = REGION_KEYS.map(r => hs.filter(h => h.region === r).length);
+    check('隱藏道具：每個地區都有 16 個，都不在城鎮或建築上', per.every(n => n === 16) && hs.every(h => !World.townAt(h.x, h.y) && !BLOCKED.has(World.tile(h.x, h.y)) && ITEMS[h.item]), per.join());
+    const h = hs[0], before = G.state.bag[h.item] || 0;
+    await Hidden.pickUp(Hidden.at(h.x, h.y));
+    check('隱藏道具：撿到後放進背包，不能再撿', (G.state.bag[h.item] || 0) === before + h.n && !Hidden.at(h.x, h.y) && Hidden.count()[0] === 1);
+    const sv = Game.parseSave(Game.serialize(G.state));
+    check('隱藏道具：撿過的紀錄會存檔', sv.ok && sv.state.flags['hid' + h.x + ',' + h.y] === 1);
     G.state = keep;
   }
   // 寄放系統（箱子）

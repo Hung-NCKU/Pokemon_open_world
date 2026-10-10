@@ -69,6 +69,11 @@ class Battle {
       await this.msg(`${this.trainer.name} 展開了道館的場地！${zh}！`);
     }
 
+    // 野外的天氣（整場對戰持續）
+    if (this.owWeather && !this.field.weather) {
+      this.field.weather = this.owWeather; this.field.weatherT = 99;
+      await this.msg({ raindance: '外面正在下雨。', sunnyday: '陽光非常強烈。', snowscape: '外面正在下雪。', sandstorm: '沙暴正在吹襲。' }[this.owWeather] || '');
+    }
     let result = null;
     while (!result) {
       this.turn++;
