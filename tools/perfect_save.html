@@ -102,7 +102,7 @@ window.addEventListener('load', () => setTimeout(() => {
     for (const id of ids) { const b = TM.base(id); st.mats[b] = 30; }
     st.legendsCaught = {};
     // 位置：關都真新鎮自家門前（和新遊戲相同）
-    World.generate(st.seed, st.region);
+    World.generate(st.seed, st.region, st.worldVer);
     const h = World.homeTown;
     const house = World.buildings.find(b => b.town === h && b.kind === 'house');
     st.x = house.door.x; st.y = house.door.y + 1;

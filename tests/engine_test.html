@@ -1159,6 +1159,40 @@ async function run() {
     check('難度：第一座道館不超過 Lv.14（火紅葉綠的小剛）', gyms[0] <= 14, String(gyms[0]));
     G.state = keep;
   }
+  // 世界配置版本：第 2 版的道館依離家由近到遠編號；舊存檔（第 1 版）保留原本的配置
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4);
+    const seeds = [20261010, 7, 12345, 99991];
+    let order = true, wildOk = true, why = '';
+    for (const sd of seeds) {
+      World.generate(sd, 'kanto', 2);
+      const home = World.towns.find(t => t.region === 'kanto' && t.kind === 'home');
+      const gs = World.towns.filter(t => t.region === 'kanto' && t.kind === 'gym').sort((a, b) => a.gym - b.gym);
+      const d = gs.map(g => Math.hypot(g.cx - home.cx, g.cy - home.cy));
+      if (!d.every((v, i) => !i || v >= d[i - 1])) { order = false; why += `${sd}:${d.map(Math.round).join(',')} `; }
+      // 道館所在城鎮附近的野外，不比館主（拿到前面徽章時）強太多
+      gs.forEach(g => {
+        G.state.badges = { kanto: [...Array(g.gym).keys()] };
+        const w = World.levelAt(g.cx, g.cy + 6);
+        if (w > World.gymLevel(g) + 3) { wildOk = false; why += `${sd}/館${g.gym + 1}:${Math.round(w)}>${World.gymLevel(g)} `; }
+      });
+    }
+    check('世界配置第 2 版：道館依離家距離由近到遠', order, why);
+    check('世界配置第 2 版：道館城鎮的野外等級不高於館主太多', wildOk, why);
+    World.generate(20261010, 'kanto', 1);
+    const v1 = World.towns.map(t => `${t.id}:${t.cx},${t.cy}:${t.gym}`);
+    World.generate(20261010, 'kanto', 2);
+    const v2 = World.towns.map(t => `${t.id}:${t.cx},${t.cy}:${t.gym}`);
+    check('世界配置：兩個版本的城鎮編號與位置相同', v1.map(x => x.split(':').slice(0, 2).join()).join('|') === v2.map(x => x.split(':').slice(0, 2).join()).join('|'));
+    check('世界配置：舊版存檔保留舊的道館順序', v1.join('|') !== v2.join('|'));
+    const old = Game.newState('T', 'kanto', 4); old.party = [Mon.create(4, 5)]; delete old.worldVer;
+    const oldErr = Game.validateState(old);
+    check('沒有世界版本的舊存檔視為第 1 版', !oldErr && old.worldVer === 1, oldErr || String(old.worldVer));
+    check('新遊戲記錄目前的世界版本', Game.newState('T', 'kanto', 4).worldVer === WORLD_VER);
+    World.generate(20261010, 'kanto');
+    G.state = keep;
+  }
   // 寄放系統（箱子）
   {
     const keep = G.state;

@@ -21,7 +21,7 @@ const Game = {
   newState(name, region, starter) {
     const seed = Math.floor(Math.random() * 1e9);
     return {
-      v: 1, seed, region, name, x: 0, y: 0, dir: 'down', surf: false,
+      v: 1, worldVer: WORLD_VER, seed, region, name, x: 0, y: 0, dir: 'down', surf: false,
       party: [], box: [],
       bag: { 'poke-ball': 5, 'potion': 3 },
       money: 3000, badges: {}, champs: {}, seen: {}, caught: {},
@@ -58,6 +58,8 @@ const Game = {
       if (bad) s[k] = v;
     }
     if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    // 世界配置版本：沒有記錄的是舊存檔（第 1 版），保留原本的世界
+    if (!Number.isInteger(s.worldVer) || s.worldVer < 1 || s.worldVer > WORLD_VER) s.worldVer = 1;
     // 箱子名稱與桌布
     if (!Array.isArray(s.boxMeta)) s.boxMeta = [];
     s.boxMeta = s.boxMeta.map((x, i) => (x && typeof x.n === 'string' && typeof x.wp === 'string' ? { n: x.n.slice(0, 8), wp: x.wp } : { n: `箱子 ${i + 1}`, wp: 'forest' }));
@@ -1453,7 +1455,7 @@ const Game = {
       if (!('item' in m)) m.item = null;
     }
     UI.showText('正在生成世界……');
-    World.generate(state.seed, state.region);
+    World.generate(state.seed, state.region, state.worldVer || 1);
     World.renderMap();
     if (fresh) {
       const h = World.homeTown;

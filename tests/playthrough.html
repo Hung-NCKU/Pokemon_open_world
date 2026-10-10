@@ -1,0 +1,83 @@
+<!-- 由 index.html 產生：自動遊玩測試（從新遊戲到關都冠軍） -->
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>自動遊玩測試 寶可夢 開放世界</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/menus.css">
+<link rel="stylesheet" href="../css/summary.css">
+<link rel="stylesheet" href="../css/storage.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="game">
+    <canvas id="world" width="720" height="480"></canvas>
+    <div id="battle" class="hidden"></div>
+    <div id="title">
+      <div class="logo">寶可夢<span>開放世界</span></div>
+      <div class="sub">九大地區・全 1025 種寶可夢</div>
+      <div class="note">非營利同人研究作品。寶可夢相關名稱與圖像版權屬於任天堂／Creatures／GAME FREAK／The Pokémon Company。</div>
+    </div>
+    <div id="banner"></div>
+    <div id="choices" class="hidden"></div>
+    <div id="choice-info" class="hidden"></div>
+    <div id="dialog" class="hidden"><div id="dialog-text"></div><div id="dialog-more" class="hidden">▼</div></div>
+  </div>
+</div>
+<div id="touch">
+  <div class="pad">
+    <button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="right">▶</button><button data-dir="down">▼</button>
+  </div>
+  <div class="ab"><button data-fast="1">▶▶</button><button data-key="x">B</button><button data-key="z">A</button></div>
+</div>
+<script src="../data/pokedex.js"></script>
+<script src="../data/moves.js"></script>
+<script src="../data/showdown.js"></script>
+<script src="../data/items.js"></script>
+<script src="../data/abilities.js"></script>
+<script src="../data/tms.js"></script>
+<script src="../data/forms.js"></script>
+<script src="../data/late.js"></script>
+<script src="../data/zmoves.js"></script>
+<script src="../data/breeding.js"></script>
+<script src="../js/util.js"></script>
+<script src="../js/data.js"></script>
+<script src="../js/abilities.js"></script>
+<script src="../js/mon.js"></script>
+<script src="../js/forms.js"></script>
+<script src="../js/tm.js"></script>
+<script src="../assets/gen3/manifest.js"></script>
+<script src="../assets/gen3/midi.js"></script>
+<script src="../assets/gen3/se_bank.js"></script>
+<script src="../js/gen3.js"></script>
+<script src="../js/sprites.js"></script>
+<script src="../js/audio.js"></script>
+<script src="../js/world.js"></script>
+<script src="../js/ecology.js"></script>
+<script src="../js/overworld_mons.js"></script>
+<script src="../js/story.js"></script>
+<script src="../js/events.js"></script>
+<script src="../js/regions.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/search.js"></script>
+<script src="../js/bagui.js"></script>
+<script src="../js/menus.js"></script>
+<script src="../js/mapui.js"></script>
+<script src="../js/summaryui.js"></script>
+<script src="../js/storageui.js"></script>
+<script src="../js/battle.js"></script>
+<script src="../js/engine.js"></script>
+<script src="../js/battle_view.js"></script>
+<script src="../js/move_anims.js"></script>
+<script src="../js/mega.js"></script>
+<script src="../js/zmove.js"></script>
+<script src="../js/picnic.js"></script>
+<script src="../js/doubles.js"></script>
+<script src="../js/late.js"></script>
+<script src="../js/game.js"></script>
+<script>Game.title = async () => {};</script>
+<script src="playthrough.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@ const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5] };
 const WW = 960, WH = 600;
+const WORLD_VER = 2; // 世界配置的版本（見 World.generate）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
 
@@ -42,8 +43,12 @@ const World = {
     return out;
   },
 
-  generate(seed, homeRegion) {
+  // worldVer：世界配置的版本（存檔記錄，舊存檔沿用舊配置）
+  //   1：道館編號依「離家由遠到近」（錯誤：第一座道館在地區最遠處）
+  //   2：道館編號依「離家由近到遠」，城鎮編號與位置不變，只改哪座城鎮是第幾座道館
+  generate(seed, homeRegion, worldVer = WORLD_VER) {
     this.seed = seed;
+    this.worldVer = worldVer;
     this._ring = null;
     const rng = mulberry32(seed);
     const tiles = this.tiles = new Uint8Array(WW * WH);
@@ -118,8 +123,9 @@ const World = {
         // 原作的城鎮名稱（道館所在城鎮、聯盟），沒有資料的地區用隨機名稱
         if (kind === 'home') name = REGIONS[region].home;
         else if (kind === 'league') name = (typeof LEAGUE_TOWN !== 'undefined' && LEAGUE_TOWN[region]) || REGIONS[region].n + '寶可夢聯盟';
-        else name = (typeof GYM_TOWNS !== 'undefined' && GYM_TOWNS[region] && GYM_TOWNS[region][k - 1]) || rnd;
-        this.towns.push({ id: id++, region, kind, gym: kind === 'gym' ? k - 1 : -1, name, x: p.x, y: p.y, cx: p.cx, cy: p.cy });
+        const gymIdx = kind !== 'gym' ? -1 : this.worldVer >= 2 ? (order.length - 2) - k : k - 1;
+        if (kind === 'gym') name = (typeof GYM_TOWNS !== 'undefined' && GYM_TOWNS[region] && GYM_TOWNS[region][gymIdx]) || rnd;
+        this.towns.push({ id: id++, region, kind, gym: gymIdx, name, x: p.x, y: p.y, cx: p.cx, cy: p.cy });
       });
     }
     this.homeTown = this.towns.find(t => t.region === homeRegion && t.kind === 'home');
