@@ -65,6 +65,28 @@ const Interior = (() => {
     Sound.sfx('door');
     Telemetry.event('進入建築', { kind: b.kind, town: t.name });
   }
+  // 洞窟解謎：從地標進入，推開石頭走到終點（每次進入石頭都會回到原位）
+  const canCave = key => !!(window.INTERIORS && (Gen3.on || window.INTERIORS_FORCE) && INTERIORS[key] && INTERIORS[key].goal);
+  function enterCave(lm, key, onGoal) {
+    const d = INTERIORS[key];
+    const [ex, ey] = d.exits[0];
+    room = { key, d, b: { kind: 'cave', town: null, door: { x: lm.x, y: lm.y }, lm }, x: ex, y: ey, dir: 'up', npcs: [],
+      boulders: d.boulders.map(([x, y]) => ({ x, y })), onGoal };
+    G.room = room; G.move = null;
+    Gen3.ensure('int_' + key, `int_${key}.png`); Gen3.ensure('int_' + key + '_top', `int_${key}_top.png`); Gen3.ensure('npc_boulder', 'npc_boulder.png');
+    Sound.sfx('door');
+    Telemetry.event('進入洞窟', { lm: lm.id });
+  }
+  const boulderAt = (x, y) => room.boulders && room.boulders.find(b => b.x === x && b.y === y);
+  // 推石頭：後面那一格要是空地（不能推進牆、其他石頭、出入口）
+  function push(bd, dx, dy) {
+    const tx = bd.x + dx, ty = bd.y + dy, d = room.d;
+    if (!walkable(tx, ty) || isExit(tx, ty) || (d.goal && d.goal[0] === tx && d.goal[1] === ty)) return false;
+    bd.x = tx; bd.y = ty;
+    Sound.sfx('select');
+    return true;
+  }
+
   function exit() {
     if (!room) return;
     const b = room.b;
@@ -81,7 +103,7 @@ const Interior = (() => {
   function walkable(x, y) {
     const d = room.d;
     if (x < 0 || y < 0 || x >= d.w || y >= d.h) return false;
-    return d.coll[y * d.w + x] === '0' && !npcAt(x, y);
+    return d.coll[y * d.w + x] === '0' && !npcAt(x, y) && !boulderAt(x, y);
   }
 
   function update(dt) {
@@ -92,6 +114,10 @@ const Interior = (() => {
         G.move = null;
         G.stepAnim = (G.stepAnim % 2) + 1;
         if (room.dir === 'down' && isExit(room.x, room.y)) exit();
+        else if (room.d.goal && room.x === room.d.goal[0] && room.y === room.d.goal[1]) {
+          const cb = room.onGoal;
+          Game.flow(async () => { if (cb) await cb(); exit(); });
+        }
       }
       return;
     }
@@ -104,7 +130,12 @@ const Interior = (() => {
     const tx = room.x + dx, ty = room.y + dy;
     // 站在出口往下走：離開建築
     if (dir === 'down' && isExit(room.x, room.y) && !walkable(tx, ty)) { exit(); G.keys.clear(); return; }
-    if (!walkable(tx, ty)) return;
+    if (!walkable(tx, ty)) {
+      // 推石頭：主角不動，石頭往前一格（推一次要等一下）
+      const bd = boulderAt(tx, ty);
+      if (bd && push(bd, dx, dy)) G.move = { fx: room.x, fy: room.y, tx: room.x, ty: room.y, t: 0, dur: 220, room: true };
+      return;
+    }
     const run = G.keys.has('Shift');
     G.move = { fx: room.x, fy: room.y, tx, ty, t: 0, dur: run ? 85 : 160, room: true };
   }
@@ -126,6 +157,7 @@ const Interior = (() => {
     const bg = Gen3.ensure('int_' + room.key, `int_${room.key}.png`);
     if (bg.naturalWidth) g.drawImage(bg, -ox, -oy, W, H);
     const people = room.npcs.map(n => ({ y: n.y * TILE, n }));
+    for (const bd of room.boulders || []) people.push({ y: bd.y * TILE, n: { x: bd.x, y: bd.y, dir: 'down', gfx: 'boulder', i: 0 } });
     people.push({ y: py, player: true });
     people.sort((a, b) => a.y - b.y);
     const walking = G.move ? (G.move.t / G.move.dur < .5 ? G.stepAnim : 0) : 0;
@@ -199,5 +231,5 @@ const Interior = (() => {
     if (r === 'win') G.state.defeated[key] = 1;
   }
 
-  return { can, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
+  return { can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
 })();

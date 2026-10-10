@@ -44,6 +44,8 @@ GYMS = {
     "rock": "RustboroCity_Gym", "fighting": "DewfordTown_Gym", "electric": "MauvilleCity_Gym", "fire": "LavaridgeTown_Gym_1F",
     "normal": "PetalburgCity_Gym", "flying": "FortreeCity_Gym", "psychic": "MossdeepCity_Gym", "water": "SootopolisCity_Gym_1F",
 }
+# 洞窟解謎（怪力推石頭）：入口是最下面的傳送點，終點是最上面的傳送點，其他傳送點擋住
+CAVES = {"cave_a": "SeafloorCavern_Room8", "cave_b": "SeafloorCavern_Room5", "cave_c": "SeafloorCavern_Room2"}
 LEADER_GFX = {"ROXANNE", "BRAWLY", "WATTSON", "FLANNERY", "NORMAN", "WINONA", "TATE", "LIZA", "JUAN"}
 # 人物外觀 → 行走圖檔名
 GFX_FILE = {"NURSE": "nurse", "GENTLEMAN": "gentleman", "BOY_1": "boy_1", "GIRL_3": "girl_3", "MART_EMPLOYEE": "mart_employee",
@@ -158,6 +160,21 @@ def main():
         data[key] = {"map": map_name, "w": w, "h": h, "coll": "".join(coll), "counter": counter, "pc": pc, "npcs": npcs, "exits": exits}
         print(f"  {key}: {map_name} {w}×{h}，人物 {len(npcs)}，出口 {exits}")
     # 豐緣館主的行走圖（其他地區的館主沒有綠寶石的行走圖，遊戲中依屬性選一般人物）
+    for key, map_name in CAVES.items():
+        d = json.load(open(os.path.join(EM, "data/maps", map_name, "map.json"), encoding="utf-8"))
+        lid, w, h, bg, top, coll, counter, pc, npcs, exits = room(map_name, {})
+        warps = sorted(([wv["x"], wv["y"]] for wv in d["warp_events"]), key=lambda p: p[1])
+        goal, entry = warps[0], warps[-1]
+        coll[goal[1] * w + goal[0]] = "0"
+        for x, y in exits:
+            if [x, y] != entry:
+                coll[y * w + x] = "1"
+        boulders = [[o["x"], o["y"]] for o in d["object_events"] if "BOULDER" in o.get("graphics_id", "")]
+        bg.save(os.path.join(OUT, f"int_{key}.png"))
+        top.save(os.path.join(OUT, f"int_{key}_top.png"))
+        data[key] = {"map": map_name, "w": w, "h": h, "coll": "".join(coll), "counter": [], "pc": [], "npcs": [], "exits": [entry], "goal": goal, "boulders": boulders}
+        print(f"  {key}: {map_name} {w}×{h}，石頭 {len(boulders)}，入口 {entry}，終點 {goal}")
+    png_rgba(os.path.join(EM, "graphics/object_events/pics/misc/pushable_boulder.png")).save(os.path.join(OUT, "npc_boulder.png"))
     bl = {}
     for kind, (lid, x0, y0, w, h, door) in EXTRA_BLDGS.items():
         pair, lw, lh, blocks = load_layout(EM, lid)

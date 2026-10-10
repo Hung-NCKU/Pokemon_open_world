@@ -1444,6 +1444,75 @@ async function run() {
     check('隱藏道具：撿過的紀錄會存檔', sv.ok && sv.state.flags['hid' + h.x + ',' + h.y] === 1);
     G.state = keep;
   }
+  // 洞窟解謎：用搜尋找出推石頭的解法，再用遊戲的移動實際走一遍
+  if (window.INTERIORS && INTERIORS.cave_a) {
+    window.INTERIORS_FORCE = true;
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(4, 20)];
+    World.generate(20261010, 'kanto');
+    const D = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    const KEY = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+    const solveCave = d => {
+      const free = (x, y) => x >= 0 && y >= 0 && x < d.w && y < d.h && d.coll[y * d.w + x] === '0';
+      const isEx = (x, y) => d.exits.some(([a, b]) => a === x && b === y) || (d.goal[0] === x && d.goal[1] === y);
+      const k = (p, bs) => p.join() + '|' + bs.map(b => b.join()).sort().join(';');
+      const start = [d.exits[0], d.boulders.map(b => b.slice())];
+      const prev = new Map([[k(...start), null]]);
+      const q = [start];
+      for (let qi = 0; qi < q.length; qi++) {
+        const [p, bs] = q[qi];
+        if (p[0] === d.goal[0] && p[1] === d.goal[1]) {
+          const path = []; let cur = k(p, bs);
+          while (prev.get(cur)) { const [from, dir] = prev.get(cur); path.unshift(dir); cur = from; }
+          return path;
+        }
+        for (const [dir, [dx, dy]] of Object.entries(D)) {
+          let np = [p[0] + dx, p[1] + dy], nbs = bs;
+          if (!free(...np)) continue;
+          const bi = bs.findIndex(b => b[0] === np[0] && b[1] === np[1]);
+          if (bi >= 0) {
+            const t = [np[0] + dx, np[1] + dy];
+            if (!free(...t) || bs.some(b => b[0] === t[0] && b[1] === t[1]) || isEx(...t)) continue;
+            nbs = bs.map((b, i) => (i === bi ? t : b)); np = p;
+          }
+          const nk = k(np, nbs);
+          if (prev.has(nk)) continue;
+          prev.set(nk, [k(p, bs), dir]); q.push([np, nbs]);
+        }
+      }
+      return null;
+    };
+    const results = [];
+    for (const key of ['cave_a', 'cave_b', 'cave_c']) {
+      const d = INTERIORS[key];
+      const path = solveCave(d);
+      let reached = false;
+      const lm = { id: 'test', x: 100, y: 100 };
+      G.state.x = 100; G.state.y = 101;
+      Interior.enterCave(lm, key, async () => { reached = true; });
+      for (const dir of path || []) {
+        G.keys.clear(); G.keys.add(KEY[dir]);
+        Interior.update(16);
+        G.keys.clear();
+        if (G.move) Interior.update(1000);
+      }
+      await new Promise(r => setTimeout(r, 0));
+      results.push(`${key}:${path ? path.length : '無解'}:${reached ? '到達' : '未到'}`);
+      if (G.room) Interior.exit();
+    }
+    check('洞窟解謎：三個洞窟都能推開石頭走到終點（實際用遊戲的移動走一遍）', results.every(r => r.endsWith('到達')), results.join(' '));
+    // 推不動：石頭後面是牆
+    Interior.enterCave({ id: 'test', x: 100, y: 100 }, 'cave_a', null);
+    const r = Interior.room;
+    const before = JSON.stringify(r.boulders);
+    r.x = r.d.boulders[0][0]; r.y = r.d.boulders[0][1] + 1;
+    while (Interior.walkable(r.x, r.y - 1)) r.y--;
+    check('洞窟解謎：離開再進入時石頭回到原位', JSON.stringify(Interior.room.boulders) === before);
+    Interior.exit();
+    check('洞窟解謎：離開洞窟回到地標前', !G.room && G.state.x === 100 && G.state.y === 101);
+    window.INTERIORS_FORCE = false;
+    G.state = keep;
+  }
   // 寄放系統（箱子）
   {
     const keep = G.state;

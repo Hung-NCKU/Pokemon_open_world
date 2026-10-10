@@ -68,6 +68,9 @@ const LANDMARKS = {
   ],
 };
 const EVENT_LEGENDS = new Set([144, 145, 146, 150]);
+// 洞窟解謎（tools/build_interiors.py 的 CAVES）與深處的寶物
+const CAVE_PUZZLES = { mtmoon: 'cave_a', ceruleancave: 'cave_b', mtember: 'cave_c' };
+const CAVE_LOOT = { ceruleancave: [['ultra-ball', 5], ['rare-candy', 3], ['max-potion', 2]], mtember: [['fire-stone', 1], ['rare-candy', 2], ['revive', 2]] };
 
 // 化石
 ITEMS['helix-fossil'] = { n: '貝殼化石', price: 0, kind: 'key', d: '古代寶可夢的化石，看起來像貝殼。研究所可以讓它復活。' };
@@ -219,6 +222,18 @@ const Story = {
     const key = 'lm_' + lm.id;
     s.flags['seen_' + lm.id] = 1;
     await UI.say(`這裡是${lm.n}。`);
+    // 洞窟解謎：推開石頭走到深處（沒有室內素材時直接進行原本的事件）
+    const cave = CAVE_PUZZLES[lm.id];
+    if (cave && typeof Interior !== 'undefined' && Interior.canCave(cave) && (lm.event === 'fossil' || s.flags[key] || (s.legendsCaught && s.legendsCaught[lm.sp]))) {
+      await UI.say('大石頭擋住了洞窟的去路……推動石頭，找出通往深處的路吧！\n（走進石頭就能推動；卡住的話，離開洞窟再進來石頭會回到原位）');
+      return Interior.enterCave(lm, cave, () => Story.caveGoal(lm));
+    }
+    return Story.caveGoal(lm, true);
+  },
+  // 走到洞窟深處（或沒有解謎時直接在入口）
+  async caveGoal(lm, entrance = false) {
+    const s = G.state;
+    const key = 'lm_' + lm.id;
     if (lm.event === 'fossil') {
       if (s.flags.fossil) { await UI.say('洞窟深處很安靜，已經沒有化石了。'); s.flags[key] = 1; return; }
       await UI.say('在洞窟深處發現了兩塊化石！但是只能帶走一塊。');
@@ -227,6 +242,16 @@ const Story = {
       Game.giveItem(fid);
       s.flags.fossil = fid; s.flags[key] = 1;
       await UI.say(`獲得了${ITEMS[fid].n}！拿去給大木博士看看吧。`);
+      return;
+    }
+    // 洞窟深處的寶物（解謎的獎勵，只有一次）
+    const loot = CAVE_LOOT[lm.id];
+    if (!entrance && loot) {
+      if (s.flags['cave_' + lm.id]) { await UI.say('洞窟深處很安靜，已經沒有東西了。'); return; }
+      s.flags['cave_' + lm.id] = 1;
+      for (const [id, n] of loot) Game.giveItem(id, n);
+      Sound.sfx('item');
+      await UI.say(`在洞窟深處找到了寶物！\n${loot.map(([id, n]) => `${ITEMS[id].n} ×${n}`).join('、')}`);
       return;
     }
     // 傳說寶可夢站在入口前（見 Story.legend）；入口本身只有景色
