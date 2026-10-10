@@ -4,7 +4,7 @@ const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5], house_s: [4, 4, 1, 3], sign: [1, 1, 0, 0] };
 const WW = 960, WH = 600;
-const WORLD_VER = 3; // 世界配置的版本（見 World.generate）
+const WORLD_VER = 4; // 世界配置的版本（見 World.generate）
 const SAVE_VER = 2;  // 存檔格式的版本（見 Game.MIGRATE）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
@@ -49,6 +49,7 @@ const World = {
   //   1：道館編號依「離家由遠到近」（錯誤：第一座道館在地區最遠處）
   //   2：道館編號依「離家由近到遠」，城鎮編號與位置不變，只改哪座城鎮是第幾座道館
   //   3：關都重要城鎮改用手工配置（data/towns.js：小屋事件、告示牌、花圃、池塘）
+  //   4：道路旁增加訓練家（原本平均 38 格道路才有 1 位，路上幾乎沒有對戰；不改變地形）
   generate(seed, homeRegion, worldVer = WORLD_VER) {
     this.seed = seed;
     this.worldVer = worldVer;
@@ -94,7 +95,37 @@ const World = {
     this.placeLandmarks(rng);
     this.placeLegends(rng);
     this.alignTrees();
+    if (this.worldVer >= 4) this.placeRouteTrainers();
     this.buildPools();
+  },
+
+  // 道路旁的訓練家（第 4 版）：每個地區約每 8 格道路 1 位，彼此相隔 7 格以上，站在路邊面向道路
+  // 只放在草地等可通行的格子上，不改變地形，也不會擋住道路
+  placeRouteTrainers() {
+    const rng = mulberry32((this.seed ^ 0x7a1e5) >>> 0);
+    const ok = new Set([T.GRASS, T.TALL, T.FLOWER, T.SAND, T.SNOW, T.DESERT]);
+    const cand = [], pathCount = {};
+    for (let y = 1; y < WH - 1; y++) for (let x = 1; x < WW - 1; x++) {
+      if (this.tiles[y * WW + x] !== T.PATH) continue;
+      const r = this.regionAt(x, y);
+      pathCount[r] = (pathCount[r] || 0) + 1;
+      for (const [dx, dy, face] of [[0, -1, 'down'], [0, 1, 'up'], [-1, 0, 'right'], [1, 0, 'left']]) {
+        if (ok.has(this.tile(x + dx, y + dy))) cand.push([x + dx, y + dy, face, r]);
+      }
+    }
+    for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
+    const placed = {}, list = [...this.trainers.values()];
+    const near = (x, y, d) => list.some(t => Math.abs(t.x - x) + Math.abs(t.y - y) < d);
+    for (const [x, y, face, r] of cand) {
+      if ((placed[r] || 0) >= (pathCount[r] || 0) / 10) continue;
+      const k = x + ',' + y;
+      if (this.trainers.has(k) || this.doors.has(k) || (this.landmarks && this.landmarks.has(k)) || (this.legends && this.legends.has(k))) continue;
+      if (this.towns.some(tw => x > tw.x - 5 && y > tw.y - 5 && x < tw.x + TOWN_W + 5 && y < tw.y + TOWN_H + 5)) continue;
+      if (near(x, y, 7)) continue;
+      const tr = { x, y, dir: face, cls: Math.floor(rng() * TRAINER_CLASSES.length), name: TRAINER_NAMES[Math.floor(rng() * TRAINER_NAMES.length)], seed: Math.floor(rng() * 1e9) };
+      this.trainers.set(k, tr); list.push(tr);
+      placed[r] = (placed[r] || 0) + 1;
+    }
   },
 
   placeTowns(rng, homeRegion) {
@@ -455,8 +486,8 @@ const World = {
       const total = Math.hypot(league.cx - home.cx, league.cy - home.cy) || 1;
       k = U.clamp(Math.hypot(x - home.cx, y - home.cy) / total, 0, 1);
     }
-    // 前期緩慢、後期加快（k^1.6）；危險地帶的加成隨地區進度遞增，避免家鄉附近就出現高等級
-    let L = lo + (hi - lo) * Math.pow(k, 1.6);
+    // 前期緩慢、後期加快（k^1.35；原本 1.6 讓中期的野外比道館低約 7 級，需要大量練等）；危險地帶的加成隨地區進度遞增，避免家鄉附近就出現高等級
+    let L = lo + (hi - lo) * Math.pow(k, 1.35);
     const t = this.tile(x, y);
     if (t === T.MOUNT || t === T.CAVE) L += 1 + 5 * k;
     if (t === T.DEEP) L += 2 + 7 * k;

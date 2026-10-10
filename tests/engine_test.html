@@ -1181,10 +1181,10 @@ async function run() {
       const gs = World.towns.filter(t => t.region === 'kanto' && t.kind === 'gym').sort((a, b) => a.gym - b.gym);
       const d = gs.map(g => Math.hypot(g.cx - home.cx, g.cy - home.cy));
       if (!d.every((v, i) => !i || v >= d[i - 1])) { order = false; why += `${sd}:${d.map(Math.round).join(',')} `; }
-      // 道館所在城鎮附近的野外，不比館主（拿到前面徽章時）強太多
+      // 道館所在城鎮的野外等級（不含山地加成），不比館主（拿到前面徽章時）強太多
       gs.forEach(g => {
         G.state.badges = { kanto: [...Array(g.gym).keys()] };
-        const w = World.levelAt(g.cx, g.cy + 6);
+        const w = World.levelAt(g.cx, g.cy);
         if (w > World.gymLevel(g) + 3) { wildOk = false; why += `${sd}/館${g.gym + 1}:${Math.round(w)}>${World.gymLevel(g)} `; }
       });
     }
@@ -1537,6 +1537,34 @@ async function run() {
     check('友好商店：錢不夠時不會進入選數量，按 X 離開', stillList && !document.querySelector('.shopui'));
     UI.choose = keepChoose; UI.say = keepSay;
     G.state = keep;
+  }
+  // 遊玩節奏：道館與沿路野外的等級差（太大要大量練等，太小沒有挑戰），以及路上的訓練家數量
+  {
+    const keep = G.state;
+    const gaps = [], bad = [];
+    let trainers = 0, roads = 0;
+    for (const sd of [1, 22, 333, 4444]) {
+      G.state = Game.newState('T', 'kanto', 4); G.state.seed = sd;
+      World.generate(sd, 'kanto');
+      const home = World.towns.find(t => t.region === 'kanto' && t.kind === 'home');
+      let prev = home;
+      for (const g of World.towns.filter(t => t.region === 'kanto' && t.kind === 'gym').sort((a, b) => a.gym - b.gym)) {
+        G.state.badges = { kanto: [...Array(g.gym).keys()] };
+        let mx = 0;
+        for (let k = 0; k <= 20; k++) mx = Math.max(mx, World.levelAt(Math.round(prev.cx + (g.cx - prev.cx) * k / 20), Math.round(prev.cy + (g.cy - prev.cy) * k / 20)));
+        const gap = World.gymLevel(g) - mx;
+        gaps.push(gap);
+        if (gap > 9 || gap < -3) bad.push(`${sd}/館${g.gym + 1}:${gap}`);
+        prev = g;
+      }
+      for (let y = 0; y < WH; y++) for (let x = 0; x < WW; x++) if (World.tiles[y * WW + x] === T.PATH && World.regionAt(x, y) === 'kanto') roads++;
+      trainers += [...World.trainers.values()].filter(t => World.regionAt(t.x, t.y) === 'kanto').length;
+    }
+    const avg = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    check('遊玩節奏：道館比沿路野外平均高 2～7 級，沒有差距過大的道館', avg >= 2 && avg <= 7 && !bad.length, `平均 ${avg.toFixed(1)} ${bad.join(' ')}`);
+    check('遊玩節奏：關都每 30 格道路至少有 1 位訓練家（道路寬 2 格）', trainers * 30 >= roads, `${trainers} 位／${roads} 格`);
+    G.state = keep;
+    World.generate(20261010, 'kanto');
   }
   // 寄放系統（箱子）
   {

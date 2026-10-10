@@ -16,11 +16,11 @@
   UI.input = async (p, d) => d || '測試';
   UI.list = async () => 0;
   UI.choose = async (opts, o = {}) => {
-    // 四天王的房間之間：像玩家用全滿藥／活力塊整頓隊伍（用錢換算：每隻受傷的寶可夢 2500 元，買不起就不補）
+    // 四天王的房間之間：像玩家用全滿藥／活力塊整頓隊伍（用錢換算：每隻受傷的寶可夢 1500 元＝厲害傷藥，買不起就不補）
     if (/打敗了四天王/.test(o.prompt || '')) {
       for (const m of G.party) {
         const max = Mon.maxHp(m);
-        if ((m.hp < max * 0.7 || m.st) && G.state.money >= 2500) { G.state.money -= 2500; spent += 2500; m.hp = max; m.st = null; }
+        if ((m.hp < max * 0.7 || m.st) && G.state.money >= 1500) { G.state.money -= 1500; spent += 1500; m.hp = max; m.st = null; }
       }
       return 0;
     }
@@ -102,6 +102,19 @@
     G.party.sort((a, b) => b.lv - a.lv);
     return n;
   }
+  // 路上的訓練家：上一站 → 目標的路線附近（10 格內）還沒打過的，依序挑戰（像玩家一樣邊走邊打）
+  async function routeTrainers(from, to) {
+    const seg = (x, y) => { const vx = to.cx - from.cx, vy = to.cy - from.cy, L = vx * vx + vy * vy || 1; const k = U.clamp(((x - from.cx) * vx + (y - from.cy) * vy) / L, 0, 1); return Math.hypot(from.cx + vx * k - x, from.cy + vy * k - y); };
+    const list = [...World.trainers.values()].filter(tr => World.regionAt(tr.x, tr.y) === 'kanto' && !G.state.defeated[tr.x + ',' + tr.y] && seg(tr.x, tr.y) <= 10);
+    let won = 0;
+    for (const tr of list) {
+      Game.healParty();
+      G.party.sort((a, b) => b.lv - a.lv);
+      await Game.trainerBattle(tr);
+      if (G.state.defeated[tr.x + ',' + tr.y]) won++;
+    }
+    return [won, list.length];
+  }
   // 依目標修正：捕捉一些隊友（第一座道館前補到 3 隻）
   async function catchTeam(near, want) {
     let tries = 0;
@@ -115,10 +128,15 @@
     }
   }
 
+  const pace = [];
   async function run() {
     Weather.force('clear');
     const t0 = performance.now();
     G.state = Game.newState('機器人', 'kanto', 4);
+    // ?seed=數字：固定世界與亂數（重現同一場遊玩）
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('seed')) { G.state.seed = +qs.get('seed'); U.seed(+qs.get('seed')); }
+    log.push({ stage: '種子', seed: G.state.seed });
     const m = Mon.create(4, 5); G.state.party.push(m); G.state.seen[4] = 1; G.state.caught[4] = 1;
     const g0 = performance.now();
     Game.start(G.state, true);
@@ -133,6 +151,8 @@
     let prev = home;
     for (const g of gyms) {
       let fails = 0, trained = 0;
+      const [tw, tn] = await routeTrainers(prev, g);
+      const lvAfterTrainers = low();
       // 第 4 座道館之後隊伍補到 6 隻（新隊友在之後的訓練中由最弱的帶頭追上等級）
       if (g.gym >= 3) await catchTeam(g, Math.min(6, g.gym));
       while (!(G.state.badges.kanto || []).includes(g.gym) && fails < 6) {
@@ -144,21 +164,24 @@
         await Story.onEnterTown(g);
         if (!(G.state.badges.kanto || []).includes(g.gym)) { fails++; if (fails === 1 || fails === 6) log.push({ stage: `道館 ${g.gym + 1} 失敗`, ...lastFight }); }
       }
-      log.push({ stage: `道館 ${g.gym + 1}（${g.name}）`, badge: (G.state.badges.kanto || []).includes(g.gym), trained, fails, lv: top(), low: low(), gymLv: World.gymLevel(g) });
+      log.push({ stage: `道館 ${g.gym + 1}（${g.name}）`, badge: (G.state.badges.kanto || []).includes(g.gym), trainers: `${tw}/${tn}`, lvAfterTrainers, trained, fails, lv: top(), low: low(), gymLv: World.gymLevel(g) });
+      pace.push(trained);
       if (!(G.state.badges.kanto || []).includes(g.gym)) break;
       prev = g;
     }
     const league = kantoTowns().find(t => t.kind === 'league');
+    await routeTrainers(prev, league);
     let fails = 0, trained = 0;
-    while (!G.state.champs.kanto && fails < 6 && (G.state.badges.kanto || []).length === 8) {
+    while (!G.state.champs.kanto && fails < 10 && (G.state.badges.kanto || []).length === 8) {
       const champTop = World.championParty(league).reduce((a, x) => Math.max(a, x.lv), 0);
       trained += await train(prev, league, champTop - 2 + fails * 2, 600);
       Game.healParty();
       await Game.leagueChallenge(league);
-      if (!G.state.champs.kanto) { fails++; if (fails === 1 || fails === 6) log.push({ stage: '聯盟失敗', ...lastFight }); }
+      if (!G.state.champs.kanto) { fails++; if (fails === 1 || fails === 10) log.push({ stage: '聯盟失敗', ...lastFight }); }
     }
     log.push({ stage: '四天王與冠軍', champion: !!G.state.champs.kanto, trained, fails, lv: top(), low: low(), spent, money: G.state.money });
-    log.push({ stage: '總計', ms: Math.round(performance.now() - t0), party: G.party.map(x => POKEDEX[x.sp].n + x.lv).join(' ') });
+    pace.push(trained);
+    log.push({ stage: '總計', ms: Math.round(performance.now() - t0), party: G.party.map(x => POKEDEX[x.sp].n + x.lv).join(' '), trainedTotal: pace.reduce((a, b) => a + b, 0), trainedMax: Math.max(...pace) });
     return !!G.state.champs.kanto;
   }
 
