@@ -219,6 +219,34 @@ async function run() {
     const want = st[1] > st[2] ? 106 : st[1] < st[2] ? 107 : 237;
     check('無畏小子依攻擊與防禦的大小進化', Mon.pickEvo(ty, Mon.evoCandidates(ty)) === want);
   }
+  // 19. 存檔驗證與備份
+  {
+    check('讀入 {} 判定為無效存檔', !Game.parseSave('{}').ok);
+    check('損毀的 JSON 判定為損毀（不是沒有存檔）', Game.parseSave('{"seed":1,').error === '存檔格式損毀（無法解析）');
+    const good = Game.newState('T', 'kanto', 4);
+    good.party.push(Mon.create(4, 5));
+    check('正常存檔通過驗證', Game.parseSave(JSON.stringify(good)).ok);
+    const partial = JSON.parse(JSON.stringify(good));
+    delete partial.bag; delete partial.flags;
+    const pr = Game.parseSave(JSON.stringify(partial));
+    check('缺少選填欄位時自動補上', pr.ok && pr.state.bag && pr.state.flags);
+    const badMon = JSON.parse(JSON.stringify(good));
+    badMon.party[0].sp = 99999;
+    check('寶可夢資料錯誤時判定無效', !Game.parseSave(JSON.stringify(badMon)).ok);
+    // 主存檔損毀時改用備份
+    const keep = [localStorage.getItem(SAVE_KEY), localStorage.getItem(SAVE_KEY + '_bak')];
+    localStorage.setItem(SAVE_KEY + '_bak', JSON.stringify(good));
+    localStorage.setItem(SAVE_KEY, '{"broken');
+    const ld = Game.loadSave();
+    check('主存檔損毀時讀取備份並回報原因', ld && ld.fromBackup && ld.state && ld.error);
+    // 存檔時保留上一份有效存檔作為備份
+    localStorage.setItem(SAVE_KEY, JSON.stringify(good));
+    G.state = JSON.parse(JSON.stringify(good)); G.state.money = 12345;
+    Game.save(true);
+    check('存檔時把上一份有效存檔留作備份', JSON.parse(localStorage.getItem(SAVE_KEY + '_bak')).money === good.money && JSON.parse(localStorage.getItem(SAVE_KEY)).money === 12345);
+    keep[0] === null ? localStorage.removeItem(SAVE_KEY) : localStorage.setItem(SAVE_KEY, keep[0]);
+    keep[1] === null ? localStorage.removeItem(SAVE_KEY + '_bak') : localStorage.setItem(SAVE_KEY + '_bak', keep[1]);
+  }
   // 18. 雙方最後一隻同時倒下
   {
     const b = setup(74, 30, 10, 3);

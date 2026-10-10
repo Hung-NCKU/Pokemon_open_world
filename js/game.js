@@ -28,15 +28,75 @@ const Game = {
       flags: {}, starter,
     };
   },
+  // 存檔：寫入前把上一份有效的存檔保留為備份
   save(silent = false) {
     try {
+      const prev = localStorage.getItem(SAVE_KEY);
+      if (prev && Game.parseSave(prev).ok) localStorage.setItem(SAVE_KEY + '_bak', prev);
       localStorage.setItem(SAVE_KEY, JSON.stringify(G.state));
       if (!silent) UI.banner('已儲存遊戲進度');
       return true;
     } catch (e) { console.error(e); UI.banner('存檔失敗！'); return false; }
   },
+  // 驗證存檔內容；必要欄位錯誤時回傳 { ok:false, error }，選填欄位缺少時補上預設值
+  validateState(s) {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return '存檔不是有效的資料';
+    if (!Number.isFinite(s.seed)) return '缺少世界種子';
+    if (!REGIONS[s.region]) return '出發地區不正確';
+    if (!Number.isFinite(s.x) || !Number.isFinite(s.y)) return '位置資料不正確';
+    if (!Array.isArray(s.party) || !s.party.length) return '隊伍中沒有寶可夢';
+    for (const m of [...s.party, ...(Array.isArray(s.box) ? s.box : [])]) {
+      if (!m || !POKEDEX[m.sp] || !Number.isFinite(m.lv) || m.lv < 1 || m.lv > 100 || !Array.isArray(m.moves) || !Array.isArray(m.iv)) return '寶可夢資料不正確';
+    }
+    const def = { name: '主角', dir: 'down', surf: false, box: [], bag: {}, money: 0, badges: {}, champs: {}, seen: {}, caught: {},
+      defeated: {}, visited: {}, flags: {}, repel: 0, steps: 0, playMs: 0, center: null, starter: s.party[0].sp };
+    for (const [k, v] of Object.entries(def)) {
+      const bad = s[k] === undefined || (typeof v === 'object' && v !== null && (typeof s[k] !== 'object' || s[k] === null || Array.isArray(v) !== Array.isArray(s[k])));
+      if (bad) s[k] = v;
+    }
+    if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    return null;
+  },
+  parseSave(text) {
+    if (!text) return { ok: false, empty: true };
+    let s;
+    try { s = JSON.parse(text); } catch { return { ok: false, error: '存檔格式損毀（無法解析）' }; }
+    const err = Game.validateState(s);
+    return err ? { ok: false, error: err } : { ok: true, state: s };
+  },
+  // 讀取存檔：主存檔無效時改用備份，並回報原因
   loadSave() {
-    try { const s = localStorage.getItem(SAVE_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+    let main = null, bak = null;
+    try { main = localStorage.getItem(SAVE_KEY); bak = localStorage.getItem(SAVE_KEY + '_bak'); } catch { }
+    const m = Game.parseSave(main);
+    if (m.ok) return { state: m.state };
+    const b = Game.parseSave(bak);
+    if (m.empty && !b.ok) return null;
+    return { state: b.ok ? b.state : null, fromBackup: b.ok, error: m.error || '找不到主存檔' };
+  },
+  // 匯出、匯入存檔（JSON 檔案）
+  exportSave() {
+    const blob = new Blob([JSON.stringify(G.state)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `pokemon-openworld-${G.state.name}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
+  importSave() {
+    return new Promise(res => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = '.json,application/json';
+      inp.onchange = () => {
+        const f = inp.files[0];
+        if (!f) return res({ ok: false, error: '沒有選擇檔案' });
+        const r = new FileReader();
+        r.onload = () => res(Game.parseSave(String(r.result)));
+        r.onerror = () => res({ ok: false, error: '無法讀取檔案' });
+        r.readAsText(f);
+      };
+      inp.click();
+    });
   },
 
   markSeen(id) { G.state.seen[id] = 1; },
@@ -489,8 +549,9 @@ const Game = {
       if (c === '地圖') { await Game.mapMenu(); return; }
       if (c === '訓練家卡片') await Game.trainerCard();
       if (c === '存檔') {
-        const ok = await UI.choose(['是', '否'], { prompt: '要儲存目前的進度嗎？' });
+        const ok = await UI.choose(['儲存', '匯出存檔檔案', '取消'], { prompt: '要儲存目前的進度嗎？（儲存時會自動保留上一份備份）' });
         if (ok === 0 && Game.save(true)) Sound.sfx('save'), await UI.say(`${G.state.name} 將進度儲存好了！`);
+        if (ok === 1) { Game.save(true); Game.exportSave(); await UI.say('已下載存檔檔案。可以在標題畫面選擇「匯入存檔」讀回。'); }
       }
       if (c === '設定') await Game.settingsMenu();
       UI.hideDialog();
@@ -897,13 +958,34 @@ const Game = {
   // ---------- 標題 / 新遊戲 ----------
   async title() {
     G.mode = 'title';
-    const save = Game.loadSave();
+    const loaded = Game.loadSave();
     const scr = document.getElementById('title');
     scr.classList.remove('hidden');
-    const opts = save ? ['繼續遊戲', '新遊戲'] : ['新遊戲'];
+    let save = loaded && loaded.state;
+    if (loaded && loaded.error) {
+      if (loaded.fromBackup) {
+        const c = await UI.choose(['恢復備份', '不要'], { prompt: `主存檔無法使用（${loaded.error}）。\n要恢復上一份有效的備份嗎？`, cancel: false });
+        if (c !== 0) save = null;
+        else { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { } }
+      } else {
+        await UI.say(`存檔無法使用（${loaded.error}），也沒有可用的備份。\n可以匯入之前匯出的存檔，或開始新遊戲。`);
+      }
+      UI.hideDialog();
+    }
     while (true) {
+      const opts = save ? ['繼續遊戲', '新遊戲', '匯入存檔'] : ['新遊戲', '匯入存檔'];
       const c = await UI.choose(opts, { cancel: false, cls: 'title-menu' });
       if (opts[c] === '繼續遊戲') { scr.classList.add('hidden'); return Game.start(save); }
+      if (opts[c] === '匯入存檔') {
+        const r = await Game.importSave();
+        if (!r.ok) { await UI.say(`匯入失敗：${r.error}`); UI.hideDialog(); continue; }
+        save = r.state;
+        G.state = save;
+        Game.save(true);
+        await UI.say(`已匯入 ${save.name} 的存檔！`);
+        UI.hideDialog();
+        continue;
+      }
       if (save) {
         const ok = await UI.choose(['是', '否'], { prompt: '開始新遊戲會覆蓋原本的存檔，確定嗎？' });
         UI.hideDialog();
