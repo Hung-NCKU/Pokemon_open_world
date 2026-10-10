@@ -1415,11 +1415,13 @@ const Game = {
     for (let y = y0; y <= y0 + VH; y++) for (let x = x0; x <= x0 + VW; x++) {
       World.drawTile(g, World.tile(x, y), x, y, x * TILE - ox, y * TILE - oy, wf);
     }
+    // 每個物件各自防錯：一個物件出錯時只略過它（並記錄位置），不會讓整個畫面只剩地形
+    const safe = (what, x, y, fn) => { try { fn(); } catch (e) { Telemetry.error(`繪製${what}失敗（${x},${y}）：${e && e.message}`, 'render'); } };
     for (const b of World.buildings) {
       if (b.x + b.w < x0 - 1 || b.x > x0 + VW + 1 || b.y + b.h < y0 - 1 || b.y > y0 + VH + 1) continue;
-      World.drawBuilding(g, b, ox, oy);
+      safe('建築 ' + b.kind, b.x, b.y, () => World.drawBuilding(g, b, ox, oy));
     }
-    Hidden.draw(g, ox, oy);
+    safe('隱藏道具', s.x, s.y, () => Hidden.draw(g, ox, oy));
     // 人物依 y 座標排序繪製（下方的人物蓋住上方）
     const people = [];
     for (let y = y0 - 1; y <= y0 + VH + 1; y++) for (let x = x0; x <= x0 + VW; x++) {
@@ -1435,28 +1437,28 @@ const Game = {
     people.sort((a, b) => a.y - b.y);
     const walking = G.move ? (G.move.t / G.move.dur < .5 ? G.stepAnim : 0) : 0;
     const exclaim = (Gen3.on && Gen3.exclaim()) || Spr.exclaim();
-    for (const p of people) {
+    for (const p of people) safe(p.player ? '主角' : p.lg ? '傳說' : p.ow ? '野生寶可夢' : p.ev ? '事件' : '訓練家', s.x, s.y, () => {
       if (p.player) {
         const sheet = G.keys.has('Shift') && G.move ? 'player_run' : 'player_walk';
         World.drawPerson(g, px - ox, py - oy, s.dir, { pal: Spr.PLAYER, sheet }, walking, { surf: s.surf, tick: G.frame });
-        continue;
+        return;
       }
-      if (p.lg) { Game.drawLegend(g, p.lg, p.lg.x * TILE - ox, p.lg.y * TILE - oy); continue; }
-      if (p.ow) { OverworldMons.draw(g, p.ow, ox, oy); continue; }
-      if (p.ev) { Game.drawEvent(g, p.ev, p.ev.x * TILE - ox, p.ev.y * TILE - oy); continue; }
+      if (p.lg) { Game.drawLegend(g, p.lg, p.lg.x * TILE - ox, p.lg.y * TILE - oy); return; }
+      if (p.ow) { OverworldMons.draw(g, p.ow, ox, oy); return; }
+      if (p.ev) { Game.drawEvent(g, p.ev, p.ev.x * TILE - ox, p.ev.y * TILE - oy); return; }
       const tr = p.tr;
       const names = Gen3.on ? GEN3.trainers : [];
       const sheet = names.length ? 'npc_' + names[tr.cls % names.length] : null;
       World.drawPerson(g, tr.x * TILE - ox, tr.y * TILE - oy, tr.dir, { pal: Spr.trainerPal(tr.cls, tr.seed % 5), sheet }, 0);
       if (G.alert === tr) g.drawImage(exclaim, tr.x * TILE - ox + (TILE - exclaim.width) / 2, tr.y * TILE - oy - TILE - exclaim.height + 8);
-    }
+    });
     // 站在草叢裡時，草蓋住下半身
     const tt = World.tile(G.move ? G.move.tx : s.x, G.move ? G.move.ty : s.y);
     if ((tt === T.TALL || tt === T.SNOWTALL) && !G.move) {
       const gi = (Gen3.on && Gen3.single(tt === T.TALL ? 'tall' : 'snowtall')) || World.tileCache[tt][0];
       g.drawImage(gi, 0, gi.height * .5, gi.width, gi.height * .5, px - ox, py - oy + TILE * .5, TILE, TILE * .5);
     }
-    Weather.draw(g, cv);
+    safe('天氣', s.x, s.y, () => Weather.draw(g, cv));
     if (U.isNight()) { g.fillStyle = 'rgba(20,30,90,.33)'; g.fillRect(0, 0, cv.width, cv.height); }
     if (G.flash) { g.fillStyle = (G.frame >> 2) % 2 ? '#000' : '#fff'; g.fillRect(0, 0, cv.width, cv.height); }
   },

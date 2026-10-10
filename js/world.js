@@ -792,6 +792,50 @@ const World = {
     return v;
   },
 
+  // 地形的交界（和綠寶石一樣不是生硬的方格）：等級高的地面（雪 > 沙漠 > 岩地 > 草地）在交界處蓋到旁邊的格子上，
+  // 邊緣是不規則的鋸齒；圖樣用該地面本身的圖塊，依方向與格子位置快取
+  groundRank(t, x, y) {
+    if (t === T.SNOW || t === T.SNOWTALL) return 3;
+    if (t === T.GRASS || t === T.FLOWER || t === T.TOWN) return this.snowyArea(x, y) ? 3 : 0;
+    if (t === T.DESERT) return 2;
+    if (t === T.CAVE) return 1;
+    if (t === T.TALL) return 0;
+    return -1; // 水、道路、建築、樹、岩山……不參與
+  },
+  fringeImg(rank, side, v) {
+    this._fringe = this._fringe || new Map();
+    const key = rank + side + v;
+    if (this._fringe.has(key)) return this._fringe.get(key);
+    const src = rank === 3 ? Gen3.single('snow') : rank === 2 ? Gen3.auto('desert', () => true, 0, 0) : rank === 1 ? Gen3.single('cave') : null;
+    if (!src) return null;
+    const S = src.width, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.drawImage(src, 0, 0);
+    // 遮罩：離邊緣 depth 以內保留；depth 隨位置起伏（每 3 像素一段，像原作的鋸齒邊）
+    const d = g.getImageData(0, 0, S, S), p = d.data, u = S / 16;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const along = side === 'n' || side === 's' ? x : y;
+      const dist = side === 'n' ? y : side === 's' ? S - 1 - y : side === 'w' ? x : S - 1 - x;
+      const seg = Math.floor(along / (u * 2));
+      const depth = (2 + Math.floor(hash2(seg, v, 31 + side.charCodeAt(0)) * 3)) * u;
+      if (dist >= depth) p[(y * S + x) * 4 + 3] = 0;
+    }
+    g.putImageData(d, 0, 0);
+    this._fringe.set(key, c);
+    return c;
+  },
+  drawFringes(g, t, x, y, px, py) {
+    const r = this.groundRank(t, x, y);
+    if (r < 0) return;
+    for (const [side, dx, dy] of [['n', 0, -1], ['s', 0, 1], ['w', -1, 0], ['e', 1, 0]]) {
+      const nr = this.groundRank(this.tile(x + dx, y + dy), x + dx, y + dy);
+      if (nr <= r) continue;
+      const im = this.fringeImg(nr, side, (side === 'n' || side === 's' ? x : y) & 3);
+      if (im) g.drawImage(im, px, py);
+    }
+  },
+
   drawTile(g, t, x, y, px, py, frame) {
     // 地標：岩壁上的洞窟入口
     if (t === T.LANDMARK) {
@@ -805,7 +849,7 @@ const World = {
     }
     if (Gen3.on) {
       const im = this.gen3Tile(t, x, y);
-      if (im) { g.drawImage(im, px, py); return; }
+      if (im) { g.drawImage(im, px, py); this.drawFringes(g, t, x, y, px, py); return; }
     }
     const arr = this.tileCache[t] || this.tileCache[T.GRASS];
     let img;
