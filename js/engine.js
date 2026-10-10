@@ -86,7 +86,7 @@ const SUPPORT_ZH = { full: '', partial: '（部分效果未實作）', none: '�
 const BOOST_TABLE = [1, 1.5, 2, 2.5, 3, 3.5, 4];
 function boostMul(s) { return s >= 0 ? BOOST_TABLE[Math.min(6, s)] : 1 / BOOST_TABLE[Math.min(6, -s)]; }
 function accBoostMul(s) { s = U.clamp(s, -6, 6); return s >= 0 ? (3 + s) / 3 : 3 / (3 - s); }
-function weightOf(m) { return (SD.speciesAbilities[m.sp] && SD.speciesAbilities[m.sp].w) || 10; }
+function weightOf(m) { const f = Forms.get(m); if (f) return f.w / 10; return (SD.speciesAbilities[m.sp] && SD.speciesAbilities[m.sp].w) || 10; }
 function hasType(m, v, t) { return (v && v.types ? v.types : Mon.types(m)).includes(t); }
 
 function newVol() {

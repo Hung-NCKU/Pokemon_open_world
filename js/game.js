@@ -94,6 +94,7 @@ const Game = {
     if (!int(m.happy, 0, 255)) m.happy = POKEDEX[m.sp].hap;
     // 培育欄位：薄荷（0–24 的性格）、極限特訓（6 項旗標）
     if (m.mint !== undefined && !int(m.mint, 0, 24)) delete m.mint;
+    if (m.form !== undefined && !Forms.get(m)) delete m.form;
     if (m.marks !== undefined && !(Array.isArray(m.marks) && m.marks.every(x => MARKS.includes(x)))) delete m.marks;
     if (m.ivHT !== undefined && !(Array.isArray(m.ivHT) && m.ivHT.length === 6)) delete m.ivHT;
     else if (m.ivHT) m.ivHT = m.ivHT.map(v => (v ? 1 : 0));
@@ -165,6 +166,10 @@ const Game = {
     Game.markCaught(m.sp);
     // 第一次捕捉：和原作一樣顯示圖鑑頁
     if (first) { await UI.say(`${Mon.name(m)} 的資料已登錄到寶可夢圖鑑！`); await Game.dexEntry(m.sp); }
+    if (m.sp === 479 && !G.state.bag['rotom-catalog']) {
+      Game.giveItem('rotom-catalog', 1);
+      await UI.say('洛托姆身上掉下了一本型錄！\n獲得了洛托姆型錄！（可以在背包裡使用，改變洛托姆的形態）');
+    }
     // 捕捉後可以查看能力或取名
     while (true) {
       const c = await UI.choose(['查看能力', '取名', '繼續'], { prompt: `捕捉到了 ${Mon.name(m)}！要做什麼？`, cancel: false });
@@ -250,16 +255,18 @@ const Game = {
     box.classList.add('done');
     const before = Mon.stats(m);
     const fromSp = m.sp;
+    const nf = Forms.evolvedForm(m, to, World.regionAt(G.state.x, G.state.y));
     m.sp = to;
+    if (nf) m.form = nf; else delete m.form;
     Abil.afterEvolve(m, fromSp, to);
     const after = Mon.stats(m);
     m.hp = Math.max(m.hp > 0 ? 1 : 0, m.hp + after[0] - before[0]);
     Game.markCaught(to);
     Sound.jingle('evolve');
-    await UI.say(`恭喜！${from} 進化成了 ${POKEDEX[to].n}！`);
+    await UI.say(`恭喜！${from} 進化成了 ${Forms.data(m).n}！`);
     box.remove();
     if (G.mode === 'world') Game.updateMusic(true);
-    for (const [lv, mid] of POKEDEX[to].l) if (lv === m.lv) await Game.learnMove(m, mid);
+    for (const [lv, mid] of Forms.data(m).l) if (lv === m.lv) await Game.learnMove(m, mid);
     // 鬼斯通→耿鬼這類多段即時進化不處理；脫殼忍者特例
     if (to === 291 && G.party.length < 6 && Game.takeBall()) {
       const sh = Mon.create(292, m.lv);
@@ -318,11 +325,11 @@ const Game = {
       m.hp = Math.min(m.hp, hp);
       await UI.say(`${name} 聞了${it.n}，能力的成長方式變成了「${NATURES[m.mint]}」！`);
     } else if (it.kind === 'abilcap') {
-      const normal = POKEDEX[m.sp].ab.filter(a => !a[1]).map(a => a[0]);
+      const normal = Forms.data(m).ab.filter(a => !a[1]).map(a => a[0]);
       m.ability = normal.find(a => a !== m.ability) || m.ability;
       await UI.say(`${name} 的特性變成了${Abil.name(m.ability)}！`);
     } else if (it.kind === 'abilpatch') {
-      m.ability = POKEDEX[m.sp].ab.find(a => a[1])[0];
+      m.ability = Forms.data(m).ab.find(a => a[1])[0];
       await UI.say(`${name} 的特性變成了${Abil.name(m.ability)}！`);
     } else if (it.kind === 'bottlecap') {
       // 極限特訓（第九世代需 Lv.50 以上）：銀色王冠選一項個體值變為最高，金色王冠全部
@@ -350,8 +357,8 @@ const Game = {
       case 'vitamin': { const ev = m.ev || [0, 0, 0, 0, 0, 0]; return !inBattle && ev[VITAMIN[id]] < 252 && ev.reduce((a, b) => a + b, 0) < 510; }
       case 'expcandy': return !inBattle && m.lv < 100;
       case 'mint': return !inBattle && (m.mint ?? m.nat) !== NATURE_INDEX[id.replace('-mint', '')];
-      case 'abilcap': return !inBattle && POKEDEX[m.sp].ab.filter(a => !a[1]).length > 1;
-      case 'abilpatch': return !inBattle && POKEDEX[m.sp].ab.some(a => a[1]) && !POKEDEX[m.sp].ab.some(a => a[1] && a[0] === m.ability);
+      case 'abilcap': return !inBattle && Forms.data(m).ab.filter(a => !a[1]).length > 1;
+      case 'abilpatch': return !inBattle && Forms.data(m).ab.some(a => a[1]) && !Forms.data(m).ab.some(a => a[1] && a[0] === m.ability);
       case 'bottlecap': return !inBattle && m.lv >= 50 && m.iv.some((v, i) => v < 31 && !(m.ivHT || [])[i]);
       default: return false;
     }
@@ -360,7 +367,7 @@ const Game = {
   // ---------- 選單 ----------
   partyRow(m, i, extra = '') {
     const max = Mon.maxHp(m);
-    return `<img class="icon" src="${Mon.sprite(m.sp, { shiny: m.shiny })}" loading="lazy">
+    return `<img class="icon" src="${Mon.spriteOf(m, { shiny: m.shiny })}" loading="lazy">
       <div class="grow"><div><b>${U.esc(Mon.name(m))}</b>${m.shiny ? ' ✨' : ''} <span class="lv">Lv.${m.lv}</span> ${UI.statusTag(m.st)} ${m.hp <= 0 ? '<span class="st" style="background:#555">瀕死</span>' : ''}</div>
       <div class="hprow">${UI.hpBar(m.hp, max, 160)} <span>${Math.max(0, m.hp)}/${max}</span></div></div>
       <div class="types">${Mon.types(m).map(typeTag).join('')}</div>${extra}`;
@@ -401,7 +408,7 @@ const Game = {
   // 想起招式（第九世代可以隨時想起曾經能學會的升級招式）
   async moveReminder(m) {
     const known = new Set(m.moves.map(x => x.id));
-    const ids = [...new Set(POKEDEX[m.sp].l.filter(([lv, mid]) => lv <= m.lv && MOVES[mid] && !known.has(mid)).map(([, mid]) => mid))];
+    const ids = [...new Set(Forms.data(m).l.filter(([lv, mid]) => lv <= m.lv && MOVES[mid] && !known.has(mid)).map(([, mid]) => mid))];
     if (!ids.length) { await UI.say(`${Mon.name(m)} 沒有可以想起的招式。`); return; }
     const rows = ids.map(mid => {
       const d = MOVES[mid];
@@ -499,6 +506,13 @@ const Game = {
         Game.takeItem(id);
         G.state.repel = it.steps;
         await UI.say(`使用了${it.n}！接下來 ${it.steps} 步不會遇到野生寶可夢。`);
+        UI.hideDialog();
+        continue;
+      }
+      if (id === 'rotom-catalog') {
+        if (battle) { await UI.say('現在不能使用這個道具。'); continue; }
+        const t = await Game.partyMenu({ pick: m => m.sp === 479 });
+        if (t >= 0) await Forms.rotom(G.party[t]);
         UI.hideDialog();
         continue;
       }

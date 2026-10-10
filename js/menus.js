@@ -2,8 +2,9 @@
 // 位置依 pokeemerald 的視窗與座標資料（GBA 240×160，畫面放大 3 倍）
 
 // 寶可夢小圖示：No.1–386 用綠寶石的圖示（2 格動畫），之後用第七世代圖示，再之後用一般圖
-function monIcon(sp, shiny) {
+function monIcon(sp, shiny, form = null) {
   const n = Gen3.on && GEN3.ui && GEN3.ui.icons || 0;
+  if (form && window.FORMS && FORMS[form]) return `<img class="micon big" src="${Mon.sprite(FORMS[form].id, { shiny })}">`;
   if (sp <= n) {
     const k = sp - 1, x = (k % 32) * 96, y = Math.floor(k / 32) * 192;
     return `<i class="micon g3" style="background-image:url(${Gen3.base}mon_icons.png);--x:${-x}px;--y:${-y}px"></i>`;
@@ -37,7 +38,7 @@ const PartyUI = (() => {
         const g = m.gender === 'm' ? '<i class="gm">♂</i>' : m.gender === 'f' ? '<i class="gf">♀</i>' : '';
         return `<div class="pslot ${main ? 'main' : 'wide'}${dis ? ' dis' : ''}${sel ? ' sel' : ''}" data-k="${k}" style="left:${p.x * 3}px;top:${p.y * 3}px;background-image:url(${Gen3.base}party_${main ? 'main' : 'wide'}_${st}.png)">
           <div class="pball${sel ? ' open' : ''}" style="background-image:url(${Gen3.base}party_ball.png)"></div>
-          ${monIcon(m.sp, m.shiny)}
+          ${monIcon(m.sp, m.shiny, m.form)}
           ${m.item ? '<div class="pitem"></div>' : ''}
           <div class="pname">${U.esc(Mon.name(m))}</div>
           <div class="plv">${m.st ? UI.statusTag(m.st) : 'Lv' + m.lv}${g}</div>
@@ -252,7 +253,7 @@ const CardUI = (() => {
           root.innerHTML = `<div class="cd-face" style="background-image:url(${bg})">
             <div class="cd-backname">${U.esc(s.name)} 的訓練家卡片</div>
             ${rows.map(([a, b], i) => `<div class="cd-brow" style="top:${(i * 16 + 33 + 8) * 3}px"><span>${a}</span><b>${U.esc(String(b))}</b></div>`).join('')}
-            <div class="cd-party">${G.party.map(m => monIcon(m.sp, m.shiny)).join('')}</div>
+            <div class="cd-party">${G.party.map(m => monIcon(m.sp, m.shiny, m.form)).join('')}</div>
           </div>`;
         }
         root.querySelector('.cd-face').onclick = flip;

@@ -21,10 +21,12 @@
 <script src="../data/items.js"></script>
 <script src="../data/abilities.js"></script>
 <script src="../data/tms.js"></script>
+<script src="../data/forms.js"></script>
 <script src="../js/util.js"></script>
 <script src="../js/data.js"></script>
 <script src="../js/abilities.js"></script>
 <script src="../js/mon.js"></script>
+<script src="../js/forms.js"></script>
 <script src="../js/tm.js"></script>
 <script src="../js/gen3.js"></script>
 <script src="../js/sprites.js"></script>
@@ -721,6 +723,33 @@ async function run() {
     const sv = JSON.parse(JSON.stringify(G.state)); sv.box = box.map(m => ({ ...m })); sv.box[0].marks = ['X'];
     const ps = Game.parseSave(JSON.stringify(sv));
     check('存檔：不正確的標記會被移除，正確的保留', ps.ok && ps.state.box[0].marks === undefined && ps.state.box[1].marks.join() === '★');
+    G.state = keep;
+  }
+  // 形態
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party.push(Mon.create(4, 5));
+    check('形態資料：至少 55 種，阿羅拉六尾是冰屬性', Object.keys(FORMS).length >= 55 && FORMS['vulpix-alola'].t.join() === 'ice');
+    const av = Mon.create(37, 20, { form: 'vulpix-alola' }), kv = Mon.create(37, 20);
+    check('地區形態的屬性與名稱', Mon.types(av).join() === 'ice' && Mon.name(av) === '阿羅拉六尾' && Mon.types(kv).join() === 'fire');
+    check('地區形態的特性取自形態資料', FORMS['vulpix-alola'].ab.some(a => a[0] === av.ability));
+    check('地區形態的種族值不同（阿羅拉穿山鼠防禦）', Mon.create(27, 50, { form: 'sandshrew-alola', perfect: 31 }) && FORMS['sandshrew-alola'].s[2] !== POKEDEX[27].s[2]);
+    check('阿羅拉地區的野生小拉達是阿羅拉形態', Forms.wild(19, 'alola') === 'rattata-alola' && Forms.wild(19, 'kanto') === null);
+    check('帕底亞的野生肯泰羅是三種品種之一', /tauros-paldea-(combat|blaze|aqua)-breed/.test(Forms.wild(128, 'paldea')));
+    check('伽勒爾的傳說三聖鳥不會當成野生地區形態', Forms.regional(144, 'galar') === null);
+    check('進化保留地區形態（阿羅拉六尾 → 阿羅拉九尾）', Forms.evolvedForm(av, 38, 'kanto') === 'ninetales-alola');
+    check('在阿羅拉進化成當地形態（皮卡丘 → 阿羅拉雷丘），其他地區不會', Forms.evolvedForm(Mon.create(25, 30), 26, 'alola') === 'raichu-alola' && Forms.evolvedForm(Mon.create(25, 30), 26, 'kanto') === null);
+    const gm = Mon.create(52, 30, { form: 'meowth-galar' });
+    check('伽勒爾喵喵進化成喵頭目（不是貓老大）', Mon.evoCandidates(gm).map(c => c.to).join() === '863');
+    check('形態的圖片使用形態編號', Mon.spriteOf(av).includes(String(FORMS['vulpix-alola'].id)));
+    const rt = Mon.create(479, 30); rt.moves = [{ id: 84, pp: 30 }, { id: 33, pp: 35 }];
+    UI.choose = async () => 1;
+    await Forms.rotom(rt);
+    UI.choose = async () => 0;
+    check('洛托姆型錄：變成加熱洛托姆，電擊換成過熱', rt.form === 'rotom-heat' && Mon.types(rt).join() === 'electric,fire' && rt.moves.some(x => x.id === 315) && !rt.moves.some(x => x.id === 84));
+    const bad = JSON.parse(JSON.stringify(G.state)); bad.party[0].form = 'vulpix-alola';
+    const ps = Game.parseSave(JSON.stringify(bad));
+    check('存檔：與物種不符的形態會被移除', ps.ok && ps.state.party[0].form === undefined);
     G.state = keep;
   }
   // 地點專屬生態

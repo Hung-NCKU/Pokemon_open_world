@@ -92,7 +92,8 @@ const OverworldMons = (() => {
     if (imgCache.has(sp)) return imgCache.get(sp);
     const n = Gen3.on && GEN3.ui && GEN3.ui.icons || 0;
     let e;
-    if (sp <= n) e = { sheet: true };
+    if (typeof sp === 'string') { const img = new Image(); img.crossOrigin = 'anonymous'; img.src = Mon.sprite(+sp.slice(1)); e = { img }; }
+    else if (sp <= n) e = { sheet: true };
     else {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -107,12 +108,12 @@ const OverworldMons = (() => {
   function draw(g, w, ox, oy) {
     const k = U.clamp((performance.now() - (w.moved || 0)) / 300, 0, 1);
     const x = (w.px + (w.x - w.px) * k) * TILE - ox, y = (w.py + (w.y - w.py) * k) * TILE - oy;
-    drawIcon(g, w.mon.sp, x, y);
+    drawIcon(g, w.mon.sp, x, y, Forms.get(w.mon) ? Forms.get(w.mon).id : null);
     if (w.seen && w.mood === 'curious') { g.fillStyle = '#f8f8f8'; g.font = 'bold 22px sans-serif'; g.fillText('!', x + TILE / 2 - 3, y - 10); }
   }
   // 地圖上的寶可夢小圖示（野生、傳說、卡比獸共用）；x, y 為格子左上角的畫面座標
-  function drawIcon(g, sp, x, y) {
-    const e = icon(sp), frame = (G.frame >> 4) % 2;
+  function drawIcon(g, sp, x, y, formId = null) {
+    const e = formId ? icon('f' + formId) : icon(sp), frame = (G.frame >> 4) % 2;
     g.imageSmoothingEnabled = false;
     g.fillStyle = 'rgba(0,0,0,.22)';
     g.beginPath(); g.ellipse(x + TILE / 2, y + TILE - 6, 14, 5, 0, 0, Math.PI * 2); g.fill();

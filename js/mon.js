@@ -10,8 +10,9 @@ const STRUGGLE = { id: 165, n: '掙扎', t: 'unknown', c: 'ph', p: 50, a: 0, pp:
 
 const Mon = {
   sp(id) { return POKEDEX[id]; },
-  name(m) { return m.nick || POKEDEX[m.sp].n; },
-  types(m) { return POKEDEX[m.sp].t; },
+  name(m) { return m.nick || Forms.data(m).n; },
+  types(m) { return Forms.data(m).t; },
+  spriteOf(m, opts = {}) { return Mon.sprite(Forms.spriteId(m), opts); },
   bst(id) { return POKEDEX[id].s.reduce((a, b) => a + b, 0); },
 
   expFor(gr, n) {
@@ -36,7 +37,7 @@ const Mon = {
   },
 
   stats(m) {
-    const b = POKEDEX[m.sp].s, L = m.lv, out = [];
+    const b = Forms.data(m).s, L = m.lv, out = [];
     // 極限特訓過的能力視為個體值 31
     const iv = i => (m.ivHT && m.ivHT[i] ? 31 : m.iv[i]);
     out[0] = b[0] === 1 ? 1 : Math.floor((2 * b[0] + iv(0) + Math.floor((m.ev?.[0] || 0) / 4)) * L / 100) + L + 10;
@@ -54,8 +55,9 @@ const Mon = {
   },
   maxHp(m) { return Mon.stats(m)[0]; },
 
-  movesFor(id, lv) {
-    const learn = POKEDEX[id].l.filter(([l, mid]) => l <= lv && MOVES[mid]);
+  movesFor(id, lv, form = null) {
+    const fl = form && window.FORMS && FORMS[form] && FORMS[form].l.length ? FORMS[form].l : null;
+    const learn = (fl || POKEDEX[id].l).filter(([l, mid]) => l <= lv && MOVES[mid]);
     const ids = [];
     for (let i = learn.length - 1; i >= 0 && ids.length < 4; i--) {
       if (!ids.includes(learn[i][1])) ids.push(learn[i][1]);
@@ -79,8 +81,15 @@ const Mon = {
       st: null,
       shiny: opts.shiny ?? U.rand() < 1 / 4096,
       tera: opts.tera || U.pick(s.t),
-      moves: Mon.movesFor(id, lv).filter(x => MOVES[x]).map(x => ({ id: x, pp: MOVES[x].pp })),
+      moves: Mon.movesFor(id, lv, opts.form).filter(x => MOVES[x]).map(x => ({ id: x, pp: MOVES[x].pp })),
     };
+    if (opts.form && window.FORMS && FORMS[opts.form] && FORMS[opts.form].base === id) {
+      m.form = opts.form;
+      const f = FORMS[opts.form];
+      m.tera = opts.tera || U.pick(f.t);
+      const normal = f.ab.filter(a => !a[1]), hidden = f.ab.filter(a => a[1]);
+      m.ability = (hidden.length && U.rand() < (opts.hidden || 0) ? U.pick(hidden) : U.pick(normal.length ? normal : f.ab))[0];
+    }
     if (opts.perfect) m.iv = m.iv.map(v => Math.max(v, opts.perfect));
     m.hp = Mon.maxHp(m);
     return m;
@@ -93,7 +102,7 @@ const Mon = {
   },
 
   // 太晶屬性：沒有設定時是第一個屬性
-  teraType(m) { return m.tera && TYPES[m.tera] ? m.tera : POKEDEX[m.sp].t[0]; },
+  teraType(m) { return m.tera && TYPES[m.tera] ? m.tera : Forms.data(m).t[0]; },
 
   sprite(id, { back = false, shiny = false } = {}) {
     return SPR + (back ? 'back/' : '') + (shiny ? 'shiny/' : '') + id + '.png';
@@ -125,6 +134,9 @@ const Mon = {
   },
   // 等級提升或使用道具時的進化候選（任一條件組成立即可）；依條件明確程度排序
   evoCandidates(m, item = null) {
+    const special = !item && Forms.candidates(m);
+    if (special) return special;
+    if (m.form && FORM_EVO[m.form]) return [];
     const out = [];
     for (const e of POKEDEX[m.sp].ev || []) {
       if (!POKEDEX[e.to]) continue;
@@ -180,7 +192,7 @@ const Mon = {
 
   // EV：依打倒的寶可夢實際的努力值產出（PokéAPI stats[].effort）；單項上限 252、總和上限 510
   gainEV(m, foe) {
-    const y = POKEDEX[foe.sp].ey || [0, 0, 0, 0, 0, 0];
+    const y = Forms.data(foe).ey || [0, 0, 0, 0, 0, 0];
     m.ev = m.ev || [0, 0, 0, 0, 0, 0];
     for (let i = 0; i < 6; i++) {
       const total = m.ev.reduce((a, c) => a + c, 0);

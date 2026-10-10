@@ -16,7 +16,7 @@ const SummaryUI = (() => {
         const g = m.gender === 'm' ? '<i class="gm">♂</i>' : m.gender === 'f' ? '<i class="gf">♀</i>' : '';
         let html = `<div class="sm-bg" style="background-image:url(${Gen3.base}sum_${['info', 'skills', 'moves'][page]}.png)"></div>
           <div class="sm-title">${PAGES[page]}</div>${[285, 330, 378].map((x, i) => `<i class="sm-dot${i === page ? ' on' : ''}" style="left:${x}px"></i>`).join('')}
-          <div class="sm-pic"><img src="${monSprite(m, false).url}" onerror="this.onerror=null;this.src='${Mon.sprite(m.sp, { shiny: m.shiny })}'"></div>
+          <div class="sm-pic"><img src="${monSprite(m, false).url}" onerror="this.onerror=null;this.src='${Mon.spriteOf(m, { shiny: m.shiny })}'"></div>
           <div class="sm-lv">Lv${m.lv}</div>${page < 2 ? `<div class="sm-nm">${U.esc(Mon.name(m))}${g}</div>
           <div class="sm-ball">No.${String(m.sp).padStart(3, '0')}</div>` : ''}`;
         if (page === 0) {

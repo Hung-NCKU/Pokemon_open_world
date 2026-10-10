@@ -16,6 +16,8 @@ const STATUS_ICON_ROW = { psn: 0, tox: 0, par: 1, slp: 2, frz: 3, brn: 4 };
 
 function monSprite(m, back) {
   const id = m.sp, sh = m.shiny;
+  const f = typeof Forms !== 'undefined' && Forms.get(m);
+  if (f) return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${f.id}.png`, scale: 2 };
   if (id <= 386) return { url: `${PKSPR}versions/generation-iii/emerald/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 3 };
   if (id <= 649) return { url: `${PKSPR}versions/generation-v/black-white/animated/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.gif`, scale: 2 };
   return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 2 };
@@ -98,7 +100,7 @@ Object.assign(Battle.prototype, {
     img.onload = () => place(s.scale);
     img.onerror = () => {
       img.onerror = null;
-      img.src = Mon.sprite(m.sp, { back, shiny: m.shiny });
+      img.src = Mon.spriteOf(m, { back, shiny: m.shiny });
       img.onload = () => place(2);
     };
     img.src = s.url;
