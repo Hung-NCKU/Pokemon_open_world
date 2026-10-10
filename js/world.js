@@ -2,9 +2,9 @@
 const T = { GRASS: 0, TALL: 1, TREE: 2, WATER: 3, SAND: 4, MOUNT: 5, CAVE: 6, SNOW: 7, SNOWTALL: 8, DESERT: 9, PATH: 10, BRIDGE: 11, TOWN: 12, BLDG: 13, DOOR: 14, FLOWER: 15, DEEP: 16, LANDMARK: 17 };
 const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
-const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5] };
+const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5], house_s: [4, 4, 1, 3], sign: [1, 1, 0, 0] };
 const WW = 960, WH = 600;
-const WORLD_VER = 2; // 世界配置的版本（見 World.generate）
+const WORLD_VER = 3; // 世界配置的版本（見 World.generate）
 const SAVE_VER = 2;  // 存檔格式的版本（見 Game.MIGRATE）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
@@ -48,6 +48,7 @@ const World = {
   // worldVer：世界配置的版本（存檔記錄，舊存檔沿用舊配置）
   //   1：道館編號依「離家由遠到近」（錯誤：第一座道館在地區最遠處）
   //   2：道館編號依「離家由近到遠」，城鎮編號與位置不變，只改哪座城鎮是第幾座道館
+  //   3：關都重要城鎮改用手工配置（data/towns.js：小屋事件、告示牌、花圃、池塘）
   generate(seed, homeRegion, worldVer = WORLD_VER) {
     this.seed = seed;
     this.worldVer = worldVer;
@@ -223,6 +224,7 @@ const World = {
   stampTowns() {
     this.buildings = [];
     this.doors = new Map();
+    this.signs = new Map();
     for (const t of this.towns) {
       for (let y = -2; y < TOWN_H + 2; y++) for (let x = -2; x < TOWN_W + 2; x++) {
         const px = t.x + x, py = t.y + y;
@@ -243,7 +245,9 @@ const World = {
         this.set(b.door.x, b.door.y, T.DOOR);
         this.doors.set(b.door.x + ',' + b.door.y, b);
       };
-      if (t.kind === 'league') {
+      const design = this.worldVer >= 3 && typeof TOWN_DESIGNS !== 'undefined' && t.kind !== 'league' && TOWN_DESIGNS[t.name];
+      if (design) this.stampDesign(t, design, add);
+      else if (t.kind === 'league') {
         add('center', 0, 1); add('mart', 12, 1); add('league', 2, 5);
       } else {
         add('center', 1, 1); add('mart', 11, 1);
@@ -251,6 +255,25 @@ const World = {
         if (t.kind === 'home') { add('house', 1, 6); add('lab', 8, 6); }
       }
     }
+  },
+
+  // 手工配置的城鎮（data/towns.js）
+  stampDesign(t, design, add) {
+    const KIND = { C: 'center', M: 'mart', G: 'gym', H: 'house', L: 'lab' };
+    const GROUND = { '.': T.TOWN, ',': T.GRASS, f: T.FLOWER, w: T.WATER, '#': T.TOWN };
+    design.rows.forEach((row, y) => [...row].forEach((c, x) => {
+      if (GROUND[c] !== undefined) this.set(t.x + x, t.y + y, GROUND[c]);
+    }));
+    design.rows.forEach((row, y) => [...row].forEach((c, x) => {
+      if (KIND[c]) add(KIND[c], x, y);
+      else if (design.houses && design.houses[c]) { add('house_s', x, y); this.buildings[this.buildings.length - 1].ev = design.houses[c]; }
+      else if (/[0-9]/.test(c)) {
+        const sx = t.x + x, sy = t.y + y;
+        this.set(sx, sy, T.BLDG);
+        this.buildings.push({ kind: 'sign', town: t, x: sx, y: sy, w: 1, h: 1, door: { x: sx, y: sy } });
+        this.signs.set(sx + ',' + sy, design.signs[c]);
+      }
+    }));
   },
 
   // 地標（洞窟入口等）：放在指定城鎮附近，並開一條路連到最近的道路

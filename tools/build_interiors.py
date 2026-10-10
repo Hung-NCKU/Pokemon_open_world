@@ -34,7 +34,11 @@ ROOMS = {
     "mart": ("OldaleTown_Mart", {"MART_EMPLOYEE": "clerk", "WOMAN_5": "talk", "BOY_1": "talk"}),
     "house": ("LittlerootTown_BrendansHouse_1F", {"MOM": "mom"}),
     "lab": ("LittlerootTown_ProfessorBirchsLab", {"PROF_BIRCH": "prof", "SCIENTIST_1": "talk"}),
+    # 城鎮的小屋：兩個人物位置，由城鎮配置指定的事件（data/towns.js）決定角色與外觀
+    "house_s": ("PetalburgCity_House1", {"EXPERT_M": "ev0", "GIRL_1": "ev1"}),
 }
+# 額外的建築外觀（從橙華市裁切）：小屋 4×4（門在左起第 2 格）、告示牌 1×1
+EXTRA_BLDGS = {"house_s": ("LAYOUT_PETALBURG_CITY", 9, 16, 4, 4, 1), "sign": ("LAYOUT_PETALBURG_CITY", 8, 9, 1, 1, 0)}
 # 道館：依館主的屬性選用綠寶石的道館（館主＝第一個 gym_leaders 外觀的人物）
 GYMS = {
     "rock": "RustboroCity_Gym", "fighting": "DewfordTown_Gym", "electric": "MauvilleCity_Gym", "fire": "LavaridgeTown_Gym_1F",
@@ -154,9 +158,19 @@ def main():
         data[key] = {"map": map_name, "w": w, "h": h, "coll": "".join(coll), "counter": counter, "pc": pc, "npcs": npcs, "exits": exits}
         print(f"  {key}: {map_name} {w}×{h}，人物 {len(npcs)}，出口 {exits}")
     # 豐緣館主的行走圖（其他地區的館主沒有綠寶石的行走圖，遊戲中依屬性選一般人物）
+    bl = {}
+    for kind, (lid, x0, y0, w, h, door) in EXTRA_BLDGS.items():
+        pair, lw, lh, blocks = load_layout(EM, lid)
+        img = Image.new("RGBA", (w * 16, h * 16))
+        for y in range(h):
+            for x in range(w):
+                img.alpha_composite(pair.render(blocks[(y0 + y) * lw + x0 + x] & 0x3FF), (x * 16, y * 16))
+        img.save(os.path.join(OUT, f"bld_{kind}.png"))
+        bl[kind] = {"w": w, "h": h, "door": door}
+    data["_buildings"] = bl
     data["_leaders"] = sorted(g.lower() for g in LEADER_GFX if save_sprite("leader_" + g.lower()))
     # 依屬性代替的館主外觀
-    for g in ["hiker", "black_belt", "man_3", "expert_f", "psychic_m", "swimmer_f", "picnicker", "hex_maniac", "bug_catcher", "beauty", "expert_m", "camper", "maniac", "lass", "cook", "man_1", "girl_3", "woman_2"]:
+    for g in ["old_man", "sailor", "pokefan_m", "scientist_1", "gentleman", "hiker", "black_belt", "man_3", "expert_f", "psychic_m", "swimmer_f", "picnicker", "hex_maniac", "bug_catcher", "beauty", "expert_m", "camper", "maniac", "lass", "cook", "man_1", "girl_3", "woman_2"]:
         save_sprite(g)
     with open(os.path.join(OUT, "interiors.js"), "w", encoding="utf-8") as f:
         f.write("// 由 tools/build_interiors.py 產生\nwindow.INTERIORS = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")

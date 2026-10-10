@@ -255,7 +255,13 @@ const Spr = (() => {
   function building(b) {
     const key = `${b.kind}_${b.w}_${b.h}_${b.door.x - b.x}`;
     if (bldCache.has(key)) return bldCache.get(key);
-    const st = BLD[b.kind];
+    if (b.kind === 'sign') {
+      // 告示牌：木柱與木板
+      const [c, g] = canvas(N, N);
+      R(g, 7, 9, 2, 6, '#7a5030'); R(g, 2, 3, 12, 7, '#384048'); R(g, 3, 4, 10, 5, '#d8a868'); R(g, 4, 5, 8, 1, '#a07040'); R(g, 4, 7, 6, 1, '#a07040');
+      const out = up(c); bldCache.set(key, out); return out;
+    }
+    const st = BLD[b.kind] || BLD.house;
     const W = b.w * N, H = b.h * N;
     const [c, g] = canvas(W, H);
     const roofH = Math.round(H * (b.kind === 'house' ? .55 : .5));

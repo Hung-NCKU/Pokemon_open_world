@@ -51,8 +51,10 @@ const Gen3 = (() => {
     return cut('t' + i, img.tiles, (i % 32) * 16, Math.floor(i / 32) * 16, 16, 16);
   }
   function building(kind) {
-    const b = img['bld_' + kind];
-    return b ? cut('b' + kind, b, 0, 0, b.naturalWidth, b.naturalHeight) : null;
+    let b = img['bld_' + kind];
+    // 室內地圖建置時另外輸出的建築（小屋、告示牌）
+    if (!b && window.INTERIORS && INTERIORS._buildings && INTERIORS._buildings[kind]) b = ensure('bld_' + kind, `bld_${kind}.png`);
+    return b && b.naturalWidth ? cut('b' + kind, b, 0, 0, b.naturalWidth, b.naturalHeight) : null;
   }
   // 走路圖 9 格：下站、上站、左站、下走1、下走2、上走1、上走2、左走1、左走2
   const FRAME = { down: [0, 3, 4], up: [1, 5, 6], left: [2, 7, 8], right: [2, 7, 8] };

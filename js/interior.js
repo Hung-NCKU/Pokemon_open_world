@@ -34,7 +34,7 @@ const Interior = (() => {
       const lead = LEADERS[b.town.region] && LEADERS[b.town.region][b.town.gym];
       return lead ? GYM_ROOM[lead[1]] || 'gym_rock' : null;
     }
-    return ['center', 'mart', 'house', 'lab'].includes(b.kind) ? b.kind : null;
+    return ['center', 'mart', 'house', 'lab', 'house_s'].includes(b.kind) ? b.kind : null;
   }
   // 道館訓練家的類型：第一個擅長館主屬性的訓練家類型
   function gymTrainerClass(type) {
@@ -46,12 +46,14 @@ const Interior = (() => {
     const key = keyFor(b), d = INTERIORS[key];
     const t = b.town;
     const lead = b.kind === 'gym' ? LEADERS[t.region][t.gym] : null;
-    const npcs = d.npcs.map((n, i) => ({ ...n, i })).filter(n => !(n.role === 'mom' && t.region !== G.state.region));
+    const npcs = d.npcs.map((n, i) => ({ ...n, i })).filter(n => !(n.role === 'mom' && t.region !== G.state.region) && !(/^ev\d$/.test(n.role) && !(b.ev || [])[+n.role[2]]));
     for (const n of npcs) {
       if (n.role === 'leader') {
         const own = (LEADER_SPRITES[t.region] || [])[t.gym];
         n.gfx = own && (INTERIORS._leaders || []).includes(own) ? 'leader_' + own : LEADER_LOOK[lead[1]] || 'man_1';
       }
+      // 小屋：兩個位置的人由城鎮配置的事件決定
+      if (/^ev\d$/.test(n.role)) { n.ev = (b.ev || [])[+n.role[2]]; if (n.ev && TownEvents.DEF[n.ev]) n.gfx = TownEvents.DEF[n.ev].gfx; }
       if (n.role === 'gymTrainer') { n.cls = gymTrainerClass(lead[1]); n.gfx = ((window.GEN3 && GEN3.trainers) || [])[n.cls] || n.gfx; }
     }
     const [ex, ey] = d.exits[0];
@@ -166,6 +168,7 @@ const Interior = (() => {
     if (n.role === 'leader') return Game.gymChallenge(t);
     if (n.role === 'guide') return guide(t);
     if (n.role === 'gymTrainer') return gymTrainer(n, t);
+    if (n.ev) return TownEvents.run(n.ev, t);
     const lines = TALK[b.kind] || TALK.center;
     return UI.say(lines[(n.i + t.id) % lines.length]);
   }

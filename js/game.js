@@ -137,6 +137,7 @@ const Game = {
     m.hp = U.clamp(Math.floor(m.hp), 0, max);
     if (m.st && !STATUS_ZH[m.st]) m.st = null;
     if (m.item && !ITEMS[m.item]) m.item = null;
+    if (m.nick !== undefined && (typeof m.nick !== 'string' || !m.nick.trim() || m.nick.length > 12)) delete m.nick;
     if (!m.uid) m.uid = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     return null;
   },
@@ -954,6 +955,8 @@ const Game = {
       else if (c === 1) await Game.pcMenu();
     } else if (b.kind === 'mart') {
       await Game.shopMenu();
+    } else if (b.kind === 'house_s') {
+      await TownEvents.house(b);
     } else if (b.kind === 'house') {
       if (t.region === G.state.region) await Game.momTalk();
       else await UI.say('這裡沒有人在家。');
@@ -1226,6 +1229,8 @@ const Game = {
     const fx = s.x + d[0], fy = s.y + d[1];
     const b = World.doors.get(fx + ',' + fy);
     if (b) return Game.enterBuilding(b);
+    const sign = World.signs && World.signs.get(fx + ',' + fy);
+    if (sign) return UI.say(sign);
     const lm = World.landmarks && World.landmarks.get(fx + ',' + fy);
     if (lm) return Story.landmark(lm);
     const lg = World.legendAt && World.legendAt(fx, fy);
