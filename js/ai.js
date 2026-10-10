@@ -67,7 +67,9 @@ const AI = {
 Battle.prototype.aiChoose = function () {
   const tier = AI.tier(this);
   const foe = this.foe, me = this.me, vF = this.vFoe, vM = this.vMe;
-  const usable = foe.moves.map((s, i) => ({ s, i })).filter(({ s, i }) => s.pp > 0 && md(s.id).support !== 'none' && !this.moveBlocked(foe, vF, s.id));
+  let usable = foe.moves.map((s, i) => ({ s, i })).filter(({ s, i }) => s.pp > 0 && md(s.id).support !== 'none' && !this.moveBlocked(foe, vF, s.id));
+  // 雙打：會打到自己隊友的全體招式（aiDouble 指定）
+  if (this._aiExclude && usable.some(u => !this._aiExclude.has(u.i))) usable = usable.filter(u => !this._aiExclude.has(u.i));
   if (!usable.length) return { idx: foe.moves.findIndex(s => s.pp > 0) };
   if (tier === 0) return { idx: U.pick(usable).i };
   const maxF = Mon.maxHp(foe);

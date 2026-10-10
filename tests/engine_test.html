@@ -927,6 +927,70 @@ async function run() {
       const d2 = s1.calcDamage(s1.me, s1.foe, s1.vMe, s1.vFoe, { ...md(moveId('rockslide')), spreadMod: .75 }, 1, 75).dmg;
       check('雙打：全體招式威力 ×0.75', d2 === Math.max(1, Math.floor(d1 * .75)), `${d1} → ${d2}`);
     }
+    // 地震打到隊友（飛行屬性的隊友不受影響）、心靈感應的隊友閃開
+    {
+      const run = async (allySp, allyAb) => {
+        const a = Mon.create(76, 50), c = Mon.create(allySp, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+        a.moves = [mv('earthquake')]; c.moves = [mv('splash')]; f1.moves = [mv('splash')]; f2.moves = [mv('splash')];
+        a.ability = 'sturdy'; if (allyAb) c.ability = allyAb; f1.ability = f2.ability = 'thick-fat';
+        const b = mkBattle([a, c], [f1, f2]);
+        b.setup();
+        b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: b.actives('foe')[0] });
+        b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: b.actives('me')[0], foe: true });
+        for (const m of [a, c, f1, f2]) b.volOf(m).lockOn = 5;
+        const hc = c.hp, h1 = f1.hp, h2 = f2.hp;
+        await b.doubleTurn();
+        return { ally: hc - c.hp, f1: h1 - f1.hp, f2: h2 - f2.hp };
+      };
+      U.seed(50);
+      const r1 = await run(68, 'guts'), r2 = await run(18, 'keen-eye'), r3 = await run(68, 'telepathy');
+      check('雙打：地震也打到自己的隊友（怪力），兩隻對手都受傷', r1.ally > 0 && r1.f1 > 0 && r1.f2 > 0, JSON.stringify(r1));
+      check('雙打：飛行屬性的隊友不受地震影響、心靈感應的隊友閃開', r2.ally === 0 && r3.ally === 0, JSON.stringify([r2, r3]));
+    }
+    // 可以對隊友使用單體招式（治癒波動）
+    {
+      const a = Mon.create(113, 50), c = Mon.create(68, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [mv('healpulse')]; c.moves = [mv('splash')]; f1.moves = [mv('splash')]; f2.moves = [mv('splash')];
+      const b = mkBattle([a, c], [f1, f2]);
+      b.setup();
+      c.hp = 10;
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: m === a ? c : b.actives('foe')[0] });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: b.actives('me')[0], foe: true });
+      await b.doubleTurn();
+      check('雙打：治癒波動可以對隊友使用', c.hp > 10, String(c.hp));
+    }
+    // 行動順序用當下的速度：冰凍之風降低對手速度後，原本比較慢的隊友先行動
+    {
+      const a = Mon.create(471, 60), c = Mon.create(68, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [mv('icywind')]; c.moves = [mv('karatechop')]; f1.moves = [mv('splash')]; f2.moves = [mv('splash')];
+      c.ability = 'guts'; f1.ability = f2.ability = 'thick-fat';
+      const b = mkBattle([a, c], [f1, f2]);
+      b.setup();
+      for (const m of [a, c, f1, f2]) b.volOf(m).lockOn = 5;
+      // 速度：冰伊布 > 對手 > 怪力；冰凍之風之後 怪力 > 對手
+      const sp = { a: 200, c: 100, f: 120 };
+      const real = b.speedOf.bind(b);
+      b.speedOf = (m, v) => (m === a ? sp.a : m === c ? sp.c : sp.f * boostMul(v.stg.spe));
+      const order = [];
+      const realRun = b.runMove.bind(b);
+      b.runMove = async (u, t, act) => { order.push(u === a ? 'A' : u === c ? 'C' : 'F'); return realRun(u, t, act); };
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: b.actives('foe')[0] });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: b.actives('me')[0], foe: true });
+      await b.doubleTurn();
+      check('雙打：每次行動後依當下的速度重新排序（冰凍之風後怪力先於對手）', order.join('') === 'ACFF', order.join(''));
+    }
+    // AI：不用會打到自己隊友的地震，改用其他招式
+    {
+      const a = Mon.create(25, 50), c = Mon.create(25, 50), f1 = Mon.create(76, 50), f2 = Mon.create(68, 50);
+      a.moves = [mv('splash')]; c.moves = [mv('splash')];
+      f1.moves = [mv('earthquake'), mv('rockslide')]; f2.moves = [mv('karatechop')];
+      f2.ability = 'guts';
+      const b = mkBattle([a, c], [f1, f2]);
+      b.setup();
+      let eq = 0;
+      for (let i = 0; i < 20; i++) { const act = b.aiDouble(f1); if (f1.moves[act.idx].id === moveId('earthquake')) eq++; }
+      check('雙打 AI：不用會打到自己隊友的地震', eq === 0, `${eq}/20`);
+    }
     // 威嚇：兩隻對手都降低攻擊
     {
       const a = Mon.create(130, 50), c = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(68, 50);

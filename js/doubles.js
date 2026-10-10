@@ -1,7 +1,11 @@
 // 雙打（第一版：固定的 NPC 雙打，驗證選擇目標、全體招式、隊友特性與換人）
 // 做法：沿用單打引擎，每次行動前把「我方／對手」切換成行動的那一對（ctx），每隻寶可夢有自己的狀態（vols）
 // - 單體招式：選擇目標（對手兩隻都在時）；目標倒下時改打另一隻
-// - 全體招式（allAdjacentFoes、allAdjacent）：打兩隻對手，威力 ×0.75（第一版不會打到隊友）
+// - 全體招式：allAdjacentFoes 打兩隻對手；allAdjacent（地震、衝浪、放電、大爆炸……）連隊友也打到；目標兩個以上時威力 ×0.75
+//   隊友有心靈感應時不會被隊友的招式打到
+// - 單體招式可以選隊友當目標（花粉團、治癒波動……）
+// - 行動順序：優先度 → 當下的速度（每次行動後重新排序，順風、冰凍之風等速度變化立刻生效，第八世代起的規則）
+// - AI：比較兩個目標選傷害最大的，避免用會打到自己隊友的全體招式
 // - 隊友：幫助（威力 ×1.5）、看我嘛／憤怒粉（吸引招式）、友情防守、正電／負電、電池、能量點
 // - 倒下的寶可夢在回合結束時由後備替換
 class DoubleBattle extends Battle {
@@ -24,6 +28,7 @@ class DoubleBattle extends Battle {
     return this.vols.get(m);
   }
   sideKey(m) { return this.foeParty.includes(m) ? 'foe' : 'me'; }
+  sideOf(m) { return this.sideKey(m); }
   label(m) { return this.foeParty.includes(m) ? this.foeName(m) : Mon.name(m); }
   actives(side) { return (side === 'me' ? this.mySlots.map(i => G.party[i]) : this.foeSlots.map(i => this.foeParty[i])).filter(m => m && m.hp > 0); }
   allyOf(m) {
@@ -157,23 +162,45 @@ class DoubleBattle extends Battle {
       if (a.type !== 'move') return { ...a, user: m };
       const slot = m.moves[a.idx];
       const mv = slot ? md(slot.id) : null;
-      // 單體招式：對手兩隻都在時選擇目標
-      if (mv && foes.length > 1 && ['normal', 'any', 'adjacentFoe'].includes(mv.target)) {
-        const t = await UI.choose([...foes.map(f => this.foeName(f)), '取消'], { prompt: `要對誰使用 ${mv.n}？` });
-        if (t < 0 || t === foes.length) continue;
-        return { ...a, user: m, target: foes[t] };
+      // 單體招式：對手兩隻都在、或有隊友時選擇目標（normal、any 可以選隊友）
+      const ally = this.allyOf(m);
+      const canAlly = ally && mv && ['normal', 'any', 'adjacentAllyOrSelf'].includes(mv.target);
+      if (mv && (foes.length > 1 || canAlly) && ['normal', 'any', 'adjacentFoe', 'adjacentAllyOrSelf'].includes(mv.target)) {
+        const opts = [...foes.map(f => this.foeName(f)), ...(canAlly ? [`隊友 ${Mon.name(ally)}`] : []), '取消'];
+        const t = await UI.choose(opts, { prompt: `要對誰使用 ${mv.n}？` });
+        if (t < 0 || t === opts.length - 1) continue;
+        return { ...a, user: m, target: t < foes.length ? foes[t] : ally };
       }
       return { ...a, user: m, target: foes[0] };
     }
   }
+  // AI：對每個目標各評估一次，選估計傷害比例最高的；會打到自己隊友的全體招式不用（隊友免疫時例外）
   aiDouble(m) {
     const targets = this.actives('me');
-    const target = targets[Math.floor(U.rand() * targets.length)];
-    this.ctx(target, m);
     const v = this.volOf(m);
-    if (v.recharge || v.charging || v.locked) return { type: 'move', idx: -2, user: m, target, foe: true };
-    const a = this.aiChoose();
-    return { type: 'move', idx: a.idx ?? 0, user: m, target, foe: true, heal: a.heal };
+    if (v.recharge || v.charging || v.locked) { this.ctx(targets[0], m); return { type: 'move', idx: -2, user: m, target: targets[0], foe: true }; }
+    const ally = this.allyOf(m);
+    this._aiExclude = new Set();
+    if (ally && typeof AI !== 'undefined') {
+      m.moves.forEach((s, i) => {
+        const mv = md(s.id);
+        if (mv.target !== 'allAdjacent' || mv.cat === 'Status') return;
+        const hurt = this.ab(ally) === 'telepathy' ? 0 : AI.est(this, m, ally, mv, { typesT: this.typesOf(ally) });
+        if (hurt > ally.hp * .15) this._aiExclude.add(i);
+      });
+    }
+    let best = null;
+    for (const t of targets) {
+      this.ctx(t, m);
+      const a = this.aiChoose();
+      if (a.heal) { this._aiExclude = null; return { type: 'move', idx: 0, user: m, target: t, foe: true, heal: true }; }
+      const s = a.idx >= 0 ? md(m.moves[a.idx].id) : null;
+      const val = s && typeof AI !== 'undefined' ? AI.est(this, m, t, s, { vU: v, vT: this.volOf(t) }) / Math.max(1, t.hp) + U.rand() * .05 : U.rand();
+      if (!best || val > best.val) best = { val, idx: a.idx ?? 0, target: t };
+    }
+    this._aiExclude = null;
+    this.ctx(best.target, m);
+    return { type: 'move', idx: best.idx, user: m, target: best.target, foe: true };
   }
 
   async doubleTurn() {
@@ -207,18 +234,26 @@ class DoubleBattle extends Battle {
       a.spe = this.speedOf(m, this.volOf(m)) * (this.field.trickRoom ? -1 : 1);
       a.rnd = U.rand();
     }
-    moves.sort((x, y) => y.pri - x.pri || y.spe - x.spe || x.rnd - y.rnd);
-    for (const a of moves) {
+    // 行動順序：每次行動後用當下的速度重新排序（第八世代起）
+    const pending = [...moves];
+    let first = true;
+    while (pending.length) {
+      for (const a of pending) a.spe = a.user && a.user.hp > 0 ? this.speedOf(a.user, this.volOf(a.user)) * (this.field.trickRoom ? -1 : 1) : -1e9;
+      pending.sort((x, y) => y.pri - x.pri || y.spe - x.spe || x.rnd - y.rnd);
+      const a = pending.shift();
       const user = a.user;
       if (!user || user.hp <= 0) continue;
       const oppSide = this.sideKey(user) === 'me' ? 'foe' : 'me';
       const opps = this.actives(oppSide);
       if (!opps.length) break;
-      // 目標：吸引招式 → 指定目標 → 另一隻
-      let target = a.target && a.target.hp > 0 && opps.includes(a.target) ? a.target : opps[0];
+      // 目標：吸引招式 → 指定目標（可以是隊友）→ 另一隻
+      const ally = this.allyOf(user);
+      const toAlly = a.target && ally && a.target === ally && ally.hp > 0;
+      let target = toAlly ? ally : a.target && a.target.hp > 0 && opps.includes(a.target) ? a.target : opps[0];
       const lure = opps.find(o => this.volOf(o).followMe);
-      if (lure && ['normal', 'any', 'adjacentFoe'].includes(a.mv.target)) target = lure;
-      this.pair(user, target);
+      if (lure && !toAlly && ['normal', 'any', 'adjacentFoe'].includes(a.mv.target)) target = lure;
+      if (toAlly) { if (this.sideKey(user) === 'me') this.ctx(ally, opps[0]); else this.ctx(opps[0], ally); }
+      else this.pair(user, target);
       // 隊友招式
       if (a.mv.id === 'helpinghand') {
         const ally = this.allyOf(user);
@@ -235,15 +270,21 @@ class DoubleBattle extends Battle {
         await this.msg(`${this.label(user)} 成為了注目的焦點！`);
         continue;
       }
-      // 全體招式：第一個目標走完整流程，其他目標只計算命中與傷害
-      const spread = ['allAdjacentFoes', 'allAdjacent'].includes(a.mv.target) && opps.length > 1;
-      if (spread) a.mv = { ...a.mv, spreadMod: .75 };
-      this.firstMover = moves.indexOf(a) === 0;
+      // 全體招式：第一個目標走完整流程，其他目標（另一隻對手、allAdjacent 的隊友）只計算命中與傷害
+      const hitsAlly = a.mv.target === 'allAdjacent' && ally && ally.hp > 0;
+      const others = ['allAdjacentFoes', 'allAdjacent'].includes(a.mv.target) ? [...opps.filter(o => o !== target), ...(hitsAlly ? [ally] : [])] : [];
+      if (others.length) a.mv = { ...a.mv, spreadMod: .75 };
+      this.firstMover = first; first = false;
       await this.runMove(user, target, a);
-      if (spread && user.hp > 0 && !this.volOf(user).lastMoveFailed) {
-        for (const o of opps) {
-          if (o === target || o.hp <= 0) continue;
-          this.pair(user, o);
+      // 大爆炸等自己倒下的招式：仍然打到其他目標
+      if (others.length && !this.volOf(user).lastMoveFailed) {
+        for (const o of others) {
+          if (o.hp <= 0) continue;
+          if (o === ally) {
+            if (this.ab(o) === 'telepathy') { await this.msg(`${this.label(o)} 讀出了隊友的攻擊，閃開了！`); continue; }
+            const oppo = this.actives(this.sideKey(user) === 'me' ? 'foe' : 'me')[0] || null;
+            if (this.sideKey(user) === 'me') this.ctx(o, oppo); else this.ctx(oppo, o);
+          } else this.pair(user, o);
           await this.useMoveOn(user, o, a.mv, a);
         }
       }
