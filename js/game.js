@@ -1020,7 +1020,9 @@ const Game = {
   },
 
   async battle(opts) {
-    const b = new Battle(opts);
+    // 雙打：雙方都有兩隻以上能戰鬥的寶可夢時
+    const dbl = opts.double && typeof DoubleBattle !== 'undefined' && opts.trainer && opts.trainer.party.length >= 2 && G.party.filter(m => m.hp > 0).length >= 2;
+    const b = dbl ? new DoubleBattle(opts) : new Battle(opts);
     const r = await b.run();
     // noBlackout：劇情戰輸了也不會被送回寶可夢中心（例如第一場勁敵戰）
     if (r === 'lose' && opts.noBlackout) { Game.healParty(); await UI.say('寶可夢都恢復了精神。'); }
@@ -1279,6 +1281,12 @@ const Game = {
 
   // 事件實體：卡比獸（正面圖，睡著的 Z）、古代石板（靠近 6 格內才會閃光）
   drawEvent(g, e, x, y) {
+    if (e.kind === 'twins') {
+      const sheet = Gen3.on ? 'npc_lass' : null;
+      World.drawPerson(g, x - 10, y, 'down', { pal: Spr.trainerPal(1, 0), sheet }, 0);
+      World.drawPerson(g, x + 10, y, 'down', { pal: Spr.trainerPal(1, 1), sheet }, 0);
+      return;
+    }
     if (e.kind === 'snorlax') {
       Game.drawLegend(g, { sp: 143 }, x, y);
       g.fillStyle = '#f8f8f8'; g.font = 'bold 18px sans-serif';

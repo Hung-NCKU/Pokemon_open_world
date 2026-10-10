@@ -49,6 +49,7 @@
 <script src="../js/mega.js"></script>
 <script src="../js/zmove.js"></script>
 <script src="../js/picnic.js"></script>
+<script src="../js/doubles.js"></script>
 <script src="../js/battle_view.js"></script>
 <script src="../js/game.js"></script>
 <script>
@@ -853,6 +854,98 @@ async function run() {
     check('蛋籃裡的蛋走路就會孵化並加入隊伍', !G.state.eggs.length && G.party.length === 3 && G.party[2].sp === 4);
     check('三明治：遭遇力的屬性', Picnic.mealType() === 'fire');
     G.state = keep;
+  }
+  // 雙打
+  {
+    const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+    Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+    const mkBattle = (mine, foes) => {
+      G.state = Game.newState('T', 'kanto', 1);
+      G.state.party = mine;
+      const b = new DoubleBattle({ trainer: { title: '雙胞胎', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+      return b;
+    };
+    const mv = (sd) => ({ id: moveId(sd), pp: 10 });
+    // 全體招式：打兩隻對手、威力 ×0.75
+    U.seed(42);
+    {
+      const a = Mon.create(76, 50), c = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [mv('rockslide')]; c.moves = [mv('splash')]; f1.moves = [mv('splash')]; f2.moves = [mv('splash')];
+      a.ability = 'sturdy'; f1.ability = f2.ability = 'thick-fat';
+      const b = mkBattle([a, c], [f1, f2]);
+      b.setup();
+      b.vols.forEach(v => { v.lockOn = 5; });
+      let n = 0;
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: b.actives('foe')[0] });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: b.actives('me')[0], foe: true });
+      for (const m of [a, c, f1, f2]) b.volOf(m).lockOn = 5;
+      const h1 = f1.hp, h2 = f2.hp;
+      await b.doubleTurn();
+      check('雙打：全體招式（岩崩）打到兩隻對手', f1.hp < h1 && f2.hp < h2, `${h1 - f1.hp}, ${h2 - f2.hp}`);
+      // 威力 ×0.75：與單打相比
+      const s1 = setup(76, 50, 143, 50); s1.me.ability = 'sturdy'; s1.foe.ability = 'thick-fat';
+      U.seed(43);
+      const d1 = s1.calcDamage(s1.me, s1.foe, s1.vMe, s1.vFoe, { ...md(moveId('rockslide')) }, 1, 75).dmg;
+      U.seed(43);
+      const d2 = s1.calcDamage(s1.me, s1.foe, s1.vMe, s1.vFoe, { ...md(moveId('rockslide')), spreadMod: .75 }, 1, 75).dmg;
+      check('雙打：全體招式威力 ×0.75', d2 === Math.max(1, Math.floor(d1 * .75)), `${d1} → ${d2}`);
+    }
+    // 威嚇：兩隻對手都降低攻擊
+    {
+      const a = Mon.create(130, 50), c = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(68, 50);
+      a.ability = 'intimidate'; f1.ability = 'thick-fat'; f2.ability = 'guts';
+      const b = mkBattle([a, c], [f1, f2]);
+      b.setup();
+      await b.entryAbility(a);
+      check('雙打：威嚇讓兩隻對手的攻擊都下降', b.volOf(f1).stg.atk === -1 && b.volOf(f2).stg.atk === -1);
+    }
+    // 幫助：隊友的威力 ×1.5；看我嘛：吸引單體招式；正電＋負電
+    {
+      const s = setup(25, 50, 143, 50);
+      const base = { ...md(moveId('thunderbolt')) };
+      U.seed(9); const d0 = s.calcDamage(s.me, s.foe, s.vMe, s.vFoe, base, 1, 90).dmg;
+      const a = Mon.create(25, 50), c = Mon.create(35, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      const b = mkBattle([a, c], [f1, f2]); b.setup();
+      b.ctx(a, f1);
+      b.volOf(a).helping = true;
+      U.seed(9);
+      const d1 = b.calcDamage(a, f1, b.volOf(a), b.volOf(f1), base, 1, 90).dmg;
+      check('雙打：幫助讓隊友的招式威力 ×1.5', d1 > d0 * 1.3, `${d0} → ${d1}`);
+      const p = Mon.create(311, 50), q = Mon.create(312, 50); p.ability = 'plus'; q.ability = 'minus';
+      const b2 = mkBattle([p, q], [Mon.create(143, 50), Mon.create(143, 50)]); b2.setup();
+      b2.ctx(p, b2.foeParty[0]);
+      U.seed(9); const e1 = b2.calcDamage(p, b2.foeParty[0], b2.volOf(p), b2.volOf(b2.foeParty[0]), base, 1, 90).dmg;
+      q.ability = 'run-away';
+      U.seed(9); const e0 = b2.calcDamage(p, b2.foeParty[0], b2.volOf(p), b2.volOf(b2.foeParty[0]), base, 1, 90).dmg;
+      check('雙打：正電＋負電，特殊招式 ×1.5', e1 > e0 * 1.3, `${e0} → ${e1}`);
+      // 看我嘛
+      const x = Mon.create(35, 50), y = Mon.create(25, 50), g1 = Mon.create(68, 50), g2 = Mon.create(68, 50);
+      x.moves = [mv('followme')]; y.moves = [mv('splash')]; g1.moves = [mv('tackle')]; g2.moves = [mv('tackle')];
+      const b3 = mkBattle([x, y], [g1, g2]); b3.setup();
+      for (const m of [x, y, g1, g2]) b3.volOf(m).lockOn = 5;
+      b3.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: g1 });
+      b3.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: y, foe: true });
+      const hy = y.hp;
+      await b3.doubleTurn();
+      check('雙打：看我嘛把對手的單體招式吸引過來', y.hp === hy && x.hp < Mon.maxHp(x), `${y.hp}/${hy} ${x.hp}`);
+    }
+    // 倒下後替換、全滅判定
+    {
+      const a = Mon.create(25, 50), c = Mon.create(35, 50), f1 = Mon.create(10, 2), f2 = Mon.create(10, 2), f3 = Mon.create(13, 2);
+      a.moves = [mv('thunderbolt')]; c.moves = [mv('splash')];
+      for (const f of [f1, f2, f3]) f.moves = [mv('splash')];
+      const b = mkBattle([a, c], [f1, f2, f3]); b.setup();
+      for (const m of [a, c, f1, f2, f3]) b.volOf(m).lockOn = 5;
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      await b.doubleTurn();
+      check('雙打：對手倒下後由後備替換', f1.hp === 0 && b.foeSlots.includes(2));
+      let r = null;
+      for (let t = 0; t < 6 && !r; t++) { b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: b.actives('foe')[0] }); r = await b.doubleTurn(); }
+      check('雙打：對手全部倒下時勝利', r === 'win', String(r));
+    }
+    U.unseed();
+    [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
   }
   // 地點專屬生態
   {

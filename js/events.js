@@ -32,22 +32,31 @@ Object.assign(World, {
     const free = (x, y) => this.inside(x, y) && !this.townAt(x, y) && !this.trainers.has(x + ',' + y) && !this.doors.has(x + ',' + y)
       && !(this.legends && this.legends.has(x + ',' + y)) && !(this.landmarks && this.landmarks.has(x + ',' + y)) && !this.events.has(x + ',' + y);
     // 卡比獸：道路上、移除後兩側仍然連通（有路可以繞）
+    // 關都所有道路格（亂數排序），先用嚴格條件，找不到再放寬
+    const roads = [];
+    for (let y = 0; y < WH; y += 2) for (let x = 0; x < WW; x += 2) if (this.tile(x, y) === T.PATH && this.regionAt(x, y) === 'kanto') roads.push([x, y]);
+    for (let i = roads.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [roads[i], roads[j]] = [roads[j], roads[i]]; }
     let placed = 0;
-    for (let tries = 0; tries < 3000 && placed < 2; tries++) {
-      const a = kanto[Math.floor(rng() * kanto.length)], b = kanto[Math.floor(rng() * kanto.length)];
-      if (a === b) continue;
-      const k = .35 + rng() * .3;
-      const cx = Math.round(a.cx + (b.cx - a.cx) * k), cy = Math.round(a.cy + (b.cy - a.cy) * k);
-      let spot = null;
-      for (let r = 0; r < 8 && !spot; r++) for (let dy = -r; dy <= r && !spot; dy++) for (let dx = -r; dx <= r; dx++) {
-        const x = cx + dx, y = cy + dy;
-        if (this.tile(x, y) === T.PATH && free(x, y) && this.regionAt(x, y) === 'kanto') { spot = [x, y]; break; }
+    for (const [townGap, spacing] of [[14, 30], [10, 20], [8, 12]]) {
+      for (const [x, y] of roads) {
+        if (placed >= 2) break;
+        if (!free(x, y) || this.towns.some(t => Math.hypot(t.cx - x, t.cy - y) < townGap)) continue;
+        if ([...this.events.values()].some(e => Math.hypot(e.x - x, e.y - y) < spacing)) continue;
+        if (!this.detourExists(x, y)) continue;
+        this.events.set(x + ',' + y, { kind: 'snorlax', id: 'snorlax' + placed, x, y, sp: 143 });
+        placed++;
       }
-      if (!spot || [...this.events.values()].some(e => Math.hypot(e.x - spot[0], e.y - spot[1]) < 30)) continue;
-      if (this.towns.some(t => Math.hypot(t.cx - spot[0], t.cy - spot[1]) < 14)) continue; // 不擋在城鎮出入口
-      if (!this.detourExists(spot[0], spot[1])) continue;
-      this.events.set(spot[0] + ',' + spot[1], { kind: 'snorlax', id: 'snorlax' + placed, x: spot[0], y: spot[1], sp: 143 });
-      placed++;
+      if (placed >= 2) break;
+    }
+    // 雙胞胎（雙打）：華藍市附近的道路上
+    const cer = kanto.find(t => t.gym === 1);
+    if (cer) {
+      let spot = null;
+      for (let r = 10; r < 26 && !spot; r++) for (let a = 0; a < 16 && !spot; a++) {
+        const x = Math.round(cer.cx + Math.cos(a / 16 * Math.PI * 2) * r), y = Math.round(cer.cy + Math.sin(a / 16 * Math.PI * 2) * r);
+        if (this.tile(x, y) === T.PATH && free(x, y) && !this.townAt(x, y) && this.detourExists(x, y)) spot = [x, y];
+      }
+      if (spot) this.events.set(spot[0] + ',' + spot[1], { kind: 'twins', id: 'twins', x: spot[0], y: spot[1] });
     }
     // 古代石板：關都的草叢、岩地、沙灘
     const ok = new Set([T.TALL, T.GRASS, T.CAVE, T.SAND, T.FLOWER]);
@@ -111,6 +120,21 @@ Object.assign(Story, {
         await UI.say('石板的縫隙裡還夾著 3 顆神奇糖果！');
       } else await UI.say(Story.tabletHint());
       Game.save(true);
+      return;
+    }
+    if (e.kind === 'twins') {
+      if (G.party.filter(m => m.hp > 0).length < 2) { await UI.say('雙胞胎：「我們要兩個人一起比賽！你也要有兩隻能戰鬥的寶可夢才行喔！」'); return; }
+      await UI.say('雙胞胎 小優與小美：「我們兩個人一起上！來雙打吧！」');
+      const L = World.gymLevel(World.towns.find(t => t.region === 'kanto' && t.gym === 1)) + 2;
+      const mk = (sp, moves, ab) => { const m = Mon.create(sp, L); m.moves = moves.filter(id => MOVES[id]).map(id => ({ id, pp: MOVES[id].pp })); m.ability = ab; return m; };
+      const party = [mk(311, [435, 270, 98, 209], 'plus'), mk(312, [486, 270, 435, 204], 'minus')];
+      const r = await Game.battle({ trainer: { title: '雙胞胎', name: '小優與小美', party, kind: 'trainer', money: 60, sprite: 'twins', lose: '兩個人一起還是輸了……' }, double: true });
+      if (r === 'win') {
+        s.flags['ev_' + e.id] = 1;
+        Game.giveItem('rare-candy', 2);
+        await UI.say('雙胞胎：「好厲害！這個送給你！」\n獲得了 2 顆神奇糖果！');
+        Game.save(true);
+      }
       return;
     }
     if (e.kind === 'snorlax') {

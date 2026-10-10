@@ -1688,7 +1688,7 @@ Object.assign(Battle.prototype, {
     if (f.weather) {
       if ((f.weather === 'sandstorm' || f.weather === 'hail') && this.wx()) {
         for (const m of [this.me, this.foe]) {
-          if (!m || m.hp <= 0) continue;
+          if (!m || m.hp <= 0 || (this.residualSkip && this.residualSkip.has(m))) continue;
           const t = this.typesOf(m), a = this.ab(m);
           // 防塵、防塵護目鏡、魔法防守，以及各自天氣的相關特性不受傷害
           const abilityImmune = ['overcoat', 'magic-guard'].includes(a) || this.itm(m) === 'safety-goggles'
@@ -1717,6 +1717,7 @@ Object.assign(Battle.prototype, {
       }
     }
     for (const [m, v, om] of [[this.me, this.vMe, this.foe], [this.foe, this.vFoe, this.me]]) {
+      if (this.residualSkip && this.residualSkip.has(m)) continue; // 雙打：這回合已處理過
       v.flinch = false; v.protect = false; v.endure = false; v.roost = false;
       if (!m || m.hp <= 0) continue;
       const wasOut = v.turnsOut > 0;
