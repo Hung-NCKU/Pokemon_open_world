@@ -1753,6 +1753,21 @@ window.addEventListener('load', () => {
     });
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => b.classList.remove('on'));
   });
+  // B 按鈕：和綠寶石一樣，在野外按住＝奔跑（搭配十字鍵），在選單、戰鬥、對話中＝返回／取消
+  document.querySelectorAll('#touch [data-b]').forEach(b => {
+    let running = false;
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      b.classList.add('on');
+      try { b.setPointerCapture(e.pointerId); } catch { }
+      if (menuMode()) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'x' }));
+      } else { running = true; G.keys.add('Shift'); }
+    });
+    const release = () => { b.classList.remove('on'); if (running) { running = false; G.keys.delete('Shift'); } };
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, release);
+  });
   // 不讓頁面捲動、縮放、長按選單
   document.addEventListener('touchmove', e => { if (!e.target.closest('.modal .body, #choices, input')) e.preventDefault(); }, { passive: false });
   document.addEventListener('contextmenu', e => { if (isTouch()) e.preventDefault(); });

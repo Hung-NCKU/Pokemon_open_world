@@ -211,6 +211,9 @@ const UI = (() => {
     return new Promise(res => {
       const m = document.createElement('div');
       m.className = 'modal input-modal';
+      // 收起對話框與選項：它們的層級比較高，會蓋住輸入框
+      hideDialog();
+      $('choices').classList.add('hidden');
       m.innerHTML = `<div class="body"><p>${U.esc(prompt)}</p><input maxlength="${maxLength || (password ? 32 : 12)}" ${password ? 'type="password" autocomplete="current-password"' : ''} value="${U.esc(def)}"><button class="ok">確定</button>${cancel ? '<button class="back">返回</button>' : ''}</div>`;
       $('game').appendChild(m);
       const inp = m.querySelector('input');
