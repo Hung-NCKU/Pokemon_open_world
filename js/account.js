@@ -30,10 +30,13 @@ const Account = (() => {
   }
   const validName = n => typeof n === 'string' && /^[\p{L}\p{N}_-]{2,12}$/u.test(n);
 
+  // 雲端模式（js/cloud_config.js 有設定時）：帳號與存檔在雲端，本機的存檔只是快取
+  const cloud = () => typeof Cloud !== 'undefined' && Cloud.enabled();
   async function register(name, pw) {
     name = (name || '').trim();
     if (!validName(name)) return { ok: false, error: '帳號名稱要 2～12 個字（中英文、數字、底線）' };
-    if (!pw || pw.length < 4) return { ok: false, error: '密碼至少 4 個字' };
+    if (!pw || pw.length < (cloud() ? 6 : 4)) return { ok: false, error: `密碼至少 ${cloud() ? 6 : 4} 個字` };
+    if (cloud()) return Cloud.register(name, pw);
     const all = accounts();
     if (all[name]) return { ok: false, error: '這個帳號名稱已經有人使用了' };
     const salt = hex(crypto.getRandomValues ? crypto.getRandomValues(new Uint8Array(16)) : new Uint8Array(16).map(() => Math.random() * 256));
@@ -42,22 +45,40 @@ const Account = (() => {
     return { ok: true };
   }
   async function login(name, pw) {
+    if (cloud()) return Cloud.login((name || '').trim(), pw);
     const a = accounts()[(name || '').trim()];
     if (!a || (await hash(pw || '', a.salt)) !== a.hash) return { ok: false, error: '帳號或密碼不正確' };
     current = name.trim();
     store.set(SES_KEY, current);
     return { ok: true };
   }
-  function logout() { current = null; store.remove(SES_KEY); }
-  // 目前帳號的存檔位置
-  const saveKey = () => (current ? SAVE_KEY + '_' + current : SAVE_KEY);
+  function logout() { current = null; store.remove(SES_KEY); if (cloud()) Cloud.logout(); }
+  const who = () => (cloud() ? Cloud.name : current);
+  // 目前帳號的存檔位置（雲端帳號在本機的快取用另一個位置）
+  const saveKey = () => (cloud() ? (Cloud.name ? SAVE_KEY + '_cloud_' + Cloud.name : SAVE_KEY) : current ? SAVE_KEY + '_' + current : SAVE_KEY);
+  // 開啟標題畫面時：雲端的存檔比本機新就下載（以存檔時間 savedAt 比較）
+  async function sync() {
+    if (!cloud() || !Cloud.name) return null;
+    try {
+      const remote = await Cloud.download();
+      if (!remote || !remote.data) return 'none';
+      const localRaw = store.get(saveKey());
+      let localAt = 0;
+      try { localAt = localRaw ? Date.parse(JSON.parse(localRaw).savedAt || 0) || 0 : 0; } catch { }
+      const remoteAt = Date.parse(remote.data.savedAt || remote.updated_at || 0) || 0;
+      if (remoteAt > localAt) { store.set(saveKey(), JSON.stringify(remote.data)); return 'downloaded'; }
+      return 'local';
+    } catch (e) { Telemetry.error('雲端同步失敗：' + e.message, 'cloud'); return 'error'; }
+  }
   const hasSave = name => !!store.get(name ? SAVE_KEY + '_' + name : SAVE_KEY);
 
   // 標題畫面的帳號選單
   async function menu() {
     while (true) {
-      const opts = current ? ['登出', '返回'] : ['登入', '註冊新帳號', '返回'];
-      const c = await UI.choose(opts, { prompt: current ? `目前登入：${current}` : '目前以訪客身分遊玩（存檔只在這台裝置的訪客位置）' });
+      const me = who();
+      const opts = me ? ['登出', '返回'] : ['登入', '註冊新帳號', '返回'];
+      const where = cloud() ? '雲端帳號：電腦、手機、線上版都能用同一個帳號與存檔' : '這台裝置的帳號（還沒有設定雲端）';
+      const c = await UI.choose(opts, { prompt: me ? `目前登入：${me}\n（${where}）` : `目前以訪客身分遊玩。\n（${where}）` });
       const pick = opts[c];
       if (!pick || pick === '返回') { UI.hideDialog(); return; }
       if (pick === '登出') { logout(); await UI.say('已登出，切換回訪客。'); continue; }
@@ -71,20 +92,23 @@ const Account = (() => {
         if (pw !== pw2) { await UI.say('兩次輸入的密碼不一樣。'); continue; }
         const r = await register(name, pw);
         if (!r.ok) { await UI.say(r.error); continue; }
-        await login(name, pw);
-        // 訪客的存檔可以搬進新帳號
-        if (hasSave(null) && !hasSave(current)) {
+        if (!cloud()) await login(name, pw);
+        // 訪客的存檔可以搬進新帳號（雲端帳號會在下次存檔時上傳）
+        if (cloud() && hasSave(null)) {
+          const m = await UI.choose(['搬進新帳號', '不用（從頭開始）'], { prompt: '這台裝置上有訪客的存檔。要把它搬進新帳號嗎？' });
+          if (m === 0) { store.set(saveKey(), store.get(SAVE_KEY)); Cloud.upload(store.get(SAVE_KEY)); }
+        } else if (hasSave(null) && !hasSave(current)) {
           const m = await UI.choose(['搬進新帳號', '不用（從頭開始）'], { prompt: '這台裝置上有訪客的存檔。要把它搬進新帳號嗎？' });
           if (m === 0) { store.set(saveKey(), store.get(SAVE_KEY)); const b = store.get(SAVE_KEY + '_bak'); if (b) store.set(saveKey() + '_bak', b); }
         }
-        await UI.say(`註冊完成！已登入 ${current}。`);
+        await UI.say(`註冊完成！已登入 ${who()}。`);
       } else {
         const r = await login(name, pw);
-        await UI.say(r.ok ? `歡迎回來，${current}！` : r.error);
+        await UI.say(r.ok ? `歡迎回來，${who()}！` : r.error);
       }
       UI.hideDialog();
       return;
     }
   }
-  return { set fastHash(v) { fastHash = v; }, get current() { return current; }, saveKey, register, login, logout, menu, store, accounts };
+  return { sync, set fastHash(v) { fastHash = v; }, get current() { return who(); }, saveKey, register, login, logout, menu, store, accounts };
 })();

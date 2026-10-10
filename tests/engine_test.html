@@ -68,6 +68,8 @@
 <script src="../assets/gen3/interiors.js"></script>
 <script src="../js/fieldmove.js"></script>
 <script src="../js/interior.js"></script>
+<script src="../js/cloud_config.js"></script>
+<script src="../js/cloud.js"></script>
 <script src="../js/account.js"></script>
 <script src="../js/game.js"></script>
 <script>
@@ -1988,6 +1990,59 @@ async function run() {
     await Game.touchEvent(ev);
     check('地上的道具：碰到時先問，選「不要」就不撿、選「撿起來」才撿', skipped && G.state.bag['ancient-tablet'] === 1 && !World.eventAt(ev.x, ev.y));
     UI.choose = keepChoose; UI.say = keepSay;
+    G.state = keep;
+  }
+  // 雲端帳號（Supabase 的 REST API 用假的 fetch 模擬）：註冊、上傳存檔、另一台裝置登入後下載、較新的存檔優先
+  {
+    const keep = G.state, realFetch = window.fetch, keepCfg = window.CLOUD_CONFIG;
+    const users = {}, saves = {};
+    let tokenN = 0;
+    window.CLOUD_CONFIG = { url: 'https://test.supabase.co', anonKey: 'anon' };
+    const reply = (status, obj) => Promise.resolve({ ok: status < 300, status, text: () => Promise.resolve(JSON.stringify(obj)) });
+    window.fetch = (url, opt) => {
+      const u = new URL(url), body = opt.body ? JSON.parse(opt.body) : null;
+      const sess = id => ({ access_token: 'tok' + (++tokenN) + ':' + id, refresh_token: 'r', expires_in: 3600, user: { id } });
+      if (u.pathname === '/auth/v1/signup') {
+        if (users[body.email]) return reply(422, { msg: 'User already registered' });
+        users[body.email] = { pw: body.password, id: 'uid' + Object.keys(users).length };
+        return reply(200, sess(users[body.email].id));
+      }
+      if (u.pathname === '/auth/v1/token') {
+        const usr = users[body.email];
+        return usr && usr.pw === body.password ? reply(200, sess(usr.id)) : reply(400, { error_description: 'Invalid login credentials' });
+      }
+      if (u.pathname === '/rest/v1/saves') {
+        const id = (opt.headers.Authorization || '').split(':')[1];
+        if (opt.method === 'POST') { saves[id] = { data: body.data, updated_at: body.updated_at }; return reply(201, null); }
+        return reply(200, saves[id] ? [saves[id]] : []);
+      }
+      return reply(404, {});
+    };
+    const tick = ms => new Promise(r => setTimeout(r, ms));
+    Account.logout();
+    const r1 = await Account.register('雲端君', 'secret12');
+    const dup = await Account.register('雲端君', 'secret12');
+    check('雲端帳號：註冊後登入，名稱重複會被拒絕', r1.ok && Account.current === '雲端君' && !dup.ok, JSON.stringify(dup));
+    G.state = Game.newState('雲端測試', 'kanto', 4); G.state.party = [Mon.create(4, 5)]; G.state.money = 4321;
+    Game.save(true);
+    await tick(2500);
+    check('雲端帳號：存檔上傳到雲端', Object.values(saves).some(x => x.data.name === '雲端測試' && x.data.money === 4321));
+    // 另一台裝置：沒有本機快取，登入後下載
+    localStorage.removeItem(Account.saveKey());
+    Account.logout();
+    const bad = await Account.login('雲端君', 'wrong');
+    const ok = await Account.login('雲端君', 'secret12');
+    const st = await Account.sync();
+    const got = Game.loadSave();
+    check('雲端帳號：另一台裝置登入後下載同一份存檔', !bad.ok && ok.ok && st === 'downloaded' && got && got.state.money === 4321, st);
+    // 本機比雲端新：保留本機
+    const local = JSON.parse(localStorage.getItem(Account.saveKey()));
+    local.money = 9999; local.savedAt = new Date(Date.now() + 60000).toISOString();
+    localStorage.setItem(Account.saveKey(), JSON.stringify(local));
+    check('雲端帳號：本機的存檔比較新時保留本機', (await Account.sync()) === 'local' && Game.loadSave().state.money === 9999);
+    localStorage.removeItem(Account.saveKey());
+    Account.logout();
+    window.fetch = realFetch; window.CLOUD_CONFIG = keepCfg;
     G.state = keep;
   }
   // 對戰塔（世界配置第 6 版）
