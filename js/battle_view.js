@@ -63,7 +63,8 @@ Object.assign(Battle.prototype, {
     const img = this.el.querySelector(`.bmon.${side} img`);
     const back = side === 'me';
     const s = monSprite(m, back);
-    img.className = '';
+    // 圖片載入、放大定位之前先隱藏（否則會先以原始的小尺寸出現一下）
+    img.className = 'sizing';
     img.style.width = '';
     img.style.bottom = '';
     img.style.top = '';
@@ -73,6 +74,7 @@ Object.assign(Battle.prototype, {
     const P = Gen3.on && GEN3.pic && GEN3.pic[m.sp];
     const place = scale => {
       img.style.width = img.naturalWidth * scale + 'px';
+      requestAnimationFrame(() => img.classList.remove('sizing'));
       this.measureBody(side, img, scale);
       if (P && m.sp <= 386 && scale === 3) {
         const cy = back ? 80 + P[1] : 40 + P[0] - P[2];
@@ -99,7 +101,7 @@ Object.assign(Battle.prototype, {
     img.crossOrigin = 'anonymous';
     img.onload = () => place(s.scale);
     img.onerror = () => {
-      img.onerror = null;
+      img.onerror = () => img.classList.remove('sizing');
       img.src = Mon.spriteOf(m, { back, shiny: m.shiny });
       img.onload = () => place(2);
     };

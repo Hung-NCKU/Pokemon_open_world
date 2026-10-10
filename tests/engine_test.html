@@ -1815,6 +1815,45 @@ async function run() {
     UI.choose = keepChoose; UI.say = keepSay;
     G.state = keep;
   }
+  // 寶可夢聯盟的室內：大廳 → 四天王 ×4 → 冠軍
+  if (window.INTERIORS && INTERIORS.league_e0) {
+    window.INTERIORS_FORCE = true;
+    const keep = G.state, keepChoose = UI.choose, keepSay = UI.say, keepE = Game.eliteBattle, keepC = Game.championBattle;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(6, 60)];
+    World.generate(20261010, 'kanto');
+    UI.choose = async () => 0; UI.say = async () => { };
+    const lb = World.buildings.find(b => b.kind === 'league' && b.town.region === 'kanto');
+    G.state.x = lb.door.x; G.state.y = lb.door.y + 1;
+    const fought = [];
+    Game.eliteBattle = async (t, i) => { fought.push('e' + i); return 'win'; };
+    Game.championBattle = async t => { fought.push('c'); return 'win'; };
+    Interior.enter(lb);
+    const lobby = Interior.room && Interior.room.key;
+    await Interior.tryGoal();
+    const blocked = Interior.room.key === 'league';
+    G.state.badges = { kanto: [0, 1, 2, 3, 4, 5, 6, 7] };
+    await Interior.tryGoal();
+    const keys = [Interior.room.key];
+    const noBack = Interior.room.noBack;
+    await Interior.tryGoal();                  // 還沒打贏，門關著
+    const stillE0 = Interior.room.key === 'league_e0';
+    for (let i = 0; i < 4; i++) {
+      const n = Interior.room.npcs.find(x => x.role === 'elite');
+      Interior.room.x = n.x; Interior.room.y = n.y + 1; Interior.room.dir = 'up';
+      await Interior.interact();
+      await Interior.tryGoal();
+      keys.push(Interior.room.key);
+    }
+    const c = Interior.room.npcs.find(x => x.role === 'champion');
+    Interior.room.x = c.x; Interior.room.y = c.y + 1; Interior.room.dir = 'up';
+    await Interior.interact();
+    check('聯盟室內：大廳沒有 8 枚徽章不能前進', lobby === 'league' && blocked);
+    check('聯盟室內：依序進入四天王的四個房間與冠軍的房間，進去後不能回頭、打贏才開門', keys.join() === 'league_e0,league_e1,league_e2,league_e3,league_champ' && noBack && stillE0, keys.join());
+    check('聯盟室內：依序挑戰四天王與冠軍，打贏冠軍後回到外面', fought.join() === 'e0,e1,e2,e3,c' && !G.room, fought.join());
+    Game.eliteBattle = keepE; Game.championBattle = keepC; UI.choose = keepChoose; UI.say = keepSay;
+    window.INTERIORS_FORCE = false;
+    G.state = keep;
+  }
   // 對戰塔（世界配置第 6 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;

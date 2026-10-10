@@ -34,6 +34,7 @@ const Interior = (() => {
       const lead = LEADERS[b.town.region] && LEADERS[b.town.region][b.town.gym];
       return lead ? GYM_ROOM[lead[1]] || 'gym_rock' : null;
     }
+    if (b.kind === 'league') return 'league';
     return ['center', 'mart', 'house', 'lab', 'house_s'].includes(b.kind) ? b.kind : null;
   }
   // 道館訓練家的類型：第一個擅長館主屬性的訓練家類型
@@ -133,7 +134,62 @@ const Interior = (() => {
   function leave() { room = null; G.room = null; }
 
   const npcAt = (x, y) => room.npcs.find(n => n.x === x && n.y === y);
-  const isExit = (x, y) => room.d.exits.some(([a, b]) => a === x && b === y);
+  // 聯盟的四天王、冠軍房間：進去之後門會關上，打完之前不能回頭（和原作一樣）
+  const isExit = (x, y) => !room.noBack && room.d.exits.some(([a, b]) => a === x && b === y);
+  const isGoal = (x, y) => (room.d.goals || []).some(([a, b]) => a === x && b === y);
+
+  // ---------- 寶可夢聯盟：大廳 → 四天王 ×4 → 冠軍 ----------
+  const CHAMP_LOOK = { hoenn: 'wallace' };
+  function goRoom(key, e4) {
+    const d = INTERIORS[key], b = room.b, t = b.town;
+    const npcs = d.npcs.map((n, i) => ({ ...n, i }));
+    for (const n of npcs) {
+      if (n.role === 'elite') {
+        const e = ELITE_FOUR[t.region] && ELITE_FOUR[t.region][e4];
+        if (t.region !== 'hoenn' && e) n.gfx = LEADER_LOOK[e.type] || 'expert_m';
+      }
+      if (n.role === 'champion' && t.region !== 'hoenn') n.gfx = CHAMP_LOOK[t.region] || 'expert_m';
+      Gen3.ensure('npc_' + n.gfx, `npc_${n.gfx}.png`);
+    }
+    const [ex, ey] = d.exits[0];
+    room = { key, d, b, x: ex, y: ey, dir: 'up', npcs, e4, noBack: true, cleared: false };
+    G.room = room; G.move = null;
+    Gen3.ensure('int_' + key, `int_${key}.png`); Gen3.ensure('int_' + key + '_top', `int_${key}_top.png`);
+    Sound.sfx('door');
+    Telemetry.event('聯盟房間', { key });
+  }
+  // 往前的門：大廳需要 8 枚徽章並確認；四天王與冠軍的房間要先打贏
+  async function tryGoal(tx, ty) {
+    const t = room.b.town, reg = REGIONS[t.region];
+    if (room.key === 'league') {
+      if (Game.badgeCount(t.region) < 8) { await UI.say(`警衛：「要挑戰${reg.n}寶可夢聯盟，必須收集${reg.n}地區的 8 枚徽章。」\n（目前 ${Game.badgeCount(t.region)}／8）`); return; }
+      const e4 = ELITE_FOUR[t.region] || [];
+      const c = await UI.choose(['前進', '還不要'], { prompt: `前面是${e4[0] && e4[0].title ? e4[0].title : '四天王'}的房間。\n進去之後，打完之前就不能回頭了。要前進嗎？` });
+      UI.hideDialog();
+      if (c !== 0) return;
+      return goRoom(e4.length ? 'league_e0' : 'league_champ', 0);
+    }
+    if (!room.cleared) { await UI.say('前面的門關著……先打贏這個房間的訓練家吧。'); return; }
+    if (room.key === 'league_champ') { exit(); return; }
+    const n = room.e4 + 1;
+    return goRoom(n < 4 && INTERIORS['league_e' + n] ? 'league_e' + n : 'league_champ', n);
+  }
+  async function leagueTalk(n) {
+    const t = room.b.town;
+    if (n.role === 'guard') {
+      return UI.say(Game.badgeCount(t.region) < 8 ? `警衛：「只有收集了 8 枚${REGIONS[t.region].n}徽章的訓練家才能前進。」` : '警衛：「四天王在後面等著你。祝你好運！」');
+    }
+    if (room.cleared) return UI.say(n.role === 'champion' ? '「你是真正的冠軍。」' : '「前進吧，前面的門已經打開了。」');
+    if (n.role === 'elite') {
+      const r = await Game.eliteBattle(t, room.e4);
+      if (r === 'win' && G.room === room) { room.cleared = true; Sound.sfx('door'); await UI.say('後面的門打開了！'); }
+      return;
+    }
+    if (n.role === 'champion') {
+      const r = await Game.championBattle(t);
+      if (r === 'win' && G.room === room) { room.cleared = true; exit(); }
+    }
+  }
   function walkable(x, y) {
     const d = room.d;
     if (x < 0 || y < 0 || x >= d.w || y >= d.h) return false;
@@ -164,6 +220,8 @@ const Interior = (() => {
     const tx = room.x + dx, ty = room.y + dy;
     // 站在出口往下走：離開建築
     if (dir === 'down' && isExit(room.x, room.y) && !walkable(tx, ty)) { exit(); G.keys.clear(); return; }
+    // 往前的門：條件不符時不讓走上去
+    if (isGoal(tx, ty) && room.d.goals) { G.keys.clear(); Game.flow(() => tryGoal(tx, ty)); return; }
     if (!walkable(tx, ty)) {
       // 推石頭：主角不動，石頭往前一格（推一次要等一下）
       const bd = boulderAt(tx, ty);
@@ -235,6 +293,7 @@ const Interior = (() => {
 
   async function talk(n) {
     const b = room.b, t = b.town;
+    if (['guard', 'elite', 'champion'].includes(n.role)) return leagueTalk(n);
     if (n.role === 'nurse') return Game.centerHeal(b);
     if (n.role === 'tm') {
       const k = await UI.choose(['製作招式學習器', '查看素材', '取消'], { prompt: '研究員：「這是招式機器。可以用寶可夢的素材製作招式學習器。」' });
@@ -279,5 +338,5 @@ const Interior = (() => {
     if (r === 'win') G.state.defeated[key] = 1;
   }
 
-  return { healAnim, can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
+  return { goRoom, tryGoal, healAnim, can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
 })();

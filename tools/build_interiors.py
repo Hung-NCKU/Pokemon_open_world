@@ -44,6 +44,16 @@ GYMS = {
     "rock": "RustboroCity_Gym", "fighting": "DewfordTown_Gym", "electric": "MauvilleCity_Gym", "fire": "LavaridgeTown_Gym_1F",
     "normal": "PetalburgCity_Gym", "flying": "FortreeCity_Gym", "psychic": "MossdeepCity_Gym", "water": "SootopolisCity_Gym_1F",
 }
+# 寶可夢聯盟：大廳（護士、店員、兩位警衛）→ 四天王的四個房間 → 冠軍的房間
+# 入口是最下面的傳送點，往下一間的門（goals）是最上面的傳送點
+LEAGUE = {
+    "league": ("EverGrandeCity_PokemonLeague_1F", {"NURSE": "nurse", "MART_EMPLOYEE": "clerk", "MAN_3": "guard"}),
+    "league_e0": ("EverGrandeCity_SidneysRoom", {"SIDNEY": "elite"}),
+    "league_e1": ("EverGrandeCity_PhoebesRoom", {"PHOEBE": "elite"}),
+    "league_e2": ("EverGrandeCity_GlaciasRoom", {"GLACIA": "elite"}),
+    "league_e3": ("EverGrandeCity_DrakesRoom", {"DRAKE": "elite"}),
+    "league_champ": ("EverGrandeCity_ChampionsRoom", {"WALLACE": "champion"}),
+}
 # 洞窟解謎（怪力推石頭）：入口是最下面的傳送點，終點是最上面的傳送點，其他傳送點擋住
 CAVES = {"cave_a": "SeafloorCavern_Room8", "cave_b": "SeafloorCavern_Room5", "cave_c": "SeafloorCavern_Room2"}
 LEADER_GFX = {"ROXANNE", "BRAWLY", "WATTSON", "FLANNERY", "NORMAN", "WINONA", "TATE", "LIZA", "JUAN"}
@@ -55,7 +65,7 @@ GFX_FILE = {"NURSE": "nurse", "GENTLEMAN": "gentleman", "BOY_1": "boy_1", "GIRL_
             "GENTLEMAN_2": "gentleman", "MAN_1": "man_1", "WOMAN_2": "woman_2", "TUBER_F": "tuber_f", "TUBER_M": "tuber_m",
             "SWIMMER_F": "swimmer_f", "SWIMMER_M": "swimmer_m", "GIRL_1": "girl_1", "EXPERT_M": "expert_m", "EXPERT_F": "expert_f",
             "HEX_MANIAC": "hex_maniac", "MANIAC": "maniac", "GUITARIST": "man_3", "SCHOOL_KID_M": "school_kid_m", "LADY": "woman_4",
-            "POKEFAN_M": "pokefan_m", "POKEFAN_F": "pokefan_f", "COOK": "cook", "WOMAN_4": "woman_4", "MAN_3": "man_3", "MAN_4": "man_4"}
+            "POKEFAN_M": "pokefan_m", "SIDNEY": "e4_sidney", "PHOEBE": "e4_phoebe", "GLACIA": "e4_glacia", "DRAKE": "e4_drake", "WALLACE": "wallace", "POKEFAN_F": "pokefan_f", "COOK": "cook", "WOMAN_4": "woman_4", "MAN_3": "man_3", "MAN_4": "man_4"}
 DIRS = {"FACE_DOWN": "down", "FACE_UP": "up", "FACE_LEFT": "left", "FACE_RIGHT": "right"}
 
 
@@ -129,6 +139,8 @@ def save_sprite(gfx):
     out = os.path.join(OUT, f"npc_{gfx}.png")
     if gfx.startswith("leader_"):
         src = os.path.join(PEOPLE, "gym_leaders", gfx[7:] + ".png")
+    elif gfx.startswith("e4_"):
+        src = os.path.join(PEOPLE, "elite_four", gfx[3:] + ".png")
     else:
         src = os.path.join(PEOPLE, gfx + ".png")
     if not os.path.exists(src):
@@ -160,6 +172,21 @@ def main():
         data[key] = {"map": map_name, "w": w, "h": h, "coll": "".join(coll), "counter": counter, "pc": pc, "npcs": npcs, "exits": exits}
         print(f"  {key}: {map_name} {w}×{h}，人物 {len(npcs)}，出口 {exits}")
     # 豐緣館主的行走圖（其他地區的館主沒有綠寶石的行走圖，遊戲中依屬性選一般人物）
+    for key, (map_name, keep) in LEAGUE.items():
+        d = json.load(open(os.path.join(EM, "data/maps", map_name, "map.json"), encoding="utf-8"))
+        lid, w, h, bg, top, coll, counter, pc, npcs, exits = room(map_name, keep)
+        top_y = min(wv["y"] for wv in d["warp_events"])
+        goals = [[wv["x"], wv["y"]] for wv in d["warp_events"] if wv["y"] == top_y]
+        for x, y in goals:
+            coll[y * w + x] = "0"
+        for n in npcs:
+            if not save_sprite(n["gfx"]):
+                n["gfx"] = "man_3"
+                save_sprite("man_3")
+        bg.save(os.path.join(OUT, f"int_{key}.png"))
+        top.save(os.path.join(OUT, f"int_{key}_top.png"))
+        data[key] = {"map": map_name, "w": w, "h": h, "coll": "".join(coll), "counter": counter, "pc": pc, "npcs": npcs, "exits": exits, "goals": goals}
+        print(f"  {key}: {map_name} {w}×{h}，人物 {[n['role'] for n in npcs]}，入口 {exits}，往前 {goals}")
     for key, map_name in CAVES.items():
         d = json.load(open(os.path.join(EM, "data/maps", map_name, "map.json"), encoding="utf-8"))
         lid, w, h, bg, top, coll, counter, pc, npcs, exits = room(map_name, {})

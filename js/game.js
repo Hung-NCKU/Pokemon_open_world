@@ -1087,6 +1087,7 @@ const Game = {
     }
   },
 
+  // 寶可夢聯盟：有室內地圖時走進大廳，一間一間挑戰（見 interior.js）；沒有時用連戰的選單
   async leagueChallenge(t) {
     const reg = REGIONS[t.region];
     if (Game.badgeCount(t.region) < 8) {
@@ -1101,21 +1102,29 @@ const Game = {
     if (e4) {
       for (let i = 0; i < e4.length; i++) {
         const e = e4[i];
-        await UI.say(e.title ? `${e.title}：第 ${i + 1} 戰，對手是擅長${TYPES[e.type].n}屬性的${e.name}！` : `四天王 ${e.name}：「我是四天王的${e.name}，擅長${TYPES[e.type].n}屬性。來吧！」`);
-        const ttl = e.title || '四天王';
-        const r = await Game.battle({ trainer: { title: ttl, name: e.name, party: World.eliteParty(t, i), kind: 'gym', ai: 3, money: 150, sprite: e.sprite, lose: e.title ? '……恭喜你晉級。' : '……你通過了。前進吧。' }, biome: 'gym' });
+        const r = await Game.eliteBattle(t, i);
         if (r !== 'win') return;
-        {
-          const last = i === e4.length - 1;
-          while (true) {
-            const n = await UI.choose([last ? '前往冠軍的房間' : '前往下一個房間', '寶可夢', '背包'], { prompt: `打敗了${e.title || '四天王'} ${e.name}！（${i + 1}／${e4.length}）${last ? '\n接下來是冠軍戰，先整頓隊伍吧。' : ''}`, cancel: false });
-            if (n === 0) break;
-            if (n === 1) await Game.partyMenu();
-            if (n === 2) await Game.bagMenu();
-          }
+        const last = i === e4.length - 1;
+        while (true) {
+          const n = await UI.choose([last ? '前往冠軍的房間' : '前往下一個房間', '寶可夢', '背包'], { prompt: `打敗了${e.title || '四天王'} ${e.name}！（${i + 1}／${e4.length}）${last ? '\n接下來是冠軍戰，先整頓隊伍吧。' : ''}`, cancel: false });
+          if (n === 0) break;
+          if (n === 1) await Game.partyMenu();
+          if (n === 2) await Game.bagMenu();
         }
       }
     }
+    await Game.championBattle(t);
+  },
+  // 四天王（伽勒爾是冠軍盃）第 i 位
+  async eliteBattle(t, i) {
+    const e = ELITE_FOUR[t.region][i];
+    await UI.say(e.title ? `${e.title}：第 ${i + 1} 戰，對手是擅長${TYPES[e.type].n}屬性的${e.name}！` : `四天王 ${e.name}：「我是四天王的${e.name}，擅長${TYPES[e.type].n}屬性。來吧！」`);
+    const ttl = e.title || '四天王';
+    return Game.battle({ trainer: { title: ttl, name: e.name, party: World.eliteParty(t, i), kind: 'gym', ai: 3, money: 150, sprite: e.sprite, lose: e.title ? '……恭喜你晉級。' : '……你通過了。前進吧。' }, biome: 'gym' });
+  },
+  // 冠軍戰與名人堂
+  async championBattle(t) {
+    const reg = REGIONS[t.region];
     await UI.say(`${reg.champ}：「歡迎來到${reg.n}寶可夢聯盟的頂點。讓我看看你和寶可夢之間的羈絆吧！」`);
     const party = World.championParty(t);
     const r = await Game.battle({ trainer: { title: '冠軍', name: reg.champ, party, kind: 'champion', dmax: t.region === 'galar', money: 200, sprite: CHAMP_SPRITES[t.region], lose: '恭喜你！你就是新的冠軍！' }, biome: 'gym' });
@@ -1134,6 +1143,7 @@ const Game = {
       }
       Game.save(true);
     }
+    return r;
   },
 
   async battle(opts) {

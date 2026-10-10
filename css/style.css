@@ -269,3 +269,6 @@ body.fast #game::after { content: '▶▶ ×2'; position: absolute; right: 10px;
 .fm-fade { position: absolute; inset: 0; background: #000; z-index: 57; opacity: 0; pointer-events: none; }
 .fm-fly { position: absolute; left: 336px; top: 200px; width: 48px; height: 64px; z-index: 56; pointer-events: none;
   background: radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 70%); }
+
+/* 戰鬥圖載入、放大之前隱藏（battle_view.js setSprite） */
+.bmon img.sizing { visibility: hidden !important; }
