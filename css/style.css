@@ -34,7 +34,10 @@ canvas { display: block; image-rendering: pixelated; }
 .mvbtn i { font-size: 11px; font-style: normal; color: #888; margin-left: 6px; }
 .mvbtn i.good { color: #d03020; } .mvbtn i.bad { color: #4060a0; }
 #choices.side-menu { top: 8px; bottom: auto; right: 8px; }
-#choices.title-menu { bottom: 70px; right: 50%; transform: translateX(50%); min-width: 200px; }
+#choices.title-menu { bottom: 28px; right: 50%; transform: translateX(50%); min-width: 200px; }
+/* 綠寶石樣式的 #choices 預設在文字框上方（bottom: 162px）；標題與側邊選單要蓋掉這個位置（選擇器要比 body.gen3 #choices 更具體） */
+body.gen3 #choices.title-menu { bottom: 26px; top: auto; }
+body.gen3 #choices.side-menu { top: 8px; bottom: auto; max-height: 464px; }
 #choices.title-menu .choice { font-size: 20px; text-align: center; }
 
 .type { display: inline-block; padding: 0 7px; border-radius: 4px; color: #fff; font-size: 12px; line-height: 18px; margin-right: 3px; text-shadow: 0 1px 1px rgba(0,0,0,.4); vertical-align: middle; }
@@ -99,12 +102,18 @@ canvas { display: block; image-rendering: pixelated; }
 #banner.show { opacity: 1; transform: none; }
 
 /* 標題 */
-#title { position: absolute; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 30%, #4a7be0, #1b2a6b 70%, #0b1030); color: #fff; text-align: center; }
+#title { position: absolute; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 38%, #ffffff 0%, #f2f8ff 45%, #d9e9fb 80%, #c4d8f2 100%); color: #26407a; text-align: center; overflow: hidden; }
+#title::before { content: ''; position: absolute; left: -10%; right: -10%; top: 44%; height: 120px; background: linear-gradient(90deg, rgba(76,200,244,.18), rgba(90,79,214,.14), rgba(236,10,70,.16)); filter: blur(30px); }
+#title .logo-img, #title .logo-svg { position: relative; display: block; margin: 14px auto 0; width: 600px; height: 270px; object-fit: contain; }
+.lg-poke { font: 900 128px "Arial Black", "Segoe UI Black", sans-serif; fill: #ffcb05; stroke: #2b5aa8; stroke-width: 18px; stroke-linejoin: round; paint-order: stroke; letter-spacing: -2px; }
+.lg-world { font: 900 196px Impact, "Arial Black", sans-serif; fill: url(#lg-world); stroke: #fff; stroke-width: 14px; stroke-linejoin: round; paint-order: stroke; }
+.lg-world-shine { font: 900 196px Impact, "Arial Black", sans-serif; fill: url(#lg-shine); }
+.lg-sub { font: 900 54px "Arial Black", "Segoe UI Black", sans-serif; fill: url(#lg-world); stroke: #fff; stroke-width: 8px; paint-order: stroke; }
 #title .logo { margin-top: 90px; font-size: 64px; font-weight: 900; color: #ffcb05; letter-spacing: 6px;
   text-shadow: 0 0 0 #2a75bb, 3px 3px 0 #2a75bb, -3px -3px 0 #2a75bb, 3px -3px 0 #2a75bb, -3px 3px 0 #2a75bb, 0 8px 12px rgba(0,0,0,.5); }
 #title .logo span { display: block; font-size: 28px; color: #fff; letter-spacing: 12px; text-shadow: 0 3px 6px rgba(0,0,0,.6); }
-#title .sub { margin-top: 12px; opacity: .85; }
-#title .note { position: absolute; bottom: 8px; left: 0; right: 0; font-size: 10px; opacity: .55; padding: 0 20px; }
+#title .sub { position: relative; margin-top: 0; font-size: 15px; font-weight: bold; letter-spacing: 2px; color: #35508f; }
+#title .note { position: absolute; bottom: 6px; left: 0; right: 0; font-size: 10px; opacity: .6; padding: 0 20px; color: #35508f; }
 #title .err { margin-top: 200px; font-size: 18px; color: #ffd; }
 
 /* 戰鬥 */

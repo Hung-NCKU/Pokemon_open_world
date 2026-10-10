@@ -15,7 +15,39 @@
     <canvas id="world" width="720" height="480"></canvas>
     <div id="battle" class="hidden"></div>
     <div id="title">
-      <div class="logo">寶可夢<span>開放世界</span></div>
+      <!-- 標題標誌：assets/title_logo.png 存在時使用該圖，否則用下面的 SVG -->
+      <img class="logo-img" src="assets/title_logo.png" alt="" onload="this.nextElementSibling.remove()" onerror="this.remove()">
+      <svg class="logo-svg" viewBox="0 0 960 430" aria-label="Pokémon THE WORLD OPEN-WORLD GAME">
+        <defs>
+          <linearGradient id="lg-world" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0" stop-color="#4cc8f4"/><stop offset=".3" stop-color="#1e8ee6"/><stop offset=".55" stop-color="#5a4fd6"/>
+            <stop offset=".78" stop-color="#b0359e"/><stop offset="1" stop-color="#ec0a46"/>
+          </linearGradient>
+          <linearGradient id="lg-shine" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <radialGradient id="lg-glow"><stop offset="0" stop-color="#bff0ff"/><stop offset="1" stop-color="#bff0ff" stop-opacity="0"/></radialGradient>
+        </defs>
+        <!-- 光束 -->
+        <polygon points="100,170 900,163 900,167 100,176" fill="url(#lg-world)"/>
+        <!-- 精靈球星芒 -->
+        <circle cx="230" cy="168" r="70" fill="url(#lg-glow)"/>
+        <g fill="#3fb6ee">
+          <polygon points="230,70 240,140 230,150 220,140"/><polygon points="230,266 240,196 230,186 220,196"/>
+          <polygon points="150,120 205,158 200,170"/><polygon points="310,120 255,158 260,170"/>
+          <polygon points="160,215 205,180 200,170"/><polygon points="300,215 255,180 260,170"/>
+        </g>
+        <circle cx="230" cy="168" r="30" fill="#fff" stroke="#2a8fe0" stroke-width="7"/>
+        <line x1="203" y1="168" x2="257" y2="168" stroke="#2a8fe0" stroke-width="7"/>
+        <circle cx="230" cy="168" r="10" fill="#fff" stroke="#2a8fe0" stroke-width="6"/>
+        <!-- Pokémon -->
+        <text x="600" y="140" text-anchor="middle" transform="rotate(-4 600 110)" class="lg-poke">Pokémon</text>
+        <!-- THE WORLD -->
+        <text x="480" y="330" text-anchor="middle" class="lg-world" textLength="860" lengthAdjust="spacingAndGlyphs">THE WORLD</text>
+        <text x="480" y="330" text-anchor="middle" class="lg-world-shine" textLength="860" lengthAdjust="spacingAndGlyphs">THE WORLD</text>
+        <!-- OPEN-WORLD GAME -->
+        <text x="480" y="405" text-anchor="middle" class="lg-sub" textLength="620" lengthAdjust="spacing">OPEN-WORLD GAME</text>
+      </svg>
       <div class="sub">九大地區・全 1025 種寶可夢</div>
       <div class="note">非營利同人研究作品。寶可夢相關名稱與圖像版權屬於任天堂／Creatures／GAME FREAK／The Pokémon Company。</div>
     </div>

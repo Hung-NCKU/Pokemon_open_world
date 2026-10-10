@@ -76,6 +76,15 @@ const UI = (() => {
     });
   }
 
+  // 讓選到的項目留在可見範圍內（只捲動清單本身；scrollIntoView 會連 #game 一起捲動，讓整個畫面錯位）
+  function keepVisible(box, el) {
+    if (!el || box.scrollHeight <= box.clientHeight) return;
+    const c = box.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const top = c.top + box.clientTop, bottom = top + box.clientHeight;
+    if (r.top < top) box.scrollTop -= top - r.top;
+    else if (r.bottom > bottom) box.scrollTop += r.bottom - bottom;
+  }
+
   // 選項選單：回傳索引；取消回傳 -1
   function choose(options, { prompt = null, cancel = true, cols = 1, start = 0, cls = '', onFocus = null, onKey: customKey = null } = {}) {
     return new Promise(res => {
@@ -102,8 +111,11 @@ const UI = (() => {
       });
       const upd = () => {
         els.forEach((e, i) => e.classList.toggle('sel', i === idx));
+        keepVisible(box, els[idx]);
         if (onFocus) info.innerHTML = onFocus(idx) || '';
       };
+      box.scrollTop = 0;
+      box.classList.remove('hidden');
       upd();
       const close = v => {
         pop(); box.classList.add('hidden'); box.innerHTML = '';
@@ -153,7 +165,7 @@ const UI = (() => {
       if (!rows.length) body.innerHTML = '<div class="empty">（空空如也）</div>';
       const upd = (scroll = true) => {
         els.forEach((e, i) => e.classList.toggle('sel', i === idx));
-        if (scroll && els[idx]) els[idx].scrollIntoView({ block: 'nearest' });
+        if (scroll && els[idx]) keepVisible(body, els[idx]);
         if (onFocus) onFocus(idx, m);
       };
       $('game').appendChild(m);
