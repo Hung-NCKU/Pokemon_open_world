@@ -107,24 +107,28 @@ const OverworldMons = (() => {
   function draw(g, w, ox, oy) {
     const k = U.clamp((performance.now() - (w.moved || 0)) / 300, 0, 1);
     const x = (w.px + (w.x - w.px) * k) * TILE - ox, y = (w.py + (w.y - w.py) * k) * TILE - oy;
-    const e = icon(w.mon.sp), frame = (G.frame >> 4) % 2;
+    drawIcon(g, w.mon.sp, x, y);
+    if (w.seen && w.mood === 'curious') { g.fillStyle = '#f8f8f8'; g.font = 'bold 22px sans-serif'; g.fillText('!', x + TILE / 2 - 3, y - 10); }
+  }
+  // 地圖上的寶可夢小圖示（野生、傳說、卡比獸共用）；x, y 為格子左上角的畫面座標
+  function drawIcon(g, sp, x, y) {
+    const e = icon(sp), frame = (G.frame >> 4) % 2;
     g.imageSmoothingEnabled = false;
     g.fillStyle = 'rgba(0,0,0,.22)';
     g.beginPath(); g.ellipse(x + TILE / 2, y + TILE - 6, 14, 5, 0, 0, Math.PI * 2); g.fill();
     if (e.sheet) {
       if (!sheet) { sheet = new Image(); sheet.src = Gen3.base + 'mon_icons.png'; }
       if (sheet.complete && sheet.naturalWidth) {
-        const k2 = w.mon.sp - 1;
+        const k2 = sp - 1;
         g.drawImage(sheet, (k2 % 32) * 32, Math.floor(k2 / 32) * 64 + frame * 32, 32, 32, x, y - 6 - frame * 2, TILE, TILE);
       }
     } else if (e.img.complete && e.img.naturalWidth) {
       const s = TILE / Math.max(e.img.naturalWidth, e.img.naturalHeight) * 1.2;
       g.drawImage(e.img, x + (TILE - e.img.naturalWidth * s) / 2, y + TILE - e.img.naturalHeight * s - 2 - frame * 2, e.img.naturalWidth * s, e.img.naturalHeight * s);
     }
-    if (w.seen && w.mood === 'curious') { g.fillStyle = '#f8f8f8'; g.font = 'bold 22px sans-serif'; g.fillText('!', x + TILE / 2 - 3, y - 10); }
   }
   return {
-    update, draw, touch, at,
+    update, draw, drawIcon, touch, at,
     get list() { return list; },
     clear() { list = []; },
     // 測試用

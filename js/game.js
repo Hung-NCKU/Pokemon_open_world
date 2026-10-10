@@ -1051,6 +1051,7 @@ const Game = {
     if (BLOCKED.has(t) || t === T.DOOR) return false;
     if (World.trainers.has(x + ',' + y)) return false;
     if (World.legendAt && World.legendAt(x, y)) return false;
+    if (World.eventAt && World.eventAt(x, y)) return false;
     if (t === T.WATER || t === T.DEEP) return G.state.surf || Game.canSurf();
     return true;
   },
@@ -1065,6 +1066,8 @@ const Game = {
     if (lm) return Story.landmark(lm);
     const lg = World.legendAt && World.legendAt(fx, fy);
     if (lg) return Story.legend(lg);
+    const ev = World.eventAt && World.eventAt(fx, fy);
+    if (ev) return Story.eventEntity(ev);
     const tr = World.trainers.get(fx + ',' + fy);
     if (tr) {
       if (s.defeated[tr.x + ',' + tr.y]) {
@@ -1109,6 +1112,8 @@ const Game = {
     if (World.landmarks && World.landmarks.has(tx + ',' + ty)) { Sound.sfx('door'); Game.flow(() => Story.landmark(World.landmarks.get(tx + ',' + ty))); G.keys.clear(); return; }
     const lg = World.legendAt && World.legendAt(tx, ty);
     if (lg) { Game.flow(() => Story.legend(lg)); G.keys.clear(); return; }
+    const ev = World.eventAt && World.eventAt(tx, ty);
+    if (ev) { Game.flow(() => Story.eventEntity(ev)); G.keys.clear(); return; }
     const ow = typeof OverworldMons !== 'undefined' && OverworldMons.at(tx, ty);
     if (ow) { OverworldMons.touch(ow); return; }
     if (!Game.walkable(tx, ty)) return;
@@ -1151,6 +1156,8 @@ const Game = {
       if (tr) people.push({ y: y * TILE, tr });
       const lg = World.legendAt && World.legendAt(x, y);
       if (lg) people.push({ y: y * TILE, lg });
+      const ev = World.eventAt && World.eventAt(x, y);
+      if (ev) people.push({ y: y * TILE, ev });
     }
     if (typeof OverworldMons !== 'undefined') for (const w of OverworldMons.list) people.push({ y: w.y * TILE, ow: w });
     people.push({ y: py, player: true });
@@ -1165,6 +1172,7 @@ const Game = {
       }
       if (p.lg) { Game.drawLegend(g, p.lg, p.lg.x * TILE - ox, p.lg.y * TILE - oy); continue; }
       if (p.ow) { OverworldMons.draw(g, p.ow, ox, oy); continue; }
+      if (p.ev) { Game.drawEvent(g, p.ev, p.ev.x * TILE - ox, p.ev.y * TILE - oy); continue; }
       const tr = p.tr;
       const names = Gen3.on ? GEN3.trainers : [];
       const sheet = names.length ? 'npc_' + names[tr.cls % names.length] : null;
@@ -1181,25 +1189,8 @@ const Game = {
     if (G.flash) { g.fillStyle = (G.frame >> 2) % 2 ? '#000' : '#fff'; g.fillRect(0, 0, cv.width, cv.height); }
   },
 
-  // 地圖上的傳說寶可夢：正面圖約 96px，腳底對齊格子下緣，緩慢上下浮動
-  legendImg: new Map(),
-  drawLegend(g, l, x, y) {
-    let img = Game.legendImg.get(l.sp);
-    if (!img) {
-      img = new Image();
-      const s = monSprite({ sp: l.sp }, false);
-      img.onerror = () => { img.onerror = null; img.src = Mon.sprite(l.sp, {}); };
-      img.src = s.url.replace(/animated\/(.*)\.gif$/, '$1.png');
-      Game.legendImg.set(l.sp, img);
-    }
-    if (!img.complete || !img.naturalWidth) return;
-    const w = 96, h = img.naturalHeight * w / img.naturalWidth;
-    const bob = Math.round(Math.sin(G.frame / 20) * 3);
-    g.fillStyle = 'rgba(0,0,0,.25)';
-    g.beginPath(); g.ellipse(x + TILE / 2, y + TILE - 4, 20, 6, 0, 0, Math.PI * 2); g.fill();
-    g.imageSmoothingEnabled = false;
-    g.drawImage(img, x + (TILE - w) / 2, y + TILE - h + 8 + bob, w, h);
-  },
+  // 地圖上的傳說／幻之寶可夢：和野生寶可夢一樣用小圖示（2 格動畫）
+  drawLegend(g, l, x, y) { OverworldMons.drawIcon(g, l.sp, x, y); },
 
   // 從遊戲中返回標題畫面（在目前的流程結束後才切換）
   toTitle() {
@@ -1211,6 +1202,23 @@ const Game = {
     cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
     const wait = () => (G.busy ? setTimeout(wait, 30) : Game.title());
     setTimeout(wait, 0);
+  },
+
+  // 事件實體：卡比獸（正面圖，睡著的 Z）、古代石板（靠近 6 格內才會閃光）
+  drawEvent(g, e, x, y) {
+    if (e.kind === 'snorlax') {
+      Game.drawLegend(g, { sp: 143 }, x, y);
+      g.fillStyle = '#f8f8f8'; g.font = 'bold 18px sans-serif';
+      const z = (G.frame >> 5) % 3;
+      g.fillText('z'.repeat(z + 1), x + TILE - 6, y - 6 - z * 4);
+      return;
+    }
+    const s = G.state;
+    if (Math.abs(e.x - s.x) + Math.abs(e.y - s.y) > 6) return;
+    const k = (G.frame >> 3) % 4;
+    g.fillStyle = k % 2 ? '#fff8c0' : '#ffffff';
+    const cx = x + TILE / 2, cy = y + TILE / 2, r = 6 + k * 2;
+    g.fillRect(cx - 1, cy - r, 3, r * 2); g.fillRect(cx - r, cy - 1, r * 2, 3);
   },
 
   // ---------- 標題 / 新遊戲 ----------

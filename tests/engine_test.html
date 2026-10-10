@@ -33,6 +33,7 @@
 <script src="../js/ecology.js"></script>
 <script src="../js/overworld_mons.js"></script>
 <script src="../js/story.js"></script>
+<script src="../js/events.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/bagui.js"></script>
 <script src="../js/menus.js"></script>
@@ -441,7 +442,7 @@ async function run() {
     const brockTown = kt.find(t => t.gym === 0);
     check('關都城鎮使用原作名稱', brockTown.name === '深灰市' && kt.find(t => t.kind === 'league').name === '石英高原');
     const lms = [...World.landmarks.values()];
-    check('關都 5 個地標都有放置', lms.length === 5, lms.map(l => l.n).join('、'));
+    check('關都的地標全部都有放置', lms.length === LANDMARKS.kanto.length, lms.map(l => l.n).join('、'));
     // 從真新鎮出發，地標入口（陸上：入口下方；海上：可衝浪）都要能到達
     const h = World.homeTown, sx = h.x + 1, sy = h.y + 5;
     const seen = new Uint8Array(WW * WH), q = [[sx, sy]];
@@ -662,6 +663,40 @@ async function run() {
     check('碰到地圖上的寶可夢會開始戰鬥，之後從地圖消失', fought === cur.mon && !OverworldMons.list.includes(cur));
     Game.battle = realBattle;
     OverworldMons.clear();
+    G.state = keep;
+  }
+  // 關都支線：火箭隊、寶可夢塔、卡比獸、古代石板
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party.push(Mon.create(4, 60));
+    const evs = [...World.events.values()];
+    const sn = evs.filter(e => e.kind === 'snorlax'), tb = evs.filter(e => e.kind === 'tablet');
+    check('關都有 2 隻擋路的卡比獸（都在道路上）', sn.length === 2 && sn.every(e => World.tile(e.x, e.y) === T.PATH), String(sn.length));
+    check('卡比獸擋住的地方都有路可以繞過', sn.every(e => World.detourExists(e.x, e.y)));
+    check('關都散落 5 片古代石板', tb.length === 5 && tb.every(e => World.regionAt(e.x, e.y) === 'kanto'));
+    check('卡比獸擋住去路', sn.length && !Game.walkable(sn[0].x, sn[0].y));
+    const realBattle = Game.battle; let fights = [];
+    Game.battle = async o => { fights.push(o); return 'win'; };
+    await Story.eventEntity(sn[0]);
+    check('沒有寶可夢之笛時叫不醒卡比獸', !fights.length && World.eventAt(sn[0].x, sn[0].y));
+    const lms = [...World.landmarks.values()];
+    const rocket = lms.find(l => l.id === 'rockethideout'), tower = lms.find(l => l.id === 'pokemontower');
+    check('火箭隊秘密基地與寶可夢塔在地圖上', rocket && tower);
+    await Story.tower(tower);
+    check('沒有西爾佛檢視鏡時進不了寶可夢塔', !fights.length && !G.state.flags.tower_done);
+    await Story.rocket(rocket);
+    check('不到 3 枚徽章進不了秘密基地', !fights.length);
+    G.state.badges.kanto = [0, 1, 2];
+    await Story.rocket(rocket);
+    check('秘密基地：3 個手下＋坂木，獲得西爾佛檢視鏡', fights.length === 4 && fights[3].trainer.name === '坂木' && G.state.bag['silph-scope'] === 1);
+    await Story.tower(tower);
+    check('寶可夢塔：打倒嘎啦嘎啦後獲得寶可夢之笛', fights[4] && fights[4].wild.sp === 105 && G.state.bag['poke-flute'] === 1);
+    await Story.eventEntity(sn[0]);
+    check('用寶可夢之笛叫醒卡比獸並戰鬥，之後道路暢通', fights[5] && fights[5].wild.sp === 143 && !World.eventAt(sn[0].x, sn[0].y));
+    for (const e of tb) await Story.eventEntity(e);
+    check('集齊 5 片古代石板：解讀出夢幻的所在', G.state.bag['ancient-tablet'] === 5 && G.state.flags.mewhint === 1);
+    check('任務摘要列出支線進度', /火箭隊/.test(Story.questSummary(G.state)) && /古代石板/.test(Story.questSummary(G.state)));
+    Game.battle = realBattle;
     G.state = keep;
   }
   // 地點專屬生態
