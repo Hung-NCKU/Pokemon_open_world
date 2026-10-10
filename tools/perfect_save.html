@@ -70,8 +70,20 @@ window.addEventListener('load', () => setTimeout(() => {
       m.hp = Mon.maxHp(m);
       return m;
     };
-    const team = [[6, 'life-orb'], [9, 'leftovers'], [3, 'sitrus-berry'], [149, 'choice-band'], [445, 'focus-sash'], [25, 'light-ball']];
-    st.party = team.map(([sp, it]) => { const m = make(sp, 100); m.item = ITEMS[it] ? it : null; return m; });
+    // 隊伍：展示特殊能力（噴火龍攜帶超級石、水箭龜攜帶水Ｚ），招式用威力高、屬性分散的升級招式
+    const team = [[6, 'charizardite-x'], [9, 'waterium-z'], [3, 'leftovers'], [149, 'lum-berry'], [445, 'focus-sash'], [25, 'light-ball']];
+    const bestMoves = sp => {
+      const learn = [...new Set(POKEDEX[sp].l.filter(([lv]) => lv <= 100).map(([, id]) => id))].filter(id => MOVES[id] && md(id).support === 'full');
+      const atk = learn.filter(id => md(id).cat !== 'Status' && md(id).bp > 0 && !md(id).self?.volatileStatus)
+        .sort((a, b) => (md(b).bp * (POKEDEX[sp].t.includes(md(b).type) ? 1.5 : 1)) - (md(a).bp * (POKEDEX[sp].t.includes(md(a).type) ? 1.5 : 1)));
+      const pick = [], types = new Set();
+      for (const id of atk) { if (pick.length >= 3) break; if (!types.has(md(id).type)) { pick.push(id); types.add(md(id).type); } }
+      const st = learn.find(id => ['swordsdance', 'dragondance', 'calmmind', 'nastyplot', 'bulkup', 'quiverdance', 'shellsmash', 'agility', 'recover', 'roost'].includes(md(id).id));
+      if (st) pick.push(st);
+      for (const id of atk) { if (pick.length >= 4) break; if (!pick.includes(id)) pick.push(id); }
+      return pick.slice(0, 4).map(id => ({ id, pp: MOVES[id].pp }));
+    };
+    st.party = team.map(([sp, it]) => { const m = make(sp, 100); m.item = ITEMS[it] ? it : null; const mv = bestMoves(sp); if (mv.length) m.moves = mv; return m; });
     const inParty = new Set(team.map(t => t[0]));
     const ids = Object.keys(POKEDEX).map(Number).sort((a, b) => a - b);
     st.box = ids.filter(id => !inParty.has(id)).map(id => make(id, 50));

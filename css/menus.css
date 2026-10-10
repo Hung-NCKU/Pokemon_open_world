@@ -42,7 +42,8 @@
 #party .ptag, #party .pdesc { position: absolute; font-size: 18px; color: #f8f8a0; }
 #party .main .ptag, #party .main .pdesc { left: 150px; top: 56px; }
 #party .wide .ptag, #party .wide .pdesc { left: 180px; top: 36px; }
-#party .pitem { position: absolute; width: 18px; height: 18px; background: #f8f8f8; border: 3px solid #e05050; border-radius: 3px; }
+/* 攜帶道具的小圖示（graphics/party_menu/hold_icons.png 的上半） */
+#party .pitem { position: absolute; width: 24px; height: 24px; background: url("../assets/gen3/party_hold.png") 0 0 / 24px 48px; image-rendering: pixelated; }
 #party .main .pitem { left: 54px; top: 90px; }
 #party .wide .pitem { left: 30px; top: 42px; }
 #party .pmsg { position: absolute; left: 12px; top: 402px; width: 522px; height: 66px; padding: 0 18px; box-sizing: border-box; font-size: 24px; line-height: 54px;
@@ -130,3 +131,8 @@
 #picnic .pc-mon.happy { animation: pcjump .5s ease-in-out 4; }
 @keyframes pcbob { 50% { transform: translateY(-6px); } }
 @keyframes pcjump { 50% { transform: translateY(-24px); } }
+
+/* 任務面板 */
+.quest-panel { font-size: 18px; line-height: 28px; max-height: 400px; overflow-y: auto; }
+.quest-panel h3 { margin: 0 0 6px; }
+.quest-panel p { margin: 0 0 6px; }

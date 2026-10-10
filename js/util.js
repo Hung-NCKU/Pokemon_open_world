@@ -8,7 +8,8 @@ const U = {
   pick(arr) { return arr[Math.floor(U.rand() * arr.length)]; },
   chance(p) { return U.rand() < p; },
   clamp(v, a, b) { return v < a ? a : v > b ? b : v; },
-  sleep(ms) { return new Promise(r => setTimeout(r, ms)); },
+  // 按住 Space 時（G.fast）等待時間減半
+  sleep(ms) { return new Promise(r => setTimeout(r, typeof G !== 'undefined' && G.fast ? ms / 2 : ms)); },
   weighted(list, rnd = U.rand) {
     let t = 0;
     for (const e of list) t += e.w;

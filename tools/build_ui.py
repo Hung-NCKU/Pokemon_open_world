@@ -130,6 +130,7 @@ def build_party():
         row[off] = pal[pid]
     blit("slot_wide_empty.bin", 18, 3, row).save(os.path.join(OUT, "party_wide_empty.png"))
     png_rgba(os.path.join(P, "pokeball.png")).save(os.path.join(OUT, "party_ball.png"))
+    png_rgba(os.path.join(P, "hold_icons.png")).save(os.path.join(OUT, "party_hold.png"))  # 攜帶道具（上）、信件（下）
     return True
 
 

@@ -307,7 +307,7 @@ def build_battle():
     tb.crop((0, 112, 240, 160)).save(os.path.join(OUT, "ui_textbox.png"))
     tb.crop((0, 272, 240, 320)).save(os.path.join(OUT, "ui_actionbox.png"))
     tb.crop((0, 432, 240, 480)).save(os.path.join(OUT, "ui_movebox.png"))
-    for f in ["healthbox_singles_player", "healthbox_singles_opponent", "hpbar", "expbar", "status", "ball_display", "ball_status_bar"]:
+    for f in ["healthbox_singles_player", "healthbox_singles_opponent", "hpbar", "expbar", "status", "ball_display", "ball_status_bar", "ball_caught_indicator"]:
         p = os.path.join(I, f + ".png")
         if os.path.exists(p):
             png_rgba(p).save(os.path.join(OUT, f"ui_{f}.png"))
@@ -468,6 +468,8 @@ def main():
     man["pic"] = build_pic_coords()
     print("背包...")
     man["itemIcons"] = build_bag()
+    from build_item_icons import build as build_item_icons
+    man["itemIconsExt"] = build_item_icons()
     print("圖鑑、訓練家卡片、隊伍畫面...")
     from build_ui import build_all
     man["ui"] = build_all()

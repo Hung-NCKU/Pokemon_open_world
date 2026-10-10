@@ -4,6 +4,7 @@ const VW = 15, VH = 10;
 
 const G = {
   mode: 'title',
+  fast: false, // 按住 Space 時為二倍速
   state: null,
   get party() { return this.state.party; },
   busy: false,
@@ -298,6 +299,8 @@ const Game = {
     const it = ITEMS[id];
     const name = Mon.name(m);
     const max = Mon.maxHp(m);
+    // 使用回復道具的音效（原作的 SE_USE_ITEM），血條回復時再播回復音
+    if (['heal', 'cure', 'revive', 'pp', 'full'].includes(it.kind)) Sound.sfx('use_item');
     if (it.kind === 'heal') {
       const h = Math.min(it.hp, max - m.hp);
       m.hp += h;
@@ -786,7 +789,7 @@ const Game = {
       if (c === '圖鑑') await Game.dexMenu();
       if (c === '背包') await Game.bagMenu();
       if (c === '野餐') { await Picnic.open(); return; }
-      if (c === '任務') await UI.say(Story.questSummary(G.state));
+      if (c === '任務') await UI.panel(`<div class="quest-panel"><h3>任務與進度</h3>${Story.questSummary(G.state).split('\n').map(l => `<p>${U.esc(l)}</p>`).join('')}</div>`);
       if (c === '地圖') { await Game.mapMenu(); return; }
       if (c === '訓練家卡片') await Game.trainerCard();
       if (c === '存檔') {
@@ -1184,6 +1187,19 @@ const Game = {
     }
   },
 
+  // ---------- 二倍速（按住 Space） ----------
+  setFast(on) {
+    if (G.fast === on) return;
+    G.fast = on;
+    document.body.classList.toggle('fast', on);
+    if (on) Game.speedAnims();
+    else for (const a of document.getAnimations()) if (a._fast) { a.playbackRate = 1; a._fast = false; }
+  },
+  // 畫面上的動畫（戰鬥特效、捕捉、送出寶可夢……）也加速
+  speedAnims() {
+    for (const a of document.getAnimations()) if (!a._fast && a.playbackRate < 2) { a.playbackRate = 2; a._fast = true; }
+  },
+
   // ---------- 主迴圈 ----------
   update(dt) {
     if (G.mode !== 'world') return;
@@ -1196,7 +1212,7 @@ const Game = {
     if (ch && !ch.classList.contains('hidden')) { ch.classList.add('hidden'); ch.innerHTML = ''; }
     const s = G.state;
     if (G.move) {
-      G.move.t += dt;
+      G.move.t += G.fast ? dt * 2 : dt;
       if (G.move.t >= G.move.dur) {
         s.x = G.move.tx; s.y = G.move.ty;
         G.move = null;
@@ -1422,7 +1438,7 @@ const Game = {
     Game.start(st, true);
     await UI.say(`${reg.prof}：「${POKEDEX[starter].n} 和你看起來很合得來呢！」`);
     await UI.say(`${reg.prof}：「這個世界很廣闊。往遠處走，寶可夢會越來越強。收集各地區的徽章、挑戰聯盟，並且完成這本圖鑑吧！」`);
-    await UI.say('（操作：方向鍵／WASD 移動，Shift 跑步，Z／Enter 調查，X／Esc 選單，M 地圖）');
+    await UI.say('（操作：方向鍵／WASD 移動，Shift 跑步，Z／Enter 調查，X／Esc 選單，M 地圖，按住 Space 二倍速）');
     UI.hideDialog();
     Game.save(true);
   },
@@ -1478,6 +1494,8 @@ window.addEventListener('load', () => {
   window.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+    // 按住 Space：二倍速（不當作確認鍵）
+    if (e.key === ' ') { Game.setFast(true); return; }
     Sound.init();
     if (UI.handleKey(e)) { G.keys.clear(); return; }
     G.keys.add(e.key);
@@ -1488,8 +1506,13 @@ window.addEventListener('load', () => {
   });
   // 點擊／觸控也能解除瀏覽器的音訊限制
   window.addEventListener('pointerdown', () => Sound.init(), true);
-  window.addEventListener('keyup', e => { G.keys.delete(e.key); G.keys.delete(e.key.toLowerCase()); G.keys.delete(e.key.toUpperCase()); });
-  window.addEventListener('blur', () => G.keys.clear());
+  window.addEventListener('keyup', e => { if (e.key === ' ') Game.setFast(false); G.keys.delete(e.key); G.keys.delete(e.key.toLowerCase()); G.keys.delete(e.key.toUpperCase()); });
+  window.addEventListener('blur', () => { G.keys.clear(); Game.setFast(false); });
+  // 觸控：按住 ▶▶ 按鈕二倍速
+  document.querySelectorAll('#touch [data-fast]').forEach(b => {
+    b.addEventListener('pointerdown', e => { e.preventDefault(); Game.setFast(true); });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => Game.setFast(false));
+  });
 
   // 觸控方向鍵
   document.querySelectorAll('#touch [data-dir]').forEach(b => {
@@ -1510,6 +1533,7 @@ window.addEventListener('load', () => {
   const loop = now => {
     const dt = Math.min(100, now - last); last = now;
     G.frame++;
+    if (G.fast) Game.speedAnims();
     Game.update(dt);
     Game.render();
     requestAnimationFrame(loop);

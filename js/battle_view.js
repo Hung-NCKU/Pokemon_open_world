@@ -268,6 +268,7 @@ Object.assign(Battle.prototype, {
     await U.sleep(520);
   },
   async healMon(m, h) {
+    if (h > 0 && m.hp < Mon.maxHp(m)) Sound.sfx('m_moonlight'); // 回復 HP 的音效
     m.hp = Math.min(Mon.maxHp(m), m.hp + h);
     this.draw();
     await U.sleep(520);

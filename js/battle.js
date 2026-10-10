@@ -91,43 +91,42 @@ class Battle {
         const mark = id => ({ full: '', partial: '＊', none: '✕' }[md(id).support]);
         const opts = me.moves.map(s => ({ label: MOVES[s.id].n + mark(s.id), disabled: s.pp <= 0 || !!this.moveBlocked(me, this.vMe, s.id) }));
         while (opts.length < 4) opts.push({ label: '－', disabled: true });
+        // 招式資訊：PP、屬性；無法使用時說明原因；極巨化中顯示極巨招式
         const info = i => {
           const s = me.moves[i];
           if (!s) return '';
           const m = md(s.id);
-          return `PP　${s.pp}/${m.pp || MOVES[s.id].pp}<br>類型/${(TYPES[m.type] || TYPES.unknown).n}`;
+          const why = this.moveBlocked(me, this.vMe, s.id);
+          const maxName = me._dmax ? (m.cat === 'Status' ? (MAX_MOVES.guard || {}).n : (MAX_MOVES[m.type] || {}).n) : '';
+          return `PP　${s.pp}/${m.pp || MOVES[s.id].pp}<br>類型/${(TYPES[m.type] || TYPES.unknown).n}`
+            + (why ? `<br><span class="mv-why">因${U.esc(why)}無法使用</span>` : '') + (maxName ? `<br>${maxName}` : '');
         };
-        // 太晶化：持有太晶珠且已充能、這場還沒用過時，按 R（或點選）切換
-        const canTera = G.state.bag['tera-orb'] && G.state.teraCharged !== false && !(this.teraUsed && this.teraUsed.me);
-        let teraOn = false;
-        const tt = TYPES[Mon.teraType(me)];
-        window.__teraToggle = () => { teraOn = !teraOn; const el = document.querySelector('#choice-info .tera-btn'); if (el) el.classList.toggle('on', teraOn); };
-        const info2 = i => info(i) + (canTera ? `<br><span class="tera-btn${teraOn ? ' on' : ''}" onclick="event.stopPropagation();window.__teraToggle()">R 太晶化 ${tt.n}</span>` : '');
-        // 超級進化：持有超級手環與對應的超級石時，按 M 切換（和太晶化擇一）
-        const canMega = this.canMega && this.canMega(me);
-        let megaOn = false;
-        window.__megaToggle = () => { megaOn = !megaOn; if (megaOn) teraOn = false; const el = document.querySelector('#choice-info .mega-btn'); if (el) el.classList.toggle('on', megaOn); };
-        const info3 = i => info2(i) + (canMega ? `<br><span class="tera-btn mega-btn${megaOn ? ' on' : ''}" onclick="event.stopPropagation();window.__megaToggle()">M 超級進化</span>` : '');
-        // Z 招式：持有 Z 手環與 Z 純晶時，按 E 切換（三種特殊能力擇一）
-        const canZ = this.canZ && this.canZ(me);
-        let zOn = false;
-        window.__zToggle = () => { zOn = !zOn; if (zOn) { teraOn = false; megaOn = false; } const el = document.querySelector('#choice-info .z-btn'); if (el) el.classList.toggle('on', zOn); };
-        const info4 = i => info3(i) + (canZ ? `<br><span class="tera-btn z-btn${zOn ? ' on' : ''}" onclick="event.stopPropagation();window.__zToggle()">E Z招式${me.moves[i] && ZMove.eligible(this, me, md(me.moves[i].id)) ? '：' + ZMOVES[ZMove.typeOf(me)].n : '（屬性不符）'}</span>` : '');
-        // 極巨化：持有極巨腕帶時按 G（四種特殊能力擇一）
-        const canDmax = this.canDmax && !me._dmax && this.canDmax(me);
-        let dOn = false;
-        window.__dToggle = () => { dOn = !dOn; if (dOn) { teraOn = false; megaOn = false; zOn = false; } const el = document.querySelector('#choice-info .d-btn'); if (el) el.classList.toggle('on', dOn); };
-        const info5 = i => (me._dmax && me.moves[i] ? `${info(i)}<br>${md(me.moves[i].id).cat === 'Status' ? (MAX_MOVES.guard || {}).n : (MAX_MOVES[md(me.moves[i].id).type] || {}).n || ''}` : info4(i))
-          + (canDmax ? `<br><span class="tera-btn d-btn${dOn ? ' on' : ''}" onclick="event.stopPropagation();window.__dToggle()">G 極巨化</span>` : '');
+        // 特殊能力列：擁有的道具都會顯示，不能用時灰色並說明原因；同時只能選一種
+        const gm = this.gimmicks(me);
+        let on = null;
+        const bar = document.createElement('div');
+        bar.id = 'gimmick-bar';
+        const drawBar = idx => {
+          bar.innerHTML = gm.map(g => {
+            const zTxt = g.id === 'z' && on === 'z' && me.moves[idx] ? (ZMove.eligible(this, me, md(me.moves[idx].id)) ? '：' + ZMOVES[ZMove.typeOf(me)].n : '（這個招式屬性不符）') : '';
+            return `<span class="gb${g.ok ? '' : ' dis'}${on === g.id ? ' on' : ''}" data-g="${g.id}" title="${U.esc(g.why || '')}">${g.key} ${g.label}${zTxt}${g.ok ? '' : `<small>${U.esc(g.why)}</small>`}</span>`;
+          }).join('');
+          bar.querySelectorAll('.gb').forEach(el => { el.onclick = ev => { ev.stopPropagation(); toggle(el.dataset.g); }; });
+        };
+        let focusIdx = 0;
+        const toggle = id => { const g = gm.find(x => x.id === id); if (!g || !g.ok) { Sound.sfx('bump'); return; } on = on === id ? null : id; Sound.sfx('select'); drawBar(focusIdx); };
+        if (gm.length) { this.el.appendChild(bar); drawBar(0); }
         const onKey = e => {
-          if (canDmax && (e.key === 'g' || e.key === 'G') && !e.repeat) { dOn = !dOn; if (dOn) { teraOn = false; megaOn = false; zOn = false; } }
-          if (canTera && (e.key === 'r' || e.key === 'R') && !e.repeat) { teraOn = !teraOn; if (teraOn) { megaOn = false; zOn = false; } }
-          if (canMega && (e.key === 'm' || e.key === 'M') && !e.repeat) { megaOn = !megaOn; if (megaOn) { teraOn = false; zOn = false; } }
-          if (canZ && (e.key === 'e' || e.key === 'E') && !e.repeat) { zOn = !zOn; if (zOn) { teraOn = false; megaOn = false; } }
+          if (e.repeat) return false;
+          const g = gm.find(x => x.key.toLowerCase() === e.key.toLowerCase());
+          if (g) { toggle(g.id); return true; }
           return false;
         };
-        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info5, onKey });
-        if (i >= 0) return { type: 'move', idx: i, tera: canTera && teraOn && !megaOn && !zOn && !dOn, mega: canMega && megaOn && !zOn && !dOn, z: canZ && zOn && !dOn, dmax: canDmax && dOn };
+        let i;
+        try {
+          i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: k => { focusIdx = k; if (gm.length) drawBar(k); return info(k); }, onKey });
+        } finally { bar.remove(); }
+        if (i >= 0) return { type: 'move', idx: i, tera: on === 'tera', mega: on === 'mega', z: on === 'z', dmax: on === 'dmax' };
       } else if (c === 1) {
         const r = await Game.bagMenu({ battle: this });
         if (r) return { type: 'item', ...r };
@@ -138,6 +137,32 @@ class Battle {
         return { type: 'run' };
       }
     }
+  }
+
+  // 這隻寶可夢可以使用的特殊能力（只列出持有對應道具的；不能用時附上原因）
+  gimmicks(me) {
+    const bag = G.state.bag, used = this.gimmickUsed ? this.gimmickUsed('me') : false;
+    const one = '這場戰鬥已經使用過特殊能力（一場只能用一種）';
+    const out = [];
+    if (bag['tera-orb']) {
+      const why = used ? one : G.state.teraCharged === false ? '太晶珠需要到寶可夢中心充能' : '';
+      out.push({ id: 'tera', key: 'R', label: `太晶化（${TYPES[Mon.teraType(me)].n}）`, ok: !why, why });
+    }
+    if (bag['mega-ring'] || (bag['z-ring'] && me.sp === 800)) {
+      const form = typeof Mega !== 'undefined' && Mega.formFor(me);
+      const why = used ? one : !form ? '要讓寶可夢攜帶對應的超級石' : '';
+      out.push({ id: 'mega', key: 'M', label: form === 'necrozma-ultra' ? '究極爆發' : '超級進化', ok: !why && this.canMega(me), why: why || (this.canMega(me) ? '' : '現在不能超級進化') });
+    }
+    if (bag['z-ring'] && typeof ZMove !== 'undefined') {
+      const t = ZMove.typeOf(me);
+      const why = used ? one : !t ? '要讓寶可夢攜帶 Z 純晶' : !this.canZ(me) ? `沒有${TYPES[t].n}屬性的攻擊招式` : '';
+      out.push({ id: 'z', key: 'E', label: 'Z 招式', ok: !why, why });
+    }
+    if (bag['dynamax-band'] && typeof Dmax !== 'undefined') {
+      const why = me._dmax ? '已經極巨化了' : used ? one : !this.canDmax(me) ? '這隻寶可夢不能極巨化（攜帶超級石等）' : '';
+      out.push({ id: 'dmax', key: 'G', label: Dmax.gmaxForm(me) ? '超極巨化' : '極巨化', ok: !why, why });
+    }
+    return out;
   }
 
   // 回傳：'win' | 'lose' | 'run' | false（有倒下並替換）| null（無事）

@@ -34,11 +34,19 @@ const BagUI = (() => {
     if (it.kind === 'mint') return 'big-mushroom';
     if (it.kind === 'evo') return 'moon-stone';
     if (id.endsWith('-berry')) return 'oran-berry';
+    if (id === 'ancient-tablet') return 'old-amber';
     if (it.kind === 'key') return 'question-mark';
     return 'question-mark';
   }
+  // 補充的圖示（Showdown／pokesprite／PokéAPI／Serebii，tools/build_item_icons.py）
+  function ext(id) {
+    const i = Gen3.on && GEN3.itemIconsExt ? GEN3.itemIconsExt[id] : undefined;
+    if (i === undefined) return null;
+    const x = (i % 16) * 24, y = Math.floor(i / 16) * 24;
+    return `<div class="bag-ic" style="background-image:url(${Gen3.base}item_icons_ext.png);background-position:${-x * 3}px ${-y * 3}px;background-size:${16 * 24 * 3}px auto"></div>`;
+  }
   function icon(id) {
-    const a = atlas(isTM(id) ? 'tm' : id);
+    const a = atlas(isTM(id) ? 'tm' : id) || ext(id);
     if (a) return a;
     const fb = (atlas(fallbackName(id)) || '').replace(/"/g, '&quot;');
     return `<img class="bag-ic" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${id}.png" onerror="this.onerror=null;this.outerHTML='${fb.replace(/'/g, "\'")}'">`;
@@ -99,5 +107,5 @@ const BagUI = (() => {
       draw();
     });
   }
-  return { pick };
+  return { pick, icon };
 })();

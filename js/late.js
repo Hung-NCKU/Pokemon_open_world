@@ -413,3 +413,21 @@ Story.prof = async function (region) {
   }
   return _profD.call(this, region);
 };
+
+// ============ 任務選單：特殊能力的取得方式與進度 ============
+const _questSummaryG = Story.questSummary;
+Story.questSummary = function (s) {
+  const has = id => (s.bag[id] ? '✓' : '　');
+  const stones = Object.keys(window.MEGA_STONES || {}).filter(k => s.bag[k]).length;
+  const crystals = Object.values(window.ZMOVES || {}).filter(z => s.bag[z.item]).length;
+  const lines = [
+    '【戰鬥特殊能力】（戰鬥中選招式時，上方的按鈕列可以切換；一場戰鬥只能用一種）',
+    `${has('tera-orb')} 太晶化（R）：太晶珠，任何地區的第一枚徽章時館主送的；用後到寶可夢中心充能`,
+    `${has('mega-ring')} 超級進化（M）：超級手環，第一次成為冠軍時取得；讓寶可夢攜帶對應的超級石（已有 ${stones} 顆，各地區散落，靠近會閃光）`,
+    `${has('z-ring')} Z 招式（E）：Z 手環，阿羅拉的博士送的；攜帶 Z 純晶並有同屬性攻擊招式（已有 ${crystals}／18 種，阿羅拉道館與野外）`,
+    `${has('dynamax-band')} 極巨化／超極巨化（G）：極巨腕帶，伽勒爾的博士送的；有超極巨因子的寶可夢會超極巨化（伽勒爾野生 3%、團體戰）`,
+    `${s.bag['red-orb'] || s.bag['blue-orb'] ? '✓' : '　'} 原始回歸：讓固拉多／蓋歐卡攜帶朱紅色／靛藍色寶珠（豐緣的野外），出場時自動發生`,
+    `${has('ultranecrozium-z')} 究極爆發（M）：合體後的奈克洛茲瑪攜帶究極奈克洛Ｚ（捕捉奈克洛茲瑪與索爾迦雷歐／露奈雅拉後取得）`,
+  ];
+  return _questSummaryG.call(this, s) + '\n' + lines.join('\n');
+};

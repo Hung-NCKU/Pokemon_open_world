@@ -2,7 +2,7 @@
 const UI = (() => {
   const $ = id => document.getElementById(id);
   const stack = [];
-  const isOk = e => ['z', 'Z', 'Enter', ' '].includes(e.key);
+  const isOk = e => ['z', 'Z', 'Enter'].includes(e.key); // Space 是二倍速鍵
   const isNo = e => ['x', 'X', 'Escape', 'Backspace'].includes(e.key);
 
   function pushKey(fn) {
@@ -63,9 +63,9 @@ const UI = (() => {
       const finish = () => {
         clearInterval(timer); tx.textContent = text; done = true;
         more.classList.remove('hidden');
-        if (auto) autoT = setTimeout(close, auto);
+        if (auto) autoT = setTimeout(close, G.fast ? auto / 2 : auto);
       };
-      const timer = speed <= 0 ? null : setInterval(() => { i += 1; tx.textContent = text.slice(0, i); if (i >= text.length) finish(); }, speed);
+      const timer = speed <= 0 ? null : setInterval(() => { i += G.fast ? 2 : 1; tx.textContent = text.slice(0, i); if (i >= text.length) finish(); }, speed);
       if (speed <= 0) finish();
       const onKey = e => {
         if (e.repeat) return;
