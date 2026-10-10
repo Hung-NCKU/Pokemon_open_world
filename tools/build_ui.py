@@ -133,8 +133,22 @@ def build_party():
     return True
 
 
+def build_map():
+    """城鎮地圖（飛翔畫面）的外框、游標、主角圖示（graphics/pokenav/region_map）。"""
+    R = os.path.join(EM, "graphics/pokenav/region_map")
+    if not os.path.isdir(R):
+        return False
+    tmp = os.path.join(OUT, "_frame.pal")
+    _write_pal(tmp, _png_pal(os.path.join(R, "frame.png")))
+    render_tilemap(os.path.join(R, "frame.png"), os.path.join(R, "frame.bin"), tmp, 32, pal_offset=1).crop((0, 0, 240, 160)).save(os.path.join(OUT, "map_frame.png"))
+    os.remove(tmp)
+    png_rgba(os.path.join(R, "cursor_small.png")).save(os.path.join(OUT, "map_cursor.png"))
+    png_rgba(os.path.join(R, "brendan_icon.png")).save(os.path.join(OUT, "map_player.png"))
+    return True
+
+
 def build_all():
-    return {"dex": build_dex(), "card": build_card(), "party": build_party()}
+    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map()}
 
 
 if __name__ == "__main__":

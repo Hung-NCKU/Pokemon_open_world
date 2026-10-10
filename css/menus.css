@@ -89,6 +89,12 @@
 #dex .dx-stats td { padding: 0 6px; line-height: 23px; }
 #dex .dx-stats .sbar { width: 150px; }
 
+/* ---------- 城鎮地圖（graphics/pokenav/region_map，js/mapui.js） ---------- */
+#rmap { position: absolute; inset: 0; z-index: 45; background: #9cd5ff url("../assets/gen3/map_frame.png") 0 0 / 720px 480px; image-rendering: pixelated; }
+#rmap canvas { position: absolute; left: 24px; top: 24px; width: 672px; height: 384px; image-rendering: pixelated; cursor: crosshair; }
+#rmap .rm-name { position: absolute; left: 24px; top: 432px; height: 48px; line-height: 48px; font-size: 24px; color: #404040; text-shadow: 2px 2px 0 #d0d0c8; white-space: nowrap; }
+#rmap .rm-hint { position: absolute; right: 24px; top: 432px; height: 48px; line-height: 48px; font-size: 18px; color: #707070; }
+
 /* ---------- 訓練家卡片（graphics/trainer_card） ---------- */
 #card { position: absolute; inset: 0; z-index: 45; background: #3888c8; color: #404040; text-shadow: 2px 2px 0 rgba(0, 0, 0, .12); }
 #card .cd-face { position: absolute; inset: 0; background-size: 720px 480px; image-rendering: pixelated; cursor: pointer; }

@@ -598,6 +598,21 @@ const Game = {
   },
 
   async mapMenu() {
+    if (Game.emeraldUI('map')) {
+      const r = await MapUI.show({ canFly: Game.canFly() });
+      let dest = r && r !== 'list' ? r : null;
+      if (r === 'list') {
+        const list = World.towns.filter(t => G.state.visited[t.id]);
+        const i = await UI.list({ title: '要飛到哪裡？', rows: list.map(t => `<div class="grow"><b>${U.esc(t.name)}</b></div><span class="dim">${REGIONS[t.region].n}地區</span>`) });
+        if (i >= 0) dest = list[i];
+      }
+      if (dest) {
+        const flyer = G.party.find(m => m.hp > 0 && (Mon.types(m).includes('flying') || m.moves.some(x => x.id === 19)));
+        await UI.say(`${Mon.name(flyer)} 使用了飛翔！`);
+        Game.warp(dest.x + 4, dest.y + 6, 'down');
+      }
+      return;
+    }
     const town = World.townAt(G.state.x, G.state.y);
     const m = document.createElement('div');
     m.className = 'modal mapmodal';
