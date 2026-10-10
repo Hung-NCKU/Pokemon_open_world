@@ -2,7 +2,10 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#10131c">
 <title>寶可夢 開放世界</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/menus.css">
@@ -61,7 +64,8 @@
   <div class="pad">
     <button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="right">▶</button><button data-dir="down">▼</button>
   </div>
-  <div class="ab"><button data-fast="1">▶▶</button><button data-key="x">B</button><button data-key="z">A</button></div>
+  <div class="mid"><button class="sm" data-key="m">SELECT</button><button class="sm" data-key="x" data-start="1">START</button></div>
+  <div class="ab"><button class="fast" data-fast="1">▶▶</button><button class="b" data-key="x">B</button><button class="a" data-key="z">A</button></div>
 </div>
 <script src="data/pokedex.js"></script>
 <script src="data/moves.js"></script>

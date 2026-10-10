@@ -1627,12 +1627,26 @@ const Game = {
 };
 
 // ---------- 啟動 ----------
+// 觸控裝置：直向時遊戲畫面在上、按鍵區在下；橫向時畫面填滿、按鍵疊在兩側
+const isTouch = () => matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 function fit() {
   const w = document.getElementById('wrap');
-  const s = Math.min(window.innerWidth / 720, window.innerHeight / 480);
+  const W = window.innerWidth, H = window.innerHeight;
+  const touch = isTouch(), portrait = touch && H > W;
+  document.body.classList.toggle('touch', touch);
+  document.body.classList.toggle('portrait', portrait);
+  document.body.classList.toggle('landscape', touch && !portrait);
+  let availH = H, top = 0;
+  if (portrait) {
+    const ctl = Math.max(240, Math.min(360, H - W * 480 / 720 - 24));
+    document.documentElement.style.setProperty('--ctl-h', ctl + 'px');
+    availH = H - ctl;
+  }
+  const s = Math.min(W / 720, availH / 480);
   w.style.transform = `scale(${s})`;
-  w.style.left = (window.innerWidth - 720 * s) / 2 + 'px';
-  w.style.top = (window.innerHeight - 480 * s) / 2 + 'px';
+  w.style.left = (W - 720 * s) / 2 + 'px';
+  top = portrait ? Math.min(24, Math.max(0, (availH - 480 * s) / 2)) : (H - 480 * s) / 2;
+  w.style.top = top + 'px';
 }
 
 window.addEventListener('load', () => {
@@ -1669,20 +1683,44 @@ window.addEventListener('load', () => {
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => Game.setFast(false));
   });
 
-  // 觸控方向鍵
+  // 觸控方向鍵：在野外走路（按住）；在選單、戰鬥中送出方向鍵（按住自動連按）
+  const ARROW = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+  const menuMode = () => UI.active() || G.mode !== 'world' || G.busy;
   document.querySelectorAll('#touch [data-dir]').forEach(b => {
-    const set = v => e => { e.preventDefault(); G.touchDir = v; };
-    b.addEventListener('pointerdown', set(b.dataset.dir));
-    b.addEventListener('pointerup', set(null));
-    b.addEventListener('pointerleave', set(null));
+    let rep = null;
+    const press = e => {
+      e.preventDefault();
+      b.classList.add('on');
+      try { b.setPointerCapture(e.pointerId); } catch { }
+      const dir = b.dataset.dir;
+      if (menuMode()) {
+        const send = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: ARROW[dir] }));
+        send();
+        rep = setTimeout(function again() { send(); rep = setTimeout(again, 120); }, 380);
+      } else G.touchDir = dir;
+    };
+    const release = e => {
+      b.classList.remove('on');
+      clearTimeout(rep); rep = null;
+      G.touchDir = null;
+    };
+    b.addEventListener('pointerdown', press);
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, release);
   });
   document.querySelectorAll('#touch [data-key]').forEach(b => {
     b.addEventListener('pointerdown', e => {
       e.preventDefault();
+      b.classList.add('on');
       window.dispatchEvent(new KeyboardEvent('keydown', { key: b.dataset.key }));
       window.dispatchEvent(new KeyboardEvent('keyup', { key: b.dataset.key }));
     });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => b.classList.remove('on'));
   });
+  // 不讓頁面捲動、縮放、長按選單
+  document.addEventListener('touchmove', e => { if (!e.target.closest('.modal .body, #choices, input')) e.preventDefault(); }, { passive: false });
+  document.addEventListener('contextmenu', e => { if (isTouch()) e.preventDefault(); });
+  document.addEventListener('dblclick', e => e.preventDefault());
+  window.addEventListener('orientationchange', () => setTimeout(fit, 200));
 
   let last = performance.now();
   const loop = now => {

@@ -208,16 +208,29 @@ body.in-battle #choices .choice.sel::before { color: #484848; font-size: 22px; l
 @keyframes evoB { 0%, 30%, 50%, 70%, 85% { opacity: 0; filter: brightness(0) invert(1); } 40%, 60%, 78%, 90% { opacity: 1; filter: brightness(0) invert(1); } 100% { opacity: 1; filter: none; } }
 .evolve.done img.a { opacity: 0; } .evolve.done img.b { opacity: 1; filter: none; animation: none; }
 
-/* 觸控 */
+/* 觸控（手機、平板）：body.touch 由 game.js 依裝置判斷
+   直向：遊戲畫面在上方，下方是掌機樣式的按鍵區；橫向：遊戲畫面填滿，按鍵半透明疊在兩側 */
 #touch { display: none; }
-@media (pointer: coarse) {
-  #touch { display: flex; position: fixed; left: 0; right: 0; bottom: 10px; justify-content: space-between; padding: 0 16px; pointer-events: none; z-index: 100; }
-  #touch button { pointer-events: auto; width: 54px; height: 54px; border-radius: 50%; border: none; background: rgba(255,255,255,.25); color: #fff; font-size: 20px; }
-  #touch .pad { display: grid; grid-template-columns: 54px 54px 54px; grid-template-rows: 54px 54px 54px; }
-  #touch .pad [data-dir=up] { grid-column: 2; grid-row: 1; } #touch .pad [data-dir=left] { grid-column: 1; grid-row: 2; }
-  #touch .pad [data-dir=right] { grid-column: 3; grid-row: 2; } #touch .pad [data-dir=down] { grid-column: 2; grid-row: 3; }
-  #touch .ab { display: flex; gap: 12px; align-items: flex-end; }
-}
+body.touch { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+body.touch #touch { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; align-items: center; justify-content: space-between;
+  padding: 12px max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-bottom)); pointer-events: none; box-sizing: border-box; }
+body.touch.portrait #touch { height: var(--ctl-h, 300px); background: linear-gradient(#1a2033, #10131c); border-top: 2px solid #2c3550; }
+body.touch.landscape #touch { top: 0; background: none; }
+#touch button { pointer-events: auto; border: none; color: #fff; font-family: inherit; touch-action: none; }
+#touch button.on { filter: brightness(1.6); transform: scale(.94); }
+#touch .pad { display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(3, 58px); }
+#touch .pad button { background: #3a4462; font-size: 22px; }
+#touch .pad [data-dir=up] { grid-column: 2; grid-row: 1; border-radius: 10px 10px 0 0; } #touch .pad [data-dir=left] { grid-column: 1; grid-row: 2; border-radius: 10px 0 0 10px; }
+#touch .pad [data-dir=right] { grid-column: 3; grid-row: 2; border-radius: 0 10px 10px 0; } #touch .pad [data-dir=down] { grid-column: 2; grid-row: 3; border-radius: 0 0 10px 10px; }
+#touch .mid { display: flex; flex-direction: column; gap: 14px; align-self: flex-end; margin-bottom: 8px; }
+#touch .sm { width: 74px; height: 26px; border-radius: 13px; background: #3a4462; font-size: 12px; letter-spacing: 1px; }
+#touch .ab { display: grid; grid-template-columns: 66px 66px; grid-template-rows: 44px 66px; gap: 8px 14px; align-items: center; }
+#touch .ab .fast { grid-column: 1 / 3; justify-self: center; width: 64px; height: 36px; border-radius: 18px; background: #3a4462; font-size: 14px; }
+#touch .ab .a, #touch .ab .b { width: 66px; height: 66px; border-radius: 50%; font-size: 22px; font-weight: bold; }
+#touch .ab .a { background: #c03040; } #touch .ab .b { background: #8a2a40; transform: translateY(18px); }
+body.touch.landscape #touch .pad button, body.touch.landscape #touch .sm, body.touch.landscape #touch .fast { background: rgba(58, 68, 98, .55); }
+body.touch.landscape #touch .a { background: rgba(192, 48, 64, .6); } body.touch.landscape #touch .b { background: rgba(138, 42, 64, .6); }
+body.touch.landscape #touch .mid { position: fixed; left: 50%; bottom: 6px; transform: translateX(-50%); flex-direction: row; margin: 0; }
 
 /* 綠寶石版背包（graphics/bag，240×160 × 3） */
 #bag { position: absolute; inset: 0; z-index: 45; background: url("../assets/gen3/bag_bg.png") 0 0 / 720px 480px; image-rendering: pixelated;
@@ -272,3 +285,8 @@ body.fast #game::after { content: '▶▶ ×2'; position: absolute; right: 10px;
 
 /* 戰鬥圖載入、放大之前隱藏（battle_view.js setSprite） */
 .bmon img.sizing { visibility: hidden !important; }
+/* 直向的窄螢幕：按鍵依寬度縮放，SELECT／START 移到下方中央 */
+body.touch.portrait #touch .pad { grid-template-columns: repeat(3, min(58px, 14vw)); grid-template-rows: repeat(3, min(58px, 14vw)); }
+body.touch.portrait #touch .ab { grid-template-columns: min(66px, 16vw) min(66px, 16vw); grid-template-rows: 40px min(66px, 16vw); gap: 8px 12px; margin-right: 4px; }
+body.touch.portrait #touch .ab .a, body.touch.portrait #touch .ab .b { width: min(66px, 16vw); height: min(66px, 16vw); }
+body.touch.portrait #touch .mid { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); flex-direction: row; gap: 12px; margin: 0; }
