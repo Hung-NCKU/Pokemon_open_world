@@ -370,7 +370,9 @@ const Game = {
     while (true) {
       const rows = G.party.map((m, i) => ({ html: Game.partyRow(m, i, battle && i === battle.myIdx ? '<span class="tag">戰鬥中</span>' : ''), disabled: pick ? !pick(m) : false }));
       const title = pick ? '要對哪一隻寶可夢使用？' : battle ? (forced ? '要派出哪一隻寶可夢？' : '寶可夢') : '寶可夢';
-      const i = await UI.list({ title, rows, start, cancel: !forced });
+      const i = Game.emeraldUI('party')
+        ? await PartyUI.pick({ msg: pick ? '要對哪一隻使用？' : battle ? (forced ? '要派出哪一隻寶可夢？' : '要替換哪一隻？') : '請選擇一隻寶可夢。', can: pick, start, cancel: !forced, active: battle ? battle.myIdx : -1 })
+        : await UI.list({ title, rows, start, cancel: !forced });
       if (i < 0) return -1;
       start = i;
       if (pick) return i;
@@ -503,7 +505,17 @@ const Game = {
     }
   },
 
+  // 綠寶石版介面是否可用（素材由 tools/build_ui.py 產生）
+  emeraldUI(k) { return Gen3.on && GEN3.ui && GEN3.ui[k]; },
+
   async dexMenu() {
+    if (Game.emeraldUI('dex')) {
+      while (true) {
+        const id = await DexUI.list();
+        if (id == null) return;
+        await DexUI.entry(id);
+      }
+    }
     let start = 0;
     const ids = Object.keys(POKEDEX).map(Number).sort((a, b) => a - b);
     const [seen, caught] = Game.dexCount();
@@ -524,6 +536,7 @@ const Game = {
   },
   // 圖鑑頁（捕捉新寶可夢後也會顯示）
   async dexEntry(id) {
+    if (Game.emeraldUI('dex')) return DexUI.entry(id);
     const s = POKEDEX[id];
     // 進化條件：列出所有條件組，改編的條件會註明原作的方式
     const evo = (s.ev || []).map(e => `→ ${G.state.seen[e.to] ? POKEDEX[e.to].n : '？？？'}：${(e.c || [e]).map(c => Mon.evoText(c)).join(' 或 ')}`).join('<br>');
@@ -654,7 +667,7 @@ const Game = {
   },
 
   async mainMenu() {
-    const items = ['寶可夢', '圖鑑', '背包', '任務', '地圖', '訓練家卡片', '存檔', '設定', '關閉'];
+    const items = ['寶可夢', '圖鑑', '背包', '任務', '地圖', '訓練家卡片', '存檔', '設定', '返回標題', '關閉'];
     while (true) {
       const c = items[await UI.choose(items, { cls: 'side-menu' })];
       if (!c || c === '關閉') return;
@@ -670,11 +683,21 @@ const Game = {
         if (ok === 1) { Game.save(true); Game.exportSave(); await UI.say('已下載存檔檔案。可以在標題畫面選擇「匯入存檔」讀回。'); }
       }
       if (c === '設定') await Game.settingsMenu();
+      if (c === '返回標題') {
+        const ok = await UI.choose(['儲存後返回', '不儲存直接返回', '取消'], { prompt: '要返回標題畫面嗎？' });
+        if (ok === 0 || ok === 1) {
+          if (ok === 0) Game.save(true);
+          UI.hideDialog();
+          Game.toTitle();
+          return;
+        }
+      }
       UI.hideDialog();
     }
   },
 
   async trainerCard() {
+    if (Game.emeraldUI('card')) return CardUI.show();
     const [seen, caught] = Game.dexCount();
     const ms = G.state.playMs;
     const badges = REGION_KEYS.map(r => {
@@ -873,6 +896,7 @@ const Game = {
     if (r === 'win') {
       const first = !Object.keys(G.state.champs).length;
       G.state.champs[t.region] = 1;
+      if (!G.state.hofTime) { const ms = G.state.playMs; G.state.hofTime = `${Math.floor(ms / 3600000)}:${String(Math.floor(ms / 60000) % 60).padStart(2, '0')}`; }
       await UI.say(`恭喜！${G.state.name} 成為了${reg.n}地區的冠軍！你和寶可夢的名字已被記錄在名人堂中！`);
       if (first) { Game.giveItem('master-ball', 1); await UI.say('獲得了大師球！'); }
       Game.save(true);
@@ -1125,6 +1149,18 @@ const Game = {
     g.beginPath(); g.ellipse(x + TILE / 2, y + TILE - 4, 20, 6, 0, 0, Math.PI * 2); g.fill();
     g.imageSmoothingEnabled = false;
     g.drawImage(img, x + (TILE - w) / 2, y + TILE - h + 8 + bob, w, h);
+  },
+
+  // 從遊戲中返回標題畫面（在目前的流程結束後才切換）
+  toTitle() {
+    G.mode = 'title';
+    G.move = null;
+    G.keys.clear();
+    Sound.stop();
+    const cv = document.getElementById('world');
+    cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+    const wait = () => (G.busy ? setTimeout(wait, 30) : Game.title());
+    setTimeout(wait, 0);
   },
 
   // ---------- 標題 / 新遊戲 ----------

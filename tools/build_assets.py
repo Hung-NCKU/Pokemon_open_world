@@ -466,6 +466,11 @@ def main():
     man["pic"] = build_pic_coords()
     print("背包...")
     man["itemIcons"] = build_bag()
+    print("圖鑑、訓練家卡片、隊伍畫面...")
+    from build_ui import build_all
+    man["ui"] = build_all()
+    from build_icons import build_icons
+    man["ui"]["icons"] = build_icons()
     with open(os.path.join(OUT, "manifest.js"), "w", encoding="utf-8") as f:
         f.write("window.GEN3=" + json.dumps(man, ensure_ascii=False) + ";\n")
     print("完成 →", OUT)
