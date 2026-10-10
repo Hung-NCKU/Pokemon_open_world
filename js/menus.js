@@ -85,20 +85,25 @@ const PartyUI = (() => {
 
 // 圖鑑：清單（左邊大圖、右邊捲動清單，選擇列固定在中間）與資料頁
 const DexUI = (() => {
-  let cur = 0;
+  let curId = 1;
   const ROWS = 9; // 畫面上的列數（選擇列在第 5 列）
-  function list() {
+  // q：搜尋條件（Search）；回傳選到的編號、{ filter: true }（按 F 開啟搜尋）或 null
+  function list(q = Search.empty()) {
     return new Promise(res => {
-      const ids = Object.keys(POKEDEX).map(Number).sort((a, b) => a - b);
+      const ids = Object.keys(POKEDEX).map(Number).sort((a, b) => a - b).filter(id => Search.matchSpecies(id, q));
       const [seen, caught] = Game.dexCount();
+      let cur = Math.max(0, ids.indexOf(curId));
+      if (ids.indexOf(curId) < 0) { const k = ids.findIndex(id => id > curId); cur = k < 0 ? Math.max(0, ids.length - 1) : k; }
       const root = document.createElement('div');
       root.id = 'dex';
       root.innerHTML = `<div class="dx-count"><div>發現</div><b>${seen}</b><div>捕捉</div><b>${caught}</b></div>
-        <div class="dx-pic"></div><div class="dx-list"></div><div class="dx-hint">↑↓ 選擇　←→ 翻頁　Z 查看　X 關閉</div>`;
+        <div class="dx-pic"></div><div class="dx-list"></div><div class="dx-hint">${Search.active(q) ? `🔍 ${U.esc(Search.label(q))}（${ids.length}）　` : ''}↑↓ 選擇　←→ 翻頁　Z 查看　F 搜尋　X 關閉</div>`;
       document.getElementById('game').appendChild(root);
       const $ = s => root.querySelector(s);
       const draw = () => {
         const id = ids[cur];
+        curId = id || curId;
+        if (!ids.length) { $('.dx-pic').innerHTML = ''; $('.dx-list').innerHTML = '<div class="dx-row">（沒有符合的寶可夢）</div>'; return; }
         $('.dx-pic').innerHTML = G.state.seen[id] ? `<img src="${Mon.sprite(id)}">` : '';
         let html = '';
         for (let r = 0; r < ROWS; r++) {
@@ -112,7 +117,7 @@ const DexUI = (() => {
       };
       const close = v => { pop(); root.remove(); res(v); };
       const choose = () => {
-        if (!G.state.seen[ids[cur]]) { Sound.sfx('bump'); return; }
+        if (!ids.length || !G.state.seen[ids[cur]]) { Sound.sfx('bump'); return; }
         Sound.sfx('select');
         close(ids[cur]);
       };
@@ -124,9 +129,11 @@ const DexUI = (() => {
         else if (k === 'ArrowLeft' || k === 'a' || k === 'PageUp') cur = Math.max(0, cur - 7);
         else if (UI.isOk(e)) { if (!e.repeat) choose(); return; }
         else if (UI.isNo(e)) { if (!e.repeat) close(null); return; }
+        else if (k === 'f' || k === 'F') { if (!e.repeat) close({ filter: true }); return; }
         else return;
         draw();
       };
+      root.querySelector('.dx-hint').onclick = () => close({ filter: true });
       root.addEventListener('wheel', e => { e.preventDefault(); cur = U.clamp(cur + Math.sign(e.deltaY), 0, ids.length - 1); draw(); }, { passive: false });
       const pop = UI.pushKey(onKey);
       draw();

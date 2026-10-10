@@ -94,6 +94,7 @@ const Game = {
     if (!int(m.happy, 0, 255)) m.happy = POKEDEX[m.sp].hap;
     // 培育欄位：薄荷（0–24 的性格）、極限特訓（6 項旗標）
     if (m.mint !== undefined && !int(m.mint, 0, 24)) delete m.mint;
+    if (m.marks !== undefined && !(Array.isArray(m.marks) && m.marks.every(x => MARKS.includes(x)))) delete m.marks;
     if (m.ivHT !== undefined && !(Array.isArray(m.ivHT) && m.ivHT.length === 6)) delete m.ivHT;
     else if (m.ivHT) m.ivHT = m.ivHT.map(v => (v ? 1 : 0));
     const max = Mon.stats(m)[0];
@@ -516,14 +517,18 @@ const Game = {
     }
   },
 
+  dexQuery: Search.empty(),
+  boxQuery: Search.empty(),
+  boxSort: 0,
   // 綠寶石版介面是否可用（素材由 tools/build_ui.py 產生）
   emeraldUI(k) { return Gen3.on && GEN3.ui && GEN3.ui[k]; },
 
   async dexMenu() {
     if (Game.emeraldUI('dex')) {
       while (true) {
-        const id = await DexUI.list();
+        const id = await DexUI.list(Game.dexQuery);
         if (id == null) return;
+        if (id.filter) { Game.dexQuery = await Search.menu(Game.dexQuery); UI.hideDialog(); continue; }
         await DexUI.entry(id);
       }
     }
@@ -595,16 +600,50 @@ const Game = {
         G.state.box.push(m);
         await UI.say(`寄放了 ${Mon.name(m)}。`);
       } else if (c === 1) {
-        if (G.party.length >= 6) { await UI.say('隊伍已經滿了！'); continue; }
         if (!G.state.box.length) { await UI.say('箱子裡沒有寶可夢。'); continue; }
-        const sorted = G.state.box.map((m, k) => [m, k]).sort((a, b) => a[0].sp - b[0].sp);
-        const i = await UI.list({ title: `領取寶可夢（${G.state.box.length} 隻）`, rows: sorted.map(([m]) => Game.partyRow(m, 0)) });
-        if (i < 0) continue;
-        const k = sorted[i][1];
-        const m = G.state.box.splice(k, 1)[0];
+        await Game.boxMenu();
+      } else return;
+    }
+  },
+
+  // 箱子：搜尋（名稱／屬性／地區／標記）、排序、領取、查看能力、標記
+  async boxMenu() {
+    const SORTS = [['編號', (a, b) => a.sp - b.sp], ['等級', (a, b) => b.lv - a.lv], ['名稱', (a, b) => Mon.name(a).localeCompare(Mon.name(b), 'zh-Hant')], ['寄放順序', () => 0]];
+    let start = 0;
+    while (true) {
+      const q = Game.boxQuery;
+      const list = G.state.box.map((m, k) => [m, k]).filter(([m]) => Search.matchMon(m, q));
+      list.sort((a, b) => SORTS[Game.boxSort][1](a[0], b[0]) || a[1] - b[1]);
+      const rows = [`<div class="grow"><b>🔍 搜尋／排序</b>　<span class="dim">${Search.active(q) ? U.esc(Search.label(q)) : '全部'}・依${SORTS[Game.boxSort][0]}</span></div>`,
+        ...list.map(([m]) => Game.partyRow(m, 0, (m.marks || []).length ? `<span class="marks">${m.marks.join('')}</span>` : ''))];
+      const i = await UI.list({ title: `箱子（${list.length}／${G.state.box.length} 隻）`, rows, start });
+      if (i < 0) return;
+      start = i;
+      if (i === 0) {
+        const c = await UI.choose(['搜尋條件', `排序：${SORTS[Game.boxSort][0]}`, '取消'], { prompt: '要怎麼整理箱子？' });
+        if (c === 0) Game.boxQuery = await Search.menu(q, { box: true });
+        if (c === 1) { const k = await UI.choose(SORTS.map(s => '依' + s[0]), { prompt: '排序方式' }); if (k >= 0) Game.boxSort = k; }
+        UI.hideDialog();
+        continue;
+      }
+      const [m, k] = list[i - 1];
+      const c = await UI.choose(['領取', '查看能力', '標記', '取消'], { prompt: `要對 ${Mon.name(m)} 做什麼？` });
+      if (c === 0) {
+        if (G.party.length >= 6) { await UI.say('隊伍已經滿了！'); continue; }
+        G.state.box.splice(k, 1);
         G.party.push(m);
         await UI.say(`領取了 ${Mon.name(m)}。`);
-      } else return;
+      } else if (c === 1) await Game.summary(m, list.map(x => x[0]));
+      else if (c === 2) {
+        while (true) {
+          const cur = m.marks || [];
+          const j = await UI.choose([...MARKS.map(x => (cur.includes(x) ? '✓' : '　') + x), '完成'], { prompt: '要加上哪些標記？（再選一次取消）', cols: 4 });
+          if (j < 0 || j === MARKS.length) break;
+          const x = MARKS[j];
+          m.marks = cur.includes(x) ? cur.filter(y => y !== x) : [...cur, x];
+        }
+      }
+      UI.hideDialog();
     }
   },
 

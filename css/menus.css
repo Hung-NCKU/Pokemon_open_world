@@ -111,3 +111,6 @@
 #card .cd-brow b { font-weight: normal; color: #2858a0; }
 #card .cd-party { position: absolute; left: 60px; top: 330px; display: flex; }
 #card .cd-party .micon { position: relative; }
+
+/* 箱子的標記 */
+.modal .row .marks { color: #d04848; margin: 0 8px; letter-spacing: 2px; }
