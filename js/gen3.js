@@ -59,10 +59,11 @@ const Gen3 = (() => {
     if (f >= n) f = FRAME[dir][0] % n;
     return cut(`${sheet}_${f}`, s, f * 16, 0, 16, s.naturalHeight, dir === 'right');
   }
+  // 衝浪圖：6 格 32×32（下、下、上、上、左、左）
   function surfFrame(dir) {
     const s = img.player_surf;
-    const f = { down: 0, up: 1, left: 2, right: 2 }[dir];
-    return s && s.naturalWidth ? cut('ps' + f, s, f * 16, 0, 16, 32, dir === 'right') : null;
+    const f = { down: 0, up: 2, left: 4, right: 4 }[dir];
+    return s && s.naturalWidth ? cut('ps' + f, s, f * 32, 0, 32, 32, dir === 'right') : null;
   }
   function surfBlob(dir) {
     const s = img.surf_blob;

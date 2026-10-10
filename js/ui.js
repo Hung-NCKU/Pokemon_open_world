@@ -24,18 +24,19 @@ const UI = (() => {
   function hideDialog() { $('dialog').classList.add('hidden'); }
 
   // 依文字框寬度把訊息切成每頁 2 行（第三世代文字框的顯示方式）
+  // 用實際字型量測寬度來換行，避免文字超出文字框
+  const measureCtx = document.createElement('canvas').getContext('2d');
   function paginate(text) {
     const box = $('dialog');
-    const width = (box.clientWidth || 660) - 24;
-    const size = parseFloat(getComputedStyle(box).fontSize) || 33;
-    const maxUnits = Math.max(8, Math.floor(width / size));
+    const cs = getComputedStyle(box);
+    const width = (box.clientWidth || 660) - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0) - 8;
+    measureCtx.font = `${cs.fontSize} ${cs.fontFamily}`;
     const lines = [];
     for (const para of String(text).split('\n')) {
-      let cur = '', units = 0;
+      let cur = '';
       for (const ch of para) {
-        const u = ch.charCodeAt(0) < 256 ? .5 : 1;
-        if (units + u > maxUnits) { lines.push(cur); cur = ''; units = 0; }
-        cur += ch; units += u;
+        if (cur && measureCtx.measureText(cur + ch).width > width) { lines.push(cur); cur = ''; }
+        cur += ch;
       }
       lines.push(cur);
     }
@@ -76,7 +77,7 @@ const UI = (() => {
   }
 
   // 選項選單：回傳索引；取消回傳 -1
-  function choose(options, { prompt = null, cancel = true, cols = 1, start = 0, cls = '', onFocus = null } = {}) {
+  function choose(options, { prompt = null, cancel = true, cols = 1, start = 0, cls = '', onFocus = null, onKey: customKey = null } = {}) {
     return new Promise(res => {
       if (prompt !== null) showText(prompt);
       const dlg = $('dialog');
@@ -117,6 +118,7 @@ const UI = (() => {
       };
       const n = options.length;
       const onKey = e => {
+        if (customKey && customKey(e, idx, els)) return;
         const k = e.key;
         if (k === 'ArrowDown' || k === 's') idx = cols === 1 ? (idx + 1) % n : (idx + cols < n ? idx + cols : idx);
         else if (k === 'ArrowUp' || k === 'w') idx = cols === 1 ? (idx - 1 + n) % n : (idx - cols >= 0 ? idx - cols : idx);
@@ -207,6 +209,20 @@ const UI = (() => {
     });
   }
 
+  // 等待任意確認／取消鍵或點擊
+  // 回傳的 Promise 有 cancel()，不需要再等待時要呼叫，避免吞掉之後的按鍵
+  function waitKey() {
+    let done;
+    const p = new Promise(res => {
+      let over = false;
+      done = () => { if (over) return; over = true; pop(); document.removeEventListener('pointerdown', done, true); res(); };
+      const pop = pushKey(e => { if (!e.repeat && (isOk(e) || isNo(e))) done(); });
+      document.addEventListener('pointerdown', done, true);
+    });
+    p.cancel = () => done();
+    return p;
+  }
+
   let bannerT = null;
   function banner(text) {
     const b = $('banner');
@@ -225,5 +241,5 @@ const UI = (() => {
     return st ? `<span class="st" style="background:${STATUS_C[st]}">${STATUS_ZH[st]}</span>` : '';
   }
 
-  return { say, choose, list, panel, input, banner, handleKey, active, hideDialog, showText, hpBar, hpColor, statusTag, isOk, isNo, pushKey };
+  return { say, choose, list, panel, input, banner, waitKey, handleKey, active, hideDialog, showText, hpBar, hpColor, statusTag, isOk, isNo, pushKey };
 })();

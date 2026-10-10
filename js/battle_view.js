@@ -22,10 +22,11 @@ function monSprite(m, back) {
 }
 
 function playCry(id, faint = false) {
-  if (G.settings.sfx === false) return;
+  const v = (G.settings.sfxVol ?? 7) / 10;
+  if (v <= 0) return;
   try {
     const a = new Audio(CRY(id));
-    a.volume = .45;
+    a.volume = .6 * v;
     if (faint) { a.playbackRate = .75; a.preservesPitch = false; }
     a.play().catch(() => { });
   } catch { }
@@ -46,7 +47,8 @@ Object.assign(Battle.prototype, {
         <span class="hlab">HP</span><div class="hpb"><div></div></div></div>
       <div class="hbox me"><span class="hn"></span><span class="hl"></span><span class="hs"></span>
         <span class="hlab">HP</span><div class="hpb"><div></div></div><span class="hnum"></span><div class="xpb"><div></div></div></div>
-      <div class="fx"></div>`;
+      <div class="fx"></div>
+      <div class="tbox"></div>`;
     el.classList.remove('hidden');
     document.body.classList.add('in-battle');
     document.getElementById('banner').classList.remove('show');
@@ -62,10 +64,20 @@ Object.assign(Battle.prototype, {
     img.className = '';
     img.style.width = '';
     img.style.bottom = '';
-    // 對手的圖依腳底（最下方不透明像素）對齊台座
+    img.style.top = '';
+    // 第三世代的圖依 pokeemerald 的座標資料定位（GetBattlerSpriteFinal_Y）：
+    //   對手：中心 y = 40 + front y_offset − 飄浮高度；我方：中心 y = 80 + back y_offset（x 分別為 176、72）
+    // 容器：對手 top 0、我方 top 96（GBA 32），高度都延伸到文字框上緣，超出的部分和原作一樣被文字框遮住
+    const P = Gen3.on && GEN3.pic && GEN3.pic[m.sp];
     const place = scale => {
       img.style.width = img.naturalWidth * scale + 'px';
-      if (back) return;
+      if (P && m.sp <= 386 && scale === 3) {
+        const cy = back ? 80 + P[1] : 40 + P[0] - P[2];
+        img.style.top = (cy - 32) * 3 - (back ? 96 : 0) + 'px';
+        img.style.bottom = 'auto';
+        return;
+      }
+      // 其他圖片：依實際內容的下緣定位（對手腳底在 GBA y=72；我方下緣略低於文字框上緣）
       try {
         const c = document.createElement('canvas');
         c.width = img.naturalWidth; c.height = img.naturalHeight;
@@ -77,7 +89,7 @@ Object.assign(Battle.prototype, {
           for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 16) break outer;
           pad++;
         }
-        img.style.bottom = 12 - pad * scale + 'px';
+        img.style.bottom = (back ? -24 : 24) - pad * scale + 'px';
       } catch { }
     };
     img.crossOrigin = 'anonymous';
@@ -143,7 +155,7 @@ Object.assign(Battle.prototype, {
   sideOf(m) { return m === this.me ? 'me' : 'foe'; },
 
   // ---------- 特效 ----------
-  center(side) { return side === 'foe' ? { x: 528, y: 110 } : { x: 216, y: 260 }; },
+  center(side) { return side === 'foe' ? { x: 528, y: 120 } : { x: 216, y: 240 }; },
   spawn(name, x, y, { dur = 500, loop = 1, scale = 3, size = null } = {}) {
     const url = Gen3.animUrl(name);
     if (!url) return null;
@@ -274,48 +286,66 @@ Object.assign(Battle.prototype, {
     return d;
   },
   // 丟球捕捉動畫
+  // 丟球捕捉動畫：按任意鍵或點擊畫面可以加速
   async catchAnim(item, shakes, caught) {
-    const foe = this.el.querySelector('.bmon.foe img');
-    const ball = this.ballEl(item);
-    const c = this.center('foe');
-    const tx = c.x - 24, ty = c.y - 10;
-    ball.style.left = tx + 'px'; ball.style.top = ty + 'px';
-    Sound.sfx('ball_throw');
-    await ball.animate([
-      { transform: 'translate(-420px, 220px) rotate(0deg)' },
-      { transform: 'translate(-200px, -80px) rotate(-360deg)', offset: .5 },
-      { transform: 'translate(0, 0) rotate(-720deg)' },
-    ], { duration: 650, easing: 'linear' }).finished;
-    ball.classList.add('open');
-    foe.animate([{ transform: 'scale(1)', filter: 'brightness(1)' }, { transform: 'scale(0) translateY(60px)', filter: 'brightness(3) sepia(1) hue-rotate(-50deg) saturate(5)' }], { duration: 380, fill: 'forwards' });
-    await U.sleep(400);
-    ball.classList.remove('open');
-    foe.classList.add('gone');
-    // 掉到地上彈跳
-    await ball.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(66px)', offset: .5 }, { transform: 'translateY(40px)', offset: .7 }, { transform: 'translateY(66px)' }],
-      { duration: 500, easing: 'ease-in', fill: 'forwards' }).finished;
-    ball.style.top = ty + 66 + 'px';
-    ball.getAnimations().forEach(a => a.cancel());
-    for (let i = 0; i < shakes; i++) {
-      await U.sleep(350);
-      Sound.sfx('ball_shake');
-      await ball.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(-28deg)' }, { transform: 'rotate(28deg)' }, { transform: 'rotate(0)' }], { duration: 480, transformOrigin: '50% 90%' }).finished;
+    const FAST = 8;
+    let fast = false;
+    const speedUp = () => {
+      if (fast) return;
+      fast = true;
+      for (const a of this.el.getAnimations({ subtree: true })) a.playbackRate = FAST;
+    };
+    const pop = UI.pushKey(e => { if (UI.isOk(e) || UI.isNo(e)) speedUp(); });
+    this.el.addEventListener('pointerdown', speedUp);
+    const wait = ms => U.sleep(fast ? ms / FAST : ms);
+    const anim = (el, kf, opt) => { const a = el.animate(kf, opt); if (fast) a.playbackRate = FAST; return a; };
+    try {
+      const foe = this.el.querySelector('.bmon.foe img');
+      const ball = this.ballEl(item);
+      const c = this.center('foe');
+      const tx = c.x - 24, ty = c.y - 10;
+      ball.style.left = tx + 'px'; ball.style.top = ty + 'px';
+      Sound.sfx('ball_throw');
+      await anim(ball, [
+        { transform: 'translate(-420px, 220px) rotate(0deg)' },
+        { transform: 'translate(-200px, -80px) rotate(-360deg)', offset: .5 },
+        { transform: 'translate(0, 0) rotate(-720deg)' },
+      ], { duration: 650, easing: 'linear' }).finished;
+      ball.classList.add('open');
+      Sound.sfx('ball_open');
+      anim(foe, [{ transform: 'scale(1)', filter: 'brightness(1)' }, { transform: 'scale(0) translateY(60px)', filter: 'brightness(3) sepia(1) hue-rotate(-50deg) saturate(5)' }], { duration: 380, fill: 'forwards' });
+      await wait(400);
+      ball.classList.remove('open');
+      foe.classList.add('gone');
+      // 掉到地上彈跳
+      await anim(ball, [{ transform: 'translateY(0)' }, { transform: 'translateY(66px)', offset: .5 }, { transform: 'translateY(40px)', offset: .7 }, { transform: 'translateY(66px)' }],
+        { duration: 500, easing: 'ease-in', fill: 'forwards' }).finished;
+      ball.style.top = ty + 66 + 'px';
+      ball.getAnimations().forEach(a => a.cancel());
+      for (let i = 0; i < shakes; i++) {
+        await wait(350);
+        Sound.sfx('ball_shake');
+        await anim(ball, [{ transform: 'rotate(0)' }, { transform: 'rotate(-28deg)' }, { transform: 'rotate(28deg)' }, { transform: 'rotate(0)' }], { duration: 480 }).finished;
+      }
+      await wait(300);
+      if (caught) {
+        Sound.sfx('caught');
+        ball.classList.add('done');
+        for (let i = 0; i < 3; i++) this.spawn('yellow_star', tx + 24 + (i - 1) * 40, ty + 50, { dur: 500 });
+        await wait(500);
+        return ball;
+      }
+      ball.classList.add('open');
+      foe.getAnimations().forEach(a => a.cancel());
+      foe.classList.remove('gone');
+      anim(foe, [{ transform: 'scale(0)', filter: 'brightness(4)' }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 300 });
+      await wait(300);
+      ball.remove();
+      return null;
+    } finally {
+      pop();
+      this.el.removeEventListener('pointerdown', speedUp);
     }
-    await U.sleep(300);
-    if (caught) {
-      Sound.sfx('caught');
-      ball.classList.add('done');
-      for (let i = 0; i < 3; i++) this.spawn('yellow_star', tx + 24 + (i - 1) * 40, ty + 50, { dur: 500 });
-      await U.sleep(500);
-      return ball;
-    }
-    ball.classList.add('open');
-    foe.getAnimations().forEach(a => a.cancel());
-    foe.classList.remove('gone');
-    foe.animate([{ transform: 'scale(0)', filter: 'brightness(4)' }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 300 });
-    await U.sleep(300);
-    ball.remove();
-    return null;
   },
 
   async trainerIntro() {

@@ -110,9 +110,12 @@ canvas { display: block; image-rendering: pixelated; }
 /* GBA 240×160 × 3 */
 #battle { position: absolute; inset: 0; z-index: 10; overflow: hidden; background-size: 720px 480px; background-color: #e8f0d8; image-rendering: pixelated; }
 #battle img, #battle .sp, #battle .ball { image-rendering: pixelated; }
-.bmon { position: absolute; width: 192px; height: 192px; overflow: hidden; }
-.bmon.foe { left: 432px; top: 8px; }
-.bmon.me { left: 120px; top: 144px; }
+.bmon { position: absolute; width: 192px; height: 240px; overflow: hidden; }
+.bmon.foe { left: 432px; top: 0; }
+.bmon.me { left: 120px; top: 96px; }
+/* 常駐的戰鬥文字框（訊息顯示在上面的 #dialog） */
+#battle .tbox { position: absolute; left: 0; bottom: 0; width: 720px; height: 144px; background: #284858; z-index: 5; }
+#battle.gen3 .tbox { background: url("../assets/gen3/ui_textbox.png") 0 0 / 720px 144px; }
 .bmon img { position: absolute; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: none; }
 .bmon img.gone { visibility: hidden; }
 .bmon img.faint { transform: translateY(110%); transition: transform .6s ease-in; }
@@ -131,7 +134,7 @@ canvas { display: block; image-rendering: pixelated; }
 .fx .ball.done { filter: brightness(.6); }
 .fx .ball.item { background-size: contain; background-position: center; }
 
-.hbox { position: absolute; color: #404040; text-shadow: 3px 3px 0 #d8d0b0; font-size: 33px; line-height: 33px; }
+.hbox { position: absolute; color: #404040; text-shadow: 2px 2px 0 #d8d0b0; font-size: 24px; line-height: 24px; white-space: nowrap; }
 .hbox.hidden { display: none; }
 .hbox span, .hbox div { position: absolute; }
 .hbox.foe { left: 24px; top: 48px; width: 384px; height: 96px; }
@@ -158,12 +161,12 @@ canvas { display: block; image-rendering: pixelated; }
 #battle.gen3 .hbox.me { background: url("../assets/gen3/ui_healthbox_singles_player.png") 0 0 / 384px 192px no-repeat; }
 
 /* 第三世代文字框與選單 */
-#dialog { font-size: 33px; line-height: 48px; height: 150px; padding: 22px 30px; }
+#dialog { font-size: 24px; line-height: 40px; height: 150px; padding: 22px 30px; white-space: pre; overflow: hidden; }
 body.gen3 #dialog { left: 6px; right: 6px; bottom: 6px; border: 24px solid transparent; border-image: url("../assets/gen3/ui_window_1.png") 8 fill / 24px stretch;
   background: none; box-shadow: none; padding: 0 12px; color: #383838; text-shadow: 3px 3px 0 #d0d0c8; image-rendering: pixelated; }
 body.gen3 #choices { border: 24px solid transparent; border-image: url("../assets/gen3/ui_window_1.png") 8 fill / 24px stretch; background: none; box-shadow: none;
   padding: 0; image-rendering: pixelated; bottom: 162px; }
-body.gen3 .choice { font-size: 30px; color: #383838; text-shadow: 3px 3px 0 #d0d0c8; padding: 4px 18px 4px 34px; }
+body.gen3 .choice { font-size: 24px; color: #383838; text-shadow: 2px 2px 0 #d0d0c8; padding: 4px 18px 4px 34px; }
 body.gen3 .choice.sel { background: none; }
 body.gen3 .choice.sel::before { color: #383838; font-size: 22px; left: 6px; }
 body.in-battle #dialog { left: 0; right: 0; bottom: 0; height: 144px; border: none; border-radius: 0; box-shadow: none; padding: 27px 42px; color: #f8f8f8;
@@ -176,10 +179,10 @@ body.in-battle #choices.battle-menu { left: 450px; right: auto; top: 354px; bott
   grid-template-columns: 1fr 1fr !important; align-content: center; box-shadow: none; }
 body.in-battle #choices.move-menu { left: 18px; right: auto; top: 354px; bottom: auto; width: 450px; height: 114px; border: none; background: none; padding: 0;
   grid-template-columns: 1fr 1fr !important; align-content: center; box-shadow: none; }
-body.in-battle #choices.battle-menu .choice, body.in-battle #choices.move-menu .choice { font-size: 30px; color: #484848; text-shadow: 3px 3px 0 #d0d0c8; padding: 6px 4px 6px 30px; }
+body.in-battle #choices.battle-menu .choice, body.in-battle #choices.move-menu .choice { font-size: 24px; color: #484848; text-shadow: 2px 2px 0 #d0d0c8; padding: 8px 4px 8px 30px; white-space: nowrap; overflow: hidden; }
 body.in-battle #choices .choice.sel { background: none; }
 body.in-battle #choices .choice.sel::before { color: #484848; font-size: 22px; left: 4px; }
-#choice-info { position: absolute; left: 498px; top: 360px; width: 204px; height: 102px; z-index: 61; font-size: 30px; line-height: 48px; color: #484848; text-shadow: 3px 3px 0 #d0d0c8; }
+#choice-info { position: absolute; left: 498px; top: 360px; width: 204px; height: 102px; z-index: 61; font-size: 24px; line-height: 48px; color: #484848; text-shadow: 2px 2px 0 #d0d0c8; white-space: nowrap; }
 #choice-info .eff { position: absolute; right: 0; top: -54px; font-size: 21px; color: #f8f8f8; text-shadow: 2px 2px 0 #303030; white-space: nowrap; }
 
 /* 進化 */

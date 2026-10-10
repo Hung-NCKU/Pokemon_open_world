@@ -54,7 +54,15 @@ const Game = {
   async addCaught(m) {
     const first = !G.state.caught[m.sp];
     Game.markCaught(m.sp);
-    if (first) await UI.say(`${Mon.name(m)} 的資料已登錄到寶可夢圖鑑！`, { auto: 1200 });
+    // 第一次捕捉：和原作一樣顯示圖鑑頁
+    if (first) { await UI.say(`${Mon.name(m)} 的資料已登錄到寶可夢圖鑑！`); await Game.dexEntry(m.sp); }
+    // 捕捉後可以查看能力或取名
+    while (true) {
+      const c = await UI.choose(['查看能力', '取名', '繼續'], { prompt: `捕捉到了 ${Mon.name(m)}！要做什麼？`, cancel: false });
+      if (c === 0) await Game.summary(m);
+      else if (c === 1) { const n = await UI.input(`要幫 ${POKEDEX[m.sp].n} 取什麼名字？（留空用原名）`, ''); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
+      else break;
+    }
     m.happy = Math.max(m.happy, 70);
     if (G.party.length < 6) G.party.push(m);
     else { G.state.box.push(m); await UI.say(`${Mon.name(m)} 已被傳送到電腦的寄放系統。`, { auto: 1200 }); }
@@ -333,18 +341,23 @@ const Game = {
       const i = await UI.list({ title: '寶可夢圖鑑', rows, start, extra: `發現 ${seen}／捕捉 ${caught}／全 ${ids.length}` });
       if (i < 0) return;
       start = i;
-      const id = ids[i], s = POKEDEX[id];
+      const id = ids[i];
       if (!G.state.seen[id]) continue;
-      // 進化條件：列出所有條件組，改編的條件會註明原作的方式
-      const evo = (s.ev || []).map(e => `→ ${G.state.seen[e.to] ? POKEDEX[e.to].n : '？？？'}：${(e.c || [e]).map(c => Mon.evoText(c)).join(' 或 ')}`).join('<br>');
-      const ey = (s.ey || []).map((v, k) => v ? `${STAT_ZH[k]}+${v}` : '').filter(Boolean).join(' ');
-      await UI.panel(`<div class="summary"><div class="left"><img class="big" src="${Mon.sprite(id)}"><div class="nm">No.${U.pad3(id)} ${U.esc(s.n)}</div>
-        <div class="dim">${U.esc(s.gen)}</div><div>${s.t.map(typeTag).join('')}</div>${s.lg ? `<div class="legend">${s.lg === 1 ? '傳說的寶可夢' : '幻之寶可夢'}</div>` : ''}
-        <div class="dim small">特性：${(s.ab || []).map(([a, h]) => U.esc(Abil.name(a)) + (h ? '（隱藏）' : '')).join('／')}</div></div>
-        <div class="right"><p>${G.state.caught[id] ? U.esc(s.fl) : '捕捉後可以查看更多資料。'}</p>
-        <table class="stats">${s.s.map((v, k) => `<tr><td>${STAT_ZH[k]}</td><td>${v}</td><td><div class="sbar"><div style="width:${Math.min(100, v / 1.6)}%"></div></div></td></tr>`).join('')}<tr><td>總和</td><td>${Mon.bst(id)}</td></tr></table>
-        <p class="dim">捕捉率 ${s.cr}　打倒後的努力值：${ey || '無'}${evo ? '<br>' + evo : ''}</p></div></div>`);
+      await Game.dexEntry(id);
     }
+  },
+  // 圖鑑頁（捕捉新寶可夢後也會顯示）
+  async dexEntry(id) {
+    const s = POKEDEX[id];
+    // 進化條件：列出所有條件組，改編的條件會註明原作的方式
+    const evo = (s.ev || []).map(e => `→ ${G.state.seen[e.to] ? POKEDEX[e.to].n : '？？？'}：${(e.c || [e]).map(c => Mon.evoText(c)).join(' 或 ')}`).join('<br>');
+    const ey = (s.ey || []).map((v, k) => v ? `${STAT_ZH[k]}+${v}` : '').filter(Boolean).join(' ');
+    await UI.panel(`<div class="summary"><div class="left"><img class="big" src="${Mon.sprite(id)}"><div class="nm">No.${U.pad3(id)} ${U.esc(s.n)}</div>
+      <div class="dim">${U.esc(s.gen)}</div><div>${s.t.map(typeTag).join('')}</div>${s.lg ? `<div class="legend">${s.lg === 1 ? '傳說的寶可夢' : '幻之寶可夢'}</div>` : ''}
+      <div class="dim small">特性：${(s.ab || []).map(([a, h]) => U.esc(Abil.name(a)) + (h ? '（隱藏）' : '')).join('／')}</div></div>
+      <div class="right"><p>${G.state.caught[id] ? U.esc(s.fl) : '捕捉後可以查看更多資料。'}</p>
+      <table class="stats">${s.s.map((v, k) => `<tr><td>${STAT_ZH[k]}</td><td>${v}</td><td><div class="sbar"><div style="width:${Math.min(100, v / 1.6)}%"></div></div></td></tr>`).join('')}<tr><td>總和</td><td>${Mon.bst(id)}</td></tr></table>
+      <p class="dim">捕捉率 ${s.cr}　打倒後的努力值：${ey || '無'}${evo ? '<br>' + evo : ''}</p></div></div>`);
   },
 
   async shopMenu() {
@@ -498,12 +511,40 @@ const Game = {
       ${badges}</div>`);
   },
 
+  // 設定：音樂與音效音量（0～10，左右鍵調整）、文字速度、戰鬥訊息
   async settingsMenu() {
-    const c = await UI.choose(['文字速度：慢', '文字速度：普通', '文字速度：快', '戰鬥訊息：自動前進', '戰鬥訊息：手動按鍵'], { prompt: '設定' });
-    if (c >= 0 && c <= 2) G.settings.textSpeed = [40, 22, 0][c];
-    if (c === 3) G.settings.battleAuto = 900;
-    if (c === 4) G.settings.battleAuto = 0;
-    try { localStorage.setItem(SAVE_KEY + '_settings', JSON.stringify(G.settings)); } catch { }
+    const st = G.settings;
+    if (st.musicVol === undefined) st.musicVol = st.music === false ? 0 : 7;
+    if (st.sfxVol === undefined) st.sfxVol = st.sfx === false ? 0 : 7;
+    const bar = v => '■'.repeat(v) + '□'.repeat(10 - v);
+    const speedName = { 40: '慢', 22: '普通', 0: '快' };
+    let idx = 0;
+    while (true) {
+      const opts = [`音樂　${bar(st.musicVol)} ${st.musicVol}`, `音效　${bar(st.sfxVol)} ${st.sfxVol}`,
+        `文字速度：${speedName[st.textSpeed] || '普通'}`, `戰鬥訊息：${st.battleAuto ? '自動前進' : '手動按鍵'}`, '完成'];
+      const adjust = d => {
+        if (idx === 0) st.musicVol = U.clamp(st.musicVol + d, 0, 10);
+        if (idx === 1) { st.sfxVol = U.clamp(st.sfxVol + d, 0, 10); Sound.sfx('select'); }
+        Sound.applyVolume();
+      };
+      // 選單開著時用左右鍵直接調整音量
+      const onKey = (e, i, els) => {
+        idx = i;
+        if (!['ArrowLeft', 'ArrowRight', 'a', 'd'].includes(e.key) || i > 1) return false;
+        adjust(e.key === 'ArrowRight' || e.key === 'd' ? 1 : -1);
+        els[i].textContent = i === 0 ? `音樂　${bar(st.musicVol)} ${st.musicVol}` : `音效　${bar(st.sfxVol)} ${st.sfxVol}`;
+        return true;
+      };
+      const c = await UI.choose(opts, { prompt: '設定（音量用 ←→ 調整）', start: idx, onKey });
+      if (c < 0 || c === 4) break;
+      idx = c;
+      if (c === 0) { st.musicVol = st.musicVol >= 10 ? 0 : st.musicVol + 1; Sound.applyVolume(); }
+      if (c === 1) { st.sfxVol = st.sfxVol >= 10 ? 0 : st.sfxVol + 1; Sound.applyVolume(); Sound.sfx('select'); }
+      if (c === 2) st.textSpeed = st.textSpeed === 40 ? 22 : st.textSpeed === 22 ? 0 : 40;
+      if (c === 3) st.battleAuto = st.battleAuto ? 0 : 900;
+    }
+    try { localStorage.setItem(SAVE_KEY + '_settings', JSON.stringify(st)); } catch { }
+    UI.hideDialog();
   },
 
   // ---------- 背景音樂 ----------

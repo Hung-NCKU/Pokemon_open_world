@@ -84,11 +84,13 @@ const Sound = (() => {
     for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
     if (pending) { const p = pending; pending = null; play(p); }
   }
+  // 音量：設定裡的 0～10 段（預設 7）
+  const vol = k => { const v = settings()[k]; return v === undefined ? .7 : v / 10; };
   function applyVolume() {
     if (!ctx) return;
-    musicGain.gain.value = settings().music === false ? 0 : .32;
-    sfxGain.gain.value = settings().sfx === false ? 0 : .5;
-    if (fileAudio) fileAudio.volume = settings().music === false ? 0 : .6;
+    musicGain.gain.value = .45 * vol('musicVol');
+    sfxGain.gain.value = .7 * vol('sfxVol');
+    if (fileAudio) fileAudio.volume = Math.min(1, .85 * vol('musicVol'));
   }
 
   const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -307,7 +309,7 @@ const Sound = (() => {
     if (Assets.bgm[name]) {
       fileAudio = new window.Audio(Assets.bgm[name]);
       fileAudio.loop = true;
-      fileAudio.volume = settings().music === false ? 0 : .6;
+      fileAudio.volume = Math.min(1, .85 * vol('musicVol'));
       fileAudio.play().catch(() => { });
       return;
     }
@@ -370,7 +372,7 @@ const Sound = (() => {
   }
   function fileSfx(name) {
     const a = new window.Audio(Assets.sfx[name]);
-    a.volume = settings().sfx === false ? 0 : .8;
+    a.volume = Math.min(1, vol('sfxVol'));
     return new Promise(r => { a.onended = r; a.onerror = r; a.play().catch(r); });
   }
 
@@ -405,14 +407,40 @@ const Sound = (() => {
     ball_throw: t => osc('sq25', 300, 1400, t, .3, .15),
     ball_shake: t => { noise(t, .06, 3000, .3, 'highpass'); osc('sq50', 220, 180, t, .06, .15); },
     caught: t => { noise(t, .05, 4000, .4, 'highpass'); },
-    run: t => { for (let i = 0; i < 5; i++) noise(t + i * .07, .06, 1500 + i * 600, .2, 'bandpass'); },
+    run: t => { for (let i = 0; i < 6; i++) { noise(t + i * .06, .08, 1200 + i * 700, .5, 'bandpass'); osc('sq50', 600 + i * 150, 900 + i * 150, t + i * .06, .05, .12); } },
     stat_up: t => { for (let i = 0; i < 6; i++) osc('sq25', 400 * Math.pow(1.19, i), 400 * Math.pow(1.19, i), t + i * .05, .05, .12); },
     stat_down: t => { for (let i = 0; i < 6; i++) osc('sq25', 1200 / Math.pow(1.19, i), 1200 / Math.pow(1.19, i), t + i * .05, .05, .12); },
     save: t => { osc('sq50', 1318, 1318, t, .08, .15); osc('sq50', 1976, 1976, t + .08, .15, .15); },
   };
+  // pokeemerald 的音效 MIDI：音色 120 以上是噪音聲道（依音高濾波），其餘用方波
+  function playSE(song) {
+    const t0 = ctx.currentTime + .01;
+    for (const n of song.notes) {
+      const t = t0 + n.t, d = Math.max(.02, Math.min(n.d, 1.5)), v = n.v * .5;
+      if (n.prog >= 120 || n.ch === 9) {
+        const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+        const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+        f.frequency.value = Math.min(12000, freq(n.n) * 4);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + d + .02);
+        s.connect(f); f.connect(g); g.connect(sfxGain);
+        s.start(t, Math.random() * .5); s.stop(t + d + .05);
+      } else {
+        const o = ctx.createOscillator();
+        o.setPeriodicWave(waves[n.prog >= 80 && n.prog < 88 ? 'sq25' : 'sq50']);
+        o.frequency.setValueAtTime(freq(n.n), t);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v * .6, t + .005);
+        g.gain.exponentialRampToValueAtTime(.001, t + d + .03);
+        o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t + d + .05);
+      }
+    }
+  }
   function sfx(name) {
     if (!ctx) return;
     if (Assets.sfx[name]) { fileSfx(name); return; }
+    const se = typeof Midi !== 'undefined' && Midi.get('se_' + name);
+    if (se) { try { playSE(se); } catch (e) { console.warn('音效播放失敗', name, e); } return; }
     if (JINGLES[name]) return jingle(name);
     const f = SFX[name];
     try { if (f) f(ctx.currentTime + .01); } catch (e) { console.warn('音效播放失敗', name, e); }

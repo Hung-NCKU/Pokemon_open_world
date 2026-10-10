@@ -366,10 +366,11 @@ const World = {
       const total = Math.hypot(league.cx - home.cx, league.cy - home.cy) || 1;
       k = U.clamp(Math.hypot(x - home.cx, y - home.cy) / total, 0, 1);
     }
-    let L = lo + (hi - lo) * k;
+    // 前期緩慢、後期加快（k^1.6）；危險地帶的加成隨地區進度遞增，避免家鄉附近就出現高等級
+    let L = lo + (hi - lo) * Math.pow(k, 1.6);
     const t = this.tile(x, y);
-    if (t === T.MOUNT || t === T.CAVE) L += 5;
-    if (t === T.DEEP) L += 8;
+    if (t === T.MOUNT || t === T.CAVE) L += 1 + 5 * k;
+    if (t === T.DEEP) L += 2 + 7 * k;
     return U.clamp(Math.floor(L), 2, 100);
   },
 
@@ -442,10 +443,11 @@ const World = {
     const cls = TRAINER_CLASSES[tr.cls];
     const L = this.levelAt(tr.x, tr.y);
     const gen = REGIONS[this.regionAt(tr.x, tr.y)].gen;
-    const n = 1 + Math.floor(rnd() * Math.min(3, 1 + L / 12));
+    // 前期的訓練家只帶 1～2 隻、等級略低於當地
+    const n = 1 + Math.floor(rnd() * Math.min(3, L / 10));
     const party = [];
     for (let i = 0; i < n; i++) {
-      const lv = U.clamp(L - 1 + Math.floor(rnd() * 3), 2, 100);
+      const lv = U.clamp(L - 2 + Math.floor(rnd() * 3), 2, 100);
       party.push(Mon.create(this.pickForLevel(rnd, lv, { types: cls.types, gen: rnd() < .7 ? gen : null }), lv, { shiny: false, hidden: .05, item: L >= 30 && rnd() < .3 ? 'oran-berry' : null }));
     }
     return party;
@@ -456,7 +458,7 @@ const World = {
     const badges = typeof Game !== 'undefined' && G.state ? Game.badgeCount() : 0;
     const rematch = G.state && G.state.champs && G.state.champs[town.region];
     if (rematch) return Math.min(100, 70 + Math.floor(badges / 4));
-    return Math.min(85, 12 + badges * 6);
+    return Math.min(85, 10 + badges * 6);
   },
   gymParty(town) {
     const L = this.gymLevel(town);
@@ -596,8 +598,10 @@ const World = {
       const blob = Gen3.on && Gen3.surfBlob(dir);
       const rider = Gen3.on && Gen3.surfFrame(dir);
       if (blob && rider) {
-        g.drawImage(blob, px - TILE / 2, py + TILE - blob.height + 6 + bob);
-        g.drawImage(rider, px, py + TILE - rider.height - 18 + bob);
+        // 坐騎與騎乘的主角都是 32×32，置中對齊，主角略高於坐騎
+        const bx = px + (TILE - blob.width) / 2, by = py + TILE - blob.height + 6 + bob;
+        g.drawImage(blob, bx, by);
+        g.drawImage(rider, px + (TILE - rider.width) / 2, by - 12);
         return;
       }
       g.drawImage(Spr.surfBlob((opts.tick >> 4) % 2), px, py + 14);

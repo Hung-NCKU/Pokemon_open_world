@@ -271,10 +271,13 @@ def build_chars():
         if os.path.exists(p):
             png_rgba(p).save(os.path.join(OUT, f"npc_{extra}.png"))
     F = os.path.join(EM, "graphics/field_effects/pics")
+    # 衝浪的坐騎沒有自己的調色盤（paletteTag = TAG_NONE），沿用主角的調色盤
+    pal = {"surf_blob": os.path.join(EM, "graphics/object_events/palettes/brendan.pal")}
     for f in ["surf_blob", "emotion_exclamation", "tall_grass", "sparkle", "shadow_medium"]:
         p = os.path.join(F, f + ".png")
         if os.path.exists(p):
-            png_rgba(p).save(os.path.join(OUT, f"fx_{f}.png"))
+            pp = pal.get(f)
+            png_rgba(p, pp if pp and os.path.exists(pp) else None).save(os.path.join(OUT, f"fx_{f}.png"))
     return out
 
 
@@ -350,11 +353,21 @@ MIDI = {
 }
 
 
+# 遊戲音效名稱 → pokeemerald 的音效 MIDI
+SE = {
+    "run": "se_flee", "select": "se_select", "hit": "se_effective", "hit_super": "se_super_effective", "hit_weak": "se_not_effective",
+    "ball_throw": "se_ball_throw", "ball_open": "se_ball_open", "ball_shake": "se_ball", "caught": "se_rg_ball_click", "faint": "se_faint",
+    "door": "se_door", "bump": "se_wall_hit", "exp": "se_exp", "save": "se_save", "stat_up": "se_m_stat_increase",
+    "stat_down": "se_m_stat_decrease", "pc": "se_pc_on", "use_item": "se_use_item", "low_health": "se_low_health", "shiny": "se_shiny",
+    "repel": "se_repel", "exit": "se_exit", "ledge": "se_ledge",
+}
+
+
 def build_midi():
     M = os.path.join(EM, "sound/songs/midi")
     os.makedirs(os.path.join(OUT, "midi"), exist_ok=True)
     out = {}
-    for k, f in MIDI.items():
+    for k, f in list(MIDI.items()) + [("se_" + k, f) for k, f in SE.items()]:
         p = os.path.join(M, f + ".mid")
         if os.path.exists(p):
             shutil.copy(p, os.path.join(OUT, "midi", k + ".mid"))
@@ -365,6 +378,33 @@ def build_midi():
     with open(os.path.join(OUT, "midi.js"), "w", encoding="utf-8") as f:
         f.write("window.GEN3_MIDI=" + json.dumps(data) + ";\n")
     return list(out)
+
+
+# 寶可夢圖片在戰鬥中的位置（pokeemerald：front/back_pic_coordinates.h、enemy_mon_elevation.h），以全國圖鑑編號對應
+def build_pic_coords():
+    G = os.path.join(EM, "src/data/pokemon_graphics")
+    pokedex = json.loads(open(os.path.join(ROOT, "data", "pokedex.js"), encoding="utf-8").read()[len("window.POKEDEX="):-2])
+    by_name = {v["en"].replace("-", "_").upper(): int(k) for k, v in pokedex.items()}
+
+    def parse(fn, field):
+        out = {}
+        if not os.path.exists(os.path.join(G, fn)):
+            return out
+        src = open(os.path.join(G, fn), encoding="utf-8").read()
+        for name, body in re.findall(r"\[SPECIES_(\w+)\]\s*=\s*([^\n]+)", src):
+            m = re.search(field, body)
+            if m and name in by_name:
+                out[by_name[name]] = int(m.group(1))
+        return out
+
+    front = parse("front_pic_coordinates.h", r"\.y_offset\s*=\s*(\d+)")
+    back = parse("back_pic_coordinates.h", r"\.y_offset\s*=\s*(\d+)")
+    elev = parse("enemy_mon_elevation.h", r"^(\d+)")
+    pic = {}
+    for nid in set(front) | set(back):
+        pic[nid] = [front.get(nid, 0), back.get(nid, 0), elev.get(nid, 0)]
+    print(f"  圖片座標 {len(pic)} 種")
+    return pic
 
 
 def main():
@@ -379,8 +419,9 @@ def main():
     man["trainers"] = build_chars()
     print("戰鬥介面與特效...")
     man["anims"] = build_battle()
-    print("音樂...")
+    print("音樂與音效...")
     man["midi"] = build_midi()
+    man["pic"] = build_pic_coords()
     with open(os.path.join(OUT, "manifest.js"), "w", encoding="utf-8") as f:
         f.write("window.GEN3=" + json.dumps(man, ensure_ascii=False) + ";\n")
     print("完成 →", OUT)

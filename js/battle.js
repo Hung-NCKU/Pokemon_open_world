@@ -145,7 +145,7 @@ class Battle {
         const c = await UI.choose(['換下一隻', '逃跑'], { prompt: '要使用下一隻寶可夢嗎？', cancel: false });
         if (c === 1) {
           const a = Mon.stats(G.party.find(m => m.hp > 0))[5], b = this.speedOf(this.foe, this.vFoe);
-          if (a >= b || Math.random() < .5) { await this.msg('順利逃走了！'); return 'run'; }
+          if (a >= b || Math.random() < .5) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
           await this.msg('沒能逃走！');
         }
       }
@@ -225,7 +225,10 @@ class Battle {
     const ball = await this.catchAnim(item, shakes, caught);
     if (caught) {
       await this.msg(`抓到了！成功捕捉了 ${Mon.name(foe)}！`);
-      await Sound.jingle('caught');
+      // 捕捉成功的音樂可以按鍵或點擊跳過
+      const skip = UI.waitKey();
+      await Promise.race([Sound.jingle('caught'), skip]);
+      skip.cancel();
       if (ball) ball.remove();
       return 'catch';
     }
