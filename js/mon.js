@@ -139,7 +139,8 @@ const Mon = {
     if (m.form && FORM_EVO[m.form]) return [];
     const out = [];
     for (const e of POKEDEX[m.sp].ev || []) {
-      if (!POKEDEX[e.to]) continue;
+      // 鐵面忍者只會在土居忍士進化成鐵殼忍者時，隊伍有空位才額外出現（Game.evolve），不是一般進化
+      if (!POKEDEX[e.to] || e.to === 292) continue;
       const conds = e.c || [e];
       let best = -1;
       for (const c of conds) {

@@ -202,11 +202,13 @@ class Battle {
     const got = [];
     for (let i = 0; i < G.party.length; i++) {
       const m = G.party[i];
-      if (m.hp <= 0 || m.lv >= 100) continue;
+      if (m.hp <= 0) continue;
+      // 努力值：Lv.100 也會獲得
+      Mon.gainEV(m, foe);
+      if (m.lv >= 100) continue;
       const part = this.participants.has(i);
       let amt = Mon.expGain(foe, m, tr, part);
       if (m.item === 'lucky-egg') amt = Math.floor(amt * 1.5);
-      Mon.gainEV(m, foe);
       got.push([m, amt, part]);
     }
     for (const [m, amt, part] of got) {

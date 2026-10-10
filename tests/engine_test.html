@@ -947,6 +947,94 @@ async function run() {
     U.unseed();
     [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
   }
+  // 第五份檢查報告的回歸測試
+  {
+    const slot = (sd, pp = 10) => ({ id: moveId(sd), pp });
+    // 1. 強制換下後，替補不會使用原本的招式（雙方都用優先度 −6 的招式，對手較快先吼叫）
+    {
+      G.state = Game.newState('T', 'kanto', 1);
+      const me = Mon.create(143, 50), bench = Mon.create(7, 50);
+      me.moves = [slot('whirlwind')]; bench.moves = [slot('whirlwind')];
+      G.state.party = [me, bench];
+      const f1 = Mon.create(101, 50), f2 = Mon.create(20, 50);
+      f1.moves = [slot('roar')]; f2.moves = [slot('splash')];
+      const b = new Battle({ trainer: { title: 'T', name: 'T', party: [f1, f2], kind: 'trainer', money: 1 } });
+      b.setup();
+      b.aiChoose = () => ({ idx: 0 });
+      b.volOf(f1).lockOn = 5; b.vMe.lockOn = 5;
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('強制換下後，換上的寶可夢不會使用原本的招式', b.me === bench && b.foe === f1, `${Mon.name(b.me)} vs ${Mon.name(b.foe)}`);
+    }
+    // 2. 預知未來：兩回合後才造成傷害
+    {
+      const b = setup(65, 50, 143, 50);
+      b.me.moves = [slot('futuresight')]; b.foe.moves = [slot('splash')];
+      b.aiChoose = () => ({ idx: 0 });
+      const hp0 = b.foe.hp;
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('預知未來：使用的回合不造成傷害，排入未來攻擊', b.foe.hp === hp0 && b.futures.length === 1);
+      b.me.moves = [slot('splash')];
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('預知未來：下一回合仍未命中', b.foe.hp === hp0);
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('預知未來：第三回合結束時命中', b.foe.hp < hp0 && !b.futures.length, `${hp0 - b.foe.hp}`);
+    }
+    // 3. 自爆：被守住、對幽靈屬性時使用者也會倒下
+    {
+      const b = setup(74, 50, 143, 50);
+      b.me.moves = [slot('selfdestruct')]; b.foe.moves = [slot('protect')]; b.aiChoose = () => ({ idx: 0 });
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('自爆被守住時使用者仍然倒下', b.me.hp === 0);
+      const b2 = setup(74, 50, 92, 50);
+      b2.me.moves = [slot('selfdestruct')]; b2.foe.moves = [slot('splash')]; b2.aiChoose = () => ({ idx: 0 });
+      await b2.doTurn({ type: 'move', idx: 0 });
+      check('對幽靈屬性自爆時使用者仍然倒下', b2.me.hp === 0);
+    }
+    // 4. 土居忍士不會直接進化成脫殼忍者
+    {
+      const n = Mon.create(290, 30);
+      check('土居忍士 Lv.30 只會進化成鐵面忍者', Mon.evoCandidates(n).every(c => c.to !== 292) && Mon.evoCandidates(n).some(c => c.to === 291));
+    }
+    // 5. Lv.100 也會獲得努力值
+    {
+      const b = setup(149, 100, 143, 30);
+      b.me.ev = [0, 0, 0, 0, 0, 0];
+      await b.awardExp();
+      check('Lv.100 打倒寶可夢也會獲得努力值', b.me.ev.reduce((a, c) => a + c, 0) > 0, JSON.stringify(b.me.ev));
+    }
+    // 6. 雜技：攜帶道具時威力不加倍
+    {
+      const b = setup(142, 50, 143, 50), acro = md(moveId('acrobatics'));
+      b.me.item = null; const free = b.basePower(b.me, b.foe, acro);
+      b.me.item = 'leftovers'; const held = b.basePower(b.me, b.foe, acro);
+      check('雜技：沒有道具時威力加倍，有道具時不加倍', free === 110 && held === 55, `${free} ${held}`);
+    }
+    // 7. 非幽靈屬性的詛咒
+    {
+      const b = setup(143, 50, 25, 50);
+      await use(b, b.me, 'curse');
+      check('非幽靈屬性的詛咒：攻擊、防禦 +1，速度 −1', b.vMe.stg.atk === 1 && b.vMe.stg.def === 1 && b.vMe.stg.spe === -1, JSON.stringify(b.vMe.stg));
+    }
+    // 8. 精神場地擋下惡作劇之心提升優先度的招式
+    {
+      const b = setup(302, 50, 25, 50);
+      b.initEngine();
+      b.me.ability = 'prankster';
+      b.field.terrain = 'psychicterrain'; b.field.terrainT = 5;
+      const tw = md(moveId('thunderwave'));
+      const ok = await b.useMoveOn(b.me, b.foe, tw, { mv: tw, pri: 1, prankster: true });
+      check('精神場地：擋下惡作劇之心提升優先度的變化招式', ok === false && b.foe.st !== 'par');
+    }
+    // 9. 壓迫感多扣 PP
+    {
+      const b = setup(25, 50, 144, 50);
+      b.foe.ability = 'pressure';
+      const s = slot('thunderbolt', 10);
+      b.me.moves = [s];
+      await b.runMove(b.me, b.foe, { mv: md(s.id), slot: s });
+      check('壓迫感：對它使用的招式多扣 1 PP', s.pp === 8, String(s.pp));
+    }
+  }
   // 地點專屬生態
   {
     const keep = G.state;

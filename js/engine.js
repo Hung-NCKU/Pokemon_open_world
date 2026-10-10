@@ -231,8 +231,9 @@ Object.assign(Battle.prototype, {
     if (!foeAction.heal && foeAction.switchTo === undefined && this.aiTera()) await this.terastallize(this.foe);
     // 2. 招式依優先度 → 速度 → 隨機排序（戲法空間時速度反轉）
     const acts = [];
-    if (action.type === 'move') acts.push({ side: 'me', ...this.resolveMove(this.me, this.vMe, action.idx) });
-    if (!foeAction.heal && foeAction.switchTo === undefined) acts.push({ side: 'foe', ...this.resolveMove(this.foe, this.vFoe, foeAction.idx) });
+    // 記住使用者：被吹走、強制換下後，替補不會使用原本的招式
+    if (action.type === 'move') acts.push({ side: 'me', mon: this.me, ...this.resolveMove(this.me, this.vMe, action.idx) });
+    if (!foeAction.heal && foeAction.switchTo === undefined) acts.push({ side: 'foe', mon: this.foe, ...this.resolveMove(this.foe, this.vFoe, foeAction.idx) });
     for (const a of acts) {
       const m = a.side === 'me' ? this.me : this.foe, v = a.side === 'me' ? this.vMe : this.vFoe;
       const ua = this.ab(m);
@@ -253,7 +254,7 @@ Object.assign(Battle.prototype, {
       const a = acts[i];
       const user = a.side === 'me' ? this.me : this.foe;
       const target = this.otherOf(user);
-      if (!user || user.hp <= 0) continue;
+      if (!user || user.hp <= 0 || (a.mon && a.mon !== user)) continue;
       this.firstMover = i === 0;
       await this.runMove(user, target, a);
       const r = await this.checkFaints();
@@ -440,7 +441,11 @@ Object.assign(Battle.prototype, {
       mv = called;
       act = { ...act, slot: null, called: true };
     } else {
-      if (act.slot && !act.cont) act.slot.pp = Math.max(0, act.slot.pp - 1);
+      if (act.slot && !act.cont) {
+        // 壓迫感：對手的招式指向自己時多扣 1 PP
+        const aimed = target && target !== user && target.hp > 0 && !['self', 'allySide', 'allyTeam', 'adjacentAllyOrSelf', 'allies', 'adjacentAlly', 'all'].includes(mv.target);
+        act.slot.pp = Math.max(0, act.slot.pp - (aimed && this.ab(target) === 'pressure' && this.sideKey(target) !== this.sideKey(user) ? 2 : 1));
+      }
       if (!act.slot && mv === STRUGGLE_MD) await this.msg(`${name} 沒有可以使用的招式了！`);
     }
     const moveId = mv.num;
@@ -513,6 +518,14 @@ Object.assign(Battle.prototype, {
 
   // 回傳 true（命中）、false（失敗／未命中）、null（被打斷）
   async useMoveOn(user, target, mv, act) {
+    // 預知未來、破滅之願：兩回合後才攻擊（同一邊只能有一個）
+    if ((mv.id === 'futuresight' || mv.id === 'doomdesire') && !act.futureHit) {
+      const side = this.sideKey(target);
+      if (this.futures.some(f => f.side === side)) { await this.msg('但是失敗了！'); return false; }
+      this.futures.push({ turns: 3, side, user, mv, act: { ...act } });
+      await this.msg(mv.id === 'futuresight' ? `${this.label(user)} 預知了未來的攻擊！` : `${this.label(user)} 把破滅之願託付給了未來！`);
+      return true;
+    }
     const vU = this.volOf(user), vT = this.volOf(target);
     const name = this.label(user), tname = this.label(target);
     const selfTarget = ['self', 'allySide', 'allyTeam', 'adjacentAllyOrSelf', 'allies', 'adjacentAlly'].includes(mv.target);
@@ -536,6 +549,7 @@ Object.assign(Battle.prototype, {
         await this.msg(`${tname} 保護住了自己！`);
         await this.protectContact(user, target, mv);
         if (mv.hasCrashDamage) await this.crash(user);
+        if (mv.selfdestruct === 'always') await this.selfFaint(user); // 自爆、大爆炸：被守住也會倒下
         return false;
       }
       if (mv.breaksProtect && vT.protect) { vT.protect = false; await this.msg(`${tname} 的守護被打破了！`); }
@@ -546,7 +560,7 @@ Object.assign(Battle.prototype, {
         if (!can.includes(mv.id) && !(vU.lockOn > 0)) { await this.msg(`${tname} 躲開了攻擊！`); return false; }
       }
       // 精神場地擋下先制招式
-      if (this.field.terrain === 'psychicterrain' && (mv.pri || 0) > 0 && this.grounded(target)) { await this.msg(`${tname} 受到了精神場地的保護！`); return false; }
+      if (this.field.terrain === 'psychicterrain' && ((act && act.pri !== undefined ? act.pri : mv.pri) || 0) > 0 && this.grounded(target)) { await this.msg(`${tname} 受到了精神場地的保護！`); return false; }
       // 惡作劇之心的變化招式對惡屬性無效
       if (act.prankster && this.typesOf(target).includes('dark') && this.sideKey(target) !== this.sideKey(user)) { await this.msg(`對 ${tname} 好像沒有效果……`); return false; }
       // 屬性免疫（Showdown：變化招式預設忽略免疫）
@@ -554,6 +568,7 @@ Object.assign(Battle.prototype, {
       if (!ignoreImm && this.effectiveness({ ...mv, type: this.moveType(user, mv) }, target, user) === 0) {
         await this.msg(`對 ${tname} 好像沒有效果……`);
         if (mv.hasCrashDamage) await this.crash(user);
+        if (mv.selfdestruct === 'always') await this.selfFaint(user); // 對幽靈屬性使用自爆也會倒下
         return false;
       }
       if (mv.flags.powder && (this.typesOf(target).includes('grass') || this.ab(target) === 'overcoat' || this.itm(target) === 'safety-goggles')) {
@@ -697,7 +712,7 @@ Object.assign(Battle.prototype, {
       case 'venoshock': case 'barbbarrage': if (target.st === 'psn' || target.st === 'tox') bp *= 2; break;
       case 'brine': if (target.hp * 2 <= st[0]) bp *= 2; break;
       case 'facade': if (['brn', 'par', 'psn', 'tox'].includes(user.st)) bp *= 2; break;
-      case 'acrobatics': bp *= 2; break; // 尚無持有道具系統，視為沒有道具
+      case 'acrobatics': if (!user.item) bp *= 2; break; // 雜技：沒有攜帶道具時威力加倍
       case 'knockoff': if (this.itm(target)) bp = Math.floor(bp * 1.5); break;
       case 'assurance': if (vT.damagedThisTurn) bp *= 2; break;
       case 'avalanche': case 'revenge': if (vU.hitBy.length) bp *= 2; break;
@@ -1444,7 +1459,8 @@ Object.assign(Battle.prototype, {
       }
       case 'destinybond': v.destinyBond = true; await this.msg(`${name} 想要和對手同歸於盡！`); return true;
       case 'curse':
-        if (!this.typesOf(user).includes('ghost')) return true;
+        // 非幽靈屬性：攻擊、防禦 +1，速度 −1
+        if (!this.typesOf(user).includes('ghost')) { await this.boost(user, { atk: 1, def: 1, spe: -1 }, user); return true; }
         if (v.curse) return fail();
         await this.hurt(user, Math.floor(Mon.maxHp(user) / 2));
         v.curse = true; await this.msg(`${this.label(user)} 削減了體力，詛咒了 ${name}！`); return true;
@@ -1707,6 +1723,10 @@ Object.assign(Battle.prototype, {
     // 未來攻擊
     for (const fu of this.futures.splice(0)) {
       if (--fu.turns > 0) { this.futures.push(fu); continue; }
+      const target = fu.side === 'me' ? this.me : this.foe;
+      if (!target || target.hp <= 0) continue;
+      await this.msg(`${this.label(target)} 受到了${fu.mv.n}的攻擊！`);
+      await this.useMoveOn(fu.user, target, fu.mv, { ...fu.act, futureHit: true });
     }
     for (const key of ['me', 'foe']) {
       const s = this.sides[key];
