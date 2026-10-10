@@ -475,6 +475,8 @@ def main():
     man["ui"] = build_all()
     from build_icons import build_icons
     man["ui"]["icons"] = build_icons()
+    from build_tm_icons import build as build_tm_icons
+    build_tm_icons()
     print("室內地圖...")
     from build_interiors import main as build_interiors
     build_interiors()

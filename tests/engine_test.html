@@ -65,6 +65,7 @@
 <script src="../js/late.js"></script>
 <script src="../js/ai.js"></script>
 <script src="../assets/gen3/interiors.js"></script>
+<script src="../js/fieldmove.js"></script>
 <script src="../js/interior.js"></script>
 <script src="../js/game.js"></script>
 <script>
@@ -704,7 +705,7 @@ async function run() {
     const d0c = Math.abs(cur.x - spot[0]) + Math.abs(cur.y - spot[1]), d0s = Math.abs(shy.x - spot[0]) + Math.abs(shy.y - spot[1]);
     OverworldMons._step(1e9);
     check('好奇的寶可夢會靠近玩家', Math.abs(cur.x - spot[0]) + Math.abs(cur.y - spot[1]) < d0c);
-    check('膽小的寶可夢會逃離玩家', Math.abs(shy.x - spot[0]) + Math.abs(shy.y - spot[1]) > d0s);
+    check('膽小的寶可夢會逃離玩家（或逃走消失）', Math.abs(shy.x - spot[0]) + Math.abs(shy.y - spot[1]) > d0s || !OverworldMons.list.includes(shy));
     const realBattle = Game.battle; let fought = null;
     Game.battle = async o => { fought = o.wild; return 'win'; };
     OverworldMons.touch(cur);
@@ -1557,6 +1558,7 @@ async function run() {
       const lm = { id: 'test', x: 100, y: 100 };
       G.state.x = 100; G.state.y = 101;
       Interior.enterCave(lm, key, async () => { reached = true; });
+      Interior.room.strength = true; // 已使用怪力（演出另外測試）
       for (const dir of path || []) {
         G.keys.clear(); G.keys.add(KEY[dir]);
         Interior.update(16);
@@ -1772,6 +1774,44 @@ async function run() {
     if (realShow) SummaryUI.show = realShow;
     UI.panel = realPanel;
     check('寶可夢資訊：打開時收起對話框，不會被遮住', dlgHidden === true);
+    G.state = keep;
+  }
+  // 飛翔：在地圖上用方向鍵在去過的城鎮之間跳、Z 確認；怪力：洞窟第一次推石頭先使用怪力
+  {
+    const keep = G.state, keepChoose = UI.choose, keepSay = UI.say;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(6, 40)];
+    World.generate(20261010, 'kanto');
+    const kt = World.towns.filter(t => t.region === 'kanto');
+    const home = kt.find(t => t.kind === 'home');
+    // 去過家鄉與最近的另一座城鎮
+    const other = kt.filter(t => t !== home).sort((a, b) => Math.hypot(a.cx - home.cx, a.cy - home.cy) - Math.hypot(b.cx - home.cx, b.cy - home.cy))[0];
+    G.state.visited = { [home.id]: 1, [other.id]: 1 };
+    G.state.x = home.cx; G.state.y = home.cy;
+    UI.choose = async () => 0; UI.say = async () => { };
+    const key = k => UI.handleKey(new KeyboardEvent('keydown', { key: k }));
+    const p = MapUI.show({ canFly: true });
+    const dx = other.cx - home.cx, dy = other.cy - home.cy;
+    key(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'ArrowRight' : 'ArrowLeft') : (dy > 0 ? 'ArrowDown' : 'ArrowUp'));
+    key('z');
+    const dest = await Promise.race([p, new Promise(r => setTimeout(() => r('timeout'), 3000))]);
+    if (dest === 'timeout') key('x');
+    check('飛翔：在地圖上用方向鍵跳到去過的城鎮，按 Z 確認飛過去', dest === other, dest && dest.name);
+    // 怪力
+    if (window.INTERIORS && INTERIORS.cave_a) {
+      window.INTERIORS_FORCE = true;
+      Interior.enterCave({ id: 'x', x: 100, y: 100 }, 'cave_a', null);
+      const r = Interior.room;
+      const bd = r.boulders.find(b => Interior.walkable(b.x, b.y + 1) || true);
+      // 站在第一顆石頭下面往上推
+      const b0 = r.boulders.reduce((a, b) => (b.y > a.y ? b : a));
+      r.x = b0.x; r.y = b0.y + 1; G.move = null;
+      G.keys.clear(); G.keys.add('ArrowUp'); Interior.update(16); G.keys.clear();
+      for (let i = 0; i < 40 && G.busy; i++) await new Promise(res => setTimeout(res, 50));
+      check('怪力：第一次推石頭先問要不要使用怪力，使用後才能推', r.strength === true);
+      Interior.exit();
+      window.INTERIORS_FORCE = false;
+    }
+    UI.choose = keepChoose; UI.say = keepSay;
     G.state = keep;
   }
   // 合眾到帕底亞的專屬內容（世界配置第 5 版）

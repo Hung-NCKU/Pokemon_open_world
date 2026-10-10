@@ -15,7 +15,7 @@
 | Z / Enter | 確定、調查、對話（面向告示牌、隱藏道具、人物） |
 | X / Esc | 選單／返回 |
 | 按住 Space | 二倍速（移動、文字、戰鬥動畫） |
-| M | 世界地圖（隊伍有飛行屬性時按 F 飛翔） |
+| M | 世界地圖（隊伍有飛行屬性時，方向鍵選去過的城鎮、Z 或點選後確認飛翔） |
 | F3 | 顯示 FPS、世界生成耗時、錯誤數 |
 | 戰鬥中 R / M / E / G | 太晶化／超級進化（究極爆發）／Z 招式／極巨化（招式選單上方的「特殊能力列」會顯示能不能用與原因） |
 
@@ -76,7 +76,8 @@ js/world.js           地圖生成、城鎮、訓練家、繪製  js/ecology.js 
 js/weather.js         天氣              js/hidden.js     隱藏道具
 js/overworld_mons.js  地圖上的野生寶可夢與習性
 js/story.js、events.js、regions.js、regions2.js、town_events.js   劇情、支線、各地區內容、城鎮事件
-js/interior.js        室內地圖、洞窟解謎
+js/interior.js        室內地圖、洞窟解謎、寶可夢中心的治療機器
+js/fieldmove.js       秘傳招式的演出（衝浪、飛翔、怪力）
 js/ui.js、menus.js、bagui.js、shopui.js、storageui.js、summaryui.js、mapui.js   介面
 js/battle.js、engine.js、battle_view.js、move_anims.js   對戰
 js/ai.js              訓練家 AI

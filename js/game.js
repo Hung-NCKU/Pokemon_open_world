@@ -737,17 +737,13 @@ const Game = {
 
   async mapMenu() {
     if (Game.emeraldUI('map')) {
-      const r = await MapUI.show({ canFly: Game.canFly() });
-      let dest = r && r !== 'list' ? r : null;
-      if (r === 'list') {
-        const list = World.towns.filter(t => G.state.visited[t.id]);
-        const i = await UI.list({ title: '要飛到哪裡？', rows: list.map(t => `<div class="grow"><b>${U.esc(t.name)}</b></div><span class="dim">${REGIONS[t.region].n}地區</span>`) });
-        if (i >= 0) dest = list[i];
-      }
+      // 飛翔：直接在地圖上選城鎮（MapUI）
+      const dest = await MapUI.show({ canFly: Game.canFly() });
       if (dest) {
         const flyer = G.party.find(m => m.hp > 0 && (Mon.types(m).includes('flying') || m.moves.some(x => x.id === 19)));
         await UI.say(`${Mon.name(flyer)} 使用了飛翔！`);
-        Game.flyTo(dest);
+        UI.hideDialog();
+        await FieldMove.fly(flyer, () => Game.flyTo(dest));
       }
       return;
     }
@@ -755,7 +751,7 @@ const Game = {
     const m = document.createElement('div');
     m.className = 'modal mapmodal';
     const scale = 0.6;
-    m.innerHTML = `<h2><span>世界地圖</span><span class="extra">${REGIONS[World.regionAt(G.state.x, G.state.y)].n}地區${town ? '・' + town.name : ''}</span></h2><div class="body"><div class="mapwrap"></div></div><div class="hint">● 白：去過的城鎮　● 紅：你的位置　X 返回${Game.canFly() ? '　F 飛翔' : ''}</div>`;
+    m.innerHTML = `<h2><span>世界地圖</span><span class="extra">${REGIONS[World.regionAt(G.state.x, G.state.y)].n}地區${town ? '・' + town.name : ''}</span></h2><div class="body"><div class="mapwrap"></div></div><div class="hint">● 白：去過的城鎮　● 紅：你的位置　X 返回${Game.canFly() ? '　點選去過的城鎮飛翔' : ''}</div>`;
     const wrap = m.querySelector('.mapwrap');
     const c = document.createElement('canvas');
     c.width = WW; c.height = WH;
@@ -795,8 +791,7 @@ const Game = {
     const action = await new Promise(res => {
       const pop = UI.pushKey(e => {
         if (e.repeat) return;
-        if ((e.key === 'f' || e.key === 'F') && Game.canFly()) { pop(); res('fly'); }
-        else if (UI.isNo(e) || UI.isOk(e) || e.key === 'm' || e.key === 'M') { pop(); res(null); }
+        if (UI.isNo(e) || UI.isOk(e) || e.key === 'm' || e.key === 'M') { pop(); res(null); }
       });
       c.onclick = ev => {
         const r = c.getBoundingClientRect();
@@ -806,16 +801,15 @@ const Game = {
       };
     });
     m.remove();
-    let dest = action && action !== 'fly' ? action : null;
-    if (action === 'fly') {
-      const list = World.towns.filter(t => G.state.visited[t.id]);
-      const i = await UI.list({ title: '要飛到哪裡？', rows: list.map(t => `<div class="grow"><b>${U.esc(t.name)}</b></div><span class="dim">${REGIONS[t.region].n}地區</span>`) });
-      if (i >= 0) dest = list[i];
-    }
+    let dest = action || null;
+    // 飛翔前確認
+    if (dest && (await UI.choose(['是', '否'], { prompt: `要飛到${dest.name}嗎？` })) !== 0) dest = null;
+    UI.hideDialog();
     if (dest) {
       const flyer = G.party.find(m => m.hp > 0 && (Mon.types(m).includes('flying') || m.moves.some(x => x.id === 19)));
       await UI.say(`${Mon.name(flyer)} 使用了飛翔！`);
-      Game.flyTo(dest);
+      UI.hideDialog();
+      await FieldMove.fly(flyer, () => Game.flyTo(dest));
     }
   },
 
@@ -1004,9 +998,12 @@ const Game = {
       if (c !== 0) { await UI.say('期待你再次光臨！'); return; }
     }
     await UI.say('那麼，請把你的寶可夢交給我一會兒。');
+    UI.hideDialog();
     Game.healParty();
     G.state.center = { x: b.door.x, y: b.door.y + 1 };
-    await Sound.jingle('heal');
+    // 室內：護士把精靈球放上治療機器（一顆一顆），配合音樂閃爍
+    if (typeof Interior !== 'undefined' && Interior.room && Interior.room.key === 'center') await Interior.healAnim(G.party.length, () => Sound.jingle('heal'));
+    else await Sound.jingle('heal');
     await UI.say('讓你久等了！你的寶可夢都已經恢復健康了。');
     Game.save(true);
     await UI.say('期待你再次光臨！');
@@ -1268,6 +1265,7 @@ const Game = {
     if (c !== 0) return;
     await UI.say(`${Mon.name(m)} 使用了衝浪！`, { auto: 700 });
     UI.hideDialog();
+    await FieldMove.surf(m);
     const s = G.state;
     s.surf = true;
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: 160 };

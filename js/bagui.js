@@ -45,7 +45,16 @@ const BagUI = (() => {
     const x = (i % 16) * 24, y = Math.floor(i / 16) * 24;
     return `<div class="bag-ic" style="background-image:url(${Gen3.base}item_icons_ext.png);background-position:${-x * 3}px ${-y * 3}px;background-size:${16 * 24 * 3}px auto"></div>`;
   }
+  // 招式學習器：依招式屬性換色（tools/build_tm_icons.py → tm_icons.png，順序同 TM_TYPES）
+  const TM_TYPES = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy'];
+  function tmIcon(id) {
+    const mv = ITEMS[id] && MOVES[ITEMS[id].mv];
+    const k = mv ? TM_TYPES.indexOf(mv.t) : -1;
+    if (!Gen3.on || k < 0) return null;
+    return `<div class="bag-ic" style="background-image:url(${Gen3.base}tm_icons.png);background-position:${-k * 72}px 0;background-size:${TM_TYPES.length * 72}px 72px"></div>`;
+  }
   function icon(id) {
+    if (isTM(id)) { const t = tmIcon(id); if (t) return t; }
     const a = atlas(isTM(id) ? 'tm' : id) || ext(id);
     if (a) return a;
     const fb = (atlas(fallbackName(id)) || '').replace(/"/g, '&quot;');

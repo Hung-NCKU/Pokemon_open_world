@@ -80,13 +80,14 @@ const MapUI = (() => {
     return { town, lm, region: inside ? World.regionAt(wx, wy) : null };
   }
 
-  // 回傳：選到的城鎮（飛翔）、'list'（F 開啟飛翔清單）或 null
+  // 回傳：選到的城鎮（飛翔）或 null
+  // 可以飛翔時：方向鍵讓游標在去過的城鎮之間跳（按住 Shift 自由移動），Z 或點選城鎮後確認就飛過去
   function show({ canFly = false } = {}) {
     return new Promise(res => {
       const s = G.state;
       const root = document.createElement('div');
       root.id = 'rmap';
-      root.innerHTML = `<canvas width="${CW}" height="${CH}"></canvas><div class="rm-name"></div><div class="rm-hint">${canFly ? 'Z 飛翔　F 清單　' : ''}X 返回</div>`;
+      root.innerHTML = `<canvas width="${CW}" height="${CH}"></canvas><div class="rm-name"></div><div class="rm-hint">${canFly ? '方向鍵 選城鎮　Z／點選 飛翔　' : ''}X 返回</div>`;
       document.getElementById('game').appendChild(root);
       const cv = root.querySelector('canvas'), g = cv.getContext('2d');
       const cursorImg = new Image(); cursorImg.src = Gen3.base + 'map_cursor.png';
@@ -126,20 +127,43 @@ const MapUI = (() => {
       };
       const timer = setInterval(() => { tick++; draw(); }, 1000 / 30);
       const close = v => { clearInterval(timer); pop(); root.remove(); res(v); };
+      const visited = () => World.towns.filter(t => s.visited[t.id]);
+      // 往某個方向最近的去過的城鎮（夾角 60 度以內）
+      const jump = (dx, dy) => {
+        let best = null, bd = 1e9;
+        for (const t of visited()) {
+          const [x, y] = toMap(t.cx, t.cy);
+          const vx = x - cx, vy = y - cy, d = Math.hypot(vx, vy);
+          if (d < 2 || (vx * dx + vy * dy) / d < .5) continue;
+          if (d < bd) { bd = d; best = [x, y]; }
+        }
+        if (best) { [cx, cy] = best; Sound.sfx('select'); return true; }
+        return false;
+      };
+      // 確認後飛過去
+      let asking = false;
+      const tryFly = async t => {
+        if (!canFly || !t || !s.visited[t.id]) { Sound.sfx('bump'); return; }
+        asking = true;
+        const c = await UI.choose(['是', '否'], { prompt: `要飛到${t.name}嗎？` });
+        UI.hideDialog();
+        asking = false;
+        if (c === 0) close(t);
+      };
       const onKey = e => {
+        if (asking) return;
         const k = e.key, step = G.keys.has('Shift') ? 6 : 2;
+        const dir = { ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0], ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1] }[k];
+        if (dir && canFly && !G.keys.has('Shift') && jump(...dir)) { draw(); return; }
         if (k === 'ArrowLeft' || k === 'a') cx = Math.max(0, cx - step);
         else if (k === 'ArrowRight' || k === 'd') cx = Math.min(MW - 1, cx + step);
         else if (k === 'ArrowUp' || k === 'w') cy = Math.max(0, cy - step);
         else if (k === 'ArrowDown' || k === 's') cy = Math.min(MH - 1, cy + step);
         else if (UI.isOk(e)) {
           if (e.repeat) return;
-          const t = at(cx, cy).town;
-          if (canFly && t && s.visited[t.id]) { Sound.sfx('select'); close(t); }
-          else Sound.sfx('bump');
+          tryFly(at(cx, cy).town);
           return;
         } else if (UI.isNo(e) || k === 'm' || k === 'M') { if (!e.repeat) close(null); return; }
-        else if (k === 'f' || k === 'F') { if (canFly && !e.repeat) close('list'); return; }
         else return;
         draw();
       };
@@ -148,12 +172,14 @@ const MapUI = (() => {
         const vx = U.clamp(cx - CW / 2, 0, MW - CW), vy = U.clamp(cy - CH / 2, 0, MH - CH);
         cx = vx + Math.round((ev.clientX - r.left) / r.width * CW);
         cy = vy + Math.round((ev.clientY - r.top) / r.height * CH);
-        const t = at(cx, cy).town;
-        if (canFly && t && s.visited[t.id]) close(t); else draw();
+        // 點選：附近（8 格內）去過的城鎮
+        let t = null, bd = 9;
+        for (const v of visited()) { const [x, y] = toMap(v.cx, v.cy); const d = Math.hypot(x - cx, y - cy); if (d < bd) { bd = d; t = v; } }
+        if (t) { [cx, cy] = toMap(t.cx, t.cy); draw(); if (!asking) tryFly(t); } else draw();
       };
       const pop = UI.pushKey(onKey);
       draw();
     });
   }
-  return { show, base, at };
+  return { show, base, at, toMap };
 })();

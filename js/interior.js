@@ -77,6 +77,21 @@ const Interior = (() => {
     Sound.sfx('door');
     Telemetry.event('進入洞窟', { lm: lm.id });
   }
+  // 怪力：會怪力的寶可夢優先，其次格鬥屬性，再其次攻擊最高的（不會因為沒有秘傳招式而卡住）
+  async function useStrength() {
+    const alive = G.party.filter(m => m.hp > 0);
+    const m = alive.find(x => x.moves.some(s => s.id === 70)) || alive.find(x => Mon.types(x).includes('fighting'))
+      || alive.reduce((a, x) => (Mon.stats(x)[1] > Mon.stats(a)[1] ? x : a), alive[0]);
+    if (!m) return;
+    const c = await UI.choose(['是', '否'], { prompt: `大石頭擋住了去路……\n要讓 ${Mon.name(m)} 使用怪力嗎？` });
+    UI.hideDialog();
+    if (c !== 0) return;
+    await UI.say(`${Mon.name(m)} 使用了怪力！`, { auto: 700 });
+    UI.hideDialog();
+    await FieldMove.strength(m);
+    room.strength = true;
+    await UI.say('現在可以推動大石頭了！', { auto: 900 });
+  }
   const boulderAt = (x, y) => room.boulders && room.boulders.find(b => b.x === x && b.y === y);
   // 推石頭：後面那一格要是空地（不能推進牆、其他石頭、出入口）
   function push(bd, dx, dy) {
@@ -85,6 +100,25 @@ const Interior = (() => {
     bd.x = tx; bd.y = ty;
     Sound.sfx('select');
     return true;
+  }
+
+  // 寶可夢中心的治療機器：在護士左邊的機器上依序放上精靈球（每 0.3 秒一顆），全部放好後隨音樂閃爍
+  //   機器的位置：古辰鎮寶可夢中心地圖（OldaleTown_PokemonCenter_1F）的第 5–6 欄、第 1–2 列
+  const HEAL_SLOTS = [[5.35, 1.45], [5.85, 1.45], [5.35, 1.8], [5.85, 1.8], [5.35, 2.15], [5.85, 2.15]];
+  async function healAnim(n, playJingle) {
+    if (!room) return playJingle();
+    const nurse = room.npcs.find(x => x.role === 'nurse');
+    if (nurse) nurse.dir = 'left';
+    room.healing = { n: 0, blink: false };
+    Gen3.ensure('ball_poke', 'ball_poke.png');
+    for (let i = 0; i < Math.min(6, n); i++) {
+      room.healing.n = i + 1;
+      Sound.sfx('select');
+      await new Promise(r => setTimeout(r, G.fast ? 150 : 300));
+    }
+    room.healing.blink = true;
+    await playJingle();
+    if (room) { room.healing = null; if (nurse) nurse.dir = 'down'; }
   }
 
   function exit() {
@@ -133,6 +167,8 @@ const Interior = (() => {
     if (!walkable(tx, ty)) {
       // 推石頭：主角不動，石頭往前一格（推一次要等一下）
       const bd = boulderAt(tx, ty);
+      // 每次進洞窟第一次推石頭：先使用怪力（演出）
+      if (bd && !room.strength) { G.keys.clear(); Game.flow(() => useStrength()); return; }
       if (bd && push(bd, dx, dy)) G.move = { fx: room.x, fy: room.y, tx: room.x, ty: room.y, t: 0, dur: 220, room: true };
       return;
     }
@@ -168,6 +204,18 @@ const Interior = (() => {
       } else {
         const n = p.n;
         World.drawPerson(g, n.x * TILE - ox, n.y * TILE - oy, n.dir, { pal: Spr.trainerPal(n.cls || 0, n.i % 5), sheet: 'npc_' + n.gfx }, 0);
+      }
+    }
+    // 治療機器上的精靈球
+    if (room.healing) {
+      const ball = Gen3.ensure('ball_poke', 'ball_poke.png');
+      const on = !room.healing.blink || (G.frame >> 3) % 2;
+      for (let i = 0; i < room.healing.n; i++) {
+        const [hx, hy] = HEAL_SLOTS[i];
+        const x = hx * TILE - ox, y = hy * TILE - oy;
+        if (ball.naturalWidth) g.drawImage(ball, 0, 0, 16, 16, x, y, 18, 18);
+        else { g.fillStyle = '#e83030'; g.beginPath(); g.arc(x + 9, y + 9, 8, 0, Math.PI * 2); g.fill(); }
+        if (room.healing.blink && on) { g.fillStyle = 'rgba(255,255,200,.7)'; g.beginPath(); g.arc(x + 9, y + 9, 10, 0, Math.PI * 2); g.fill(); }
       }
     }
     const top = Gen3.ensure('int_' + room.key + '_top', `int_${room.key}_top.png`);
@@ -231,5 +279,5 @@ const Interior = (() => {
     if (r === 'win') G.state.defeated[key] = 1;
   }
 
-  return { can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
+  return { healAnim, can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
 })();

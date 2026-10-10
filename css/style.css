@@ -260,3 +260,12 @@ body.fast #game::after { content: '▶▶ ×2'; position: absolute; right: 10px;
 #choice-info .mv-why { color: #c04040; font-size: 15px; }
 /* F3 遊玩紀錄的即時顯示 */
 #telemetry { position: absolute; left: 4px; top: 4px; z-index: 50; margin: 0; padding: 3px 6px; font: 12px/16px monospace; color: #fff; background: rgba(0, 0, 0, .6); border-radius: 3px; pointer-events: none; white-space: pre; }
+
+/* 秘傳招式的演出（js/fieldmove.js） */
+.fieldmove { position: absolute; inset: 0; z-index: 58; pointer-events: none; }
+.fm-band { position: absolute; left: 0; right: 0; top: 140px; height: 200px; display: flex; align-items: center; justify-content: center; transform: scaleY(0);
+  background: repeating-linear-gradient(90deg, #203058 0 24px, #283868 24px 48px); box-shadow: 0 -6px 0 #f8f8f8, 0 6px 0 #f8f8f8; overflow: hidden; }
+.fm-band img { width: 192px; height: 192px; image-rendering: pixelated; object-fit: contain; }
+.fm-fade { position: absolute; inset: 0; background: #000; z-index: 57; opacity: 0; pointer-events: none; }
+.fm-fly { position: absolute; left: 336px; top: 200px; width: 48px; height: 64px; z-index: 56; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 70%); }
