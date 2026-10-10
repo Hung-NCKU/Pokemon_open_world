@@ -1,11 +1,15 @@
 // 共用工具：亂數、雜訊、雜項
 const U = {
-  ri(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); },
-  pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; },
-  chance(p) { return Math.random() < p; },
+  // 遊戲邏輯共用的亂數來源；U.seed(n) 改為固定亂數（測試、重播用），U.unseed() 還原
+  rand: Math.random,
+  seed(n) { U.rand = mulberry32(n >>> 0); },
+  unseed() { U.rand = Math.random; },
+  ri(a, b) { return a + Math.floor(U.rand() * (b - a + 1)); },
+  pick(arr) { return arr[Math.floor(U.rand() * arr.length)]; },
+  chance(p) { return U.rand() < p; },
   clamp(v, a, b) { return v < a ? a : v > b ? b : v; },
   sleep(ms) { return new Promise(r => setTimeout(r, ms)); },
-  weighted(list, rnd = Math.random) {
+  weighted(list, rnd = U.rand) {
     let t = 0;
     for (const e of list) t += e.w;
     let r = rnd() * t;

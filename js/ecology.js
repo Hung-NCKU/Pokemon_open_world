@@ -106,10 +106,10 @@ Object.assign(World, {
     const night = U.isNight();
     const table = this.zoneTable(Math.floor(x / ZONE), Math.floor(y / ZONE), biome)
       .filter(t => !(t.slot === 'day' && night) && !(t.slot === 'night' && !night));
-    let id = table.length ? U.weighted(table).id : this.pickForLevel(Math.random, L);
+    let id = table.length ? U.weighted(table).id : this.pickForLevel(U.rand, L);
     id = this.evolveFor(id, L);
     // 野生寶可夢：隱藏特性 3%、有 5% 機率攜帶樹果
-    const item = Math.random() < .05 ? U.pick(['oran-berry', 'sitrus-berry', 'cheri-berry', 'pecha-berry', 'rawst-berry', 'chesto-berry']) : null;
+    const item = U.rand() < .05 ? U.pick(['oran-berry', 'sitrus-berry', 'cheri-berry', 'pecha-berry', 'rawst-berry', 'chesto-berry']) : null;
     return Mon.create(id, L, { hidden: .03, item });
   },
 

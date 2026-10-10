@@ -78,7 +78,7 @@ const Abil = {
     const list = (POKEDEX[sp] && POKEDEX[sp].ab) || [];
     const normal = list.filter(a => !a[1]).map(a => a[0]);
     const hid = list.filter(a => a[1]).map(a => a[0]);
-    if (hid.length && Math.random() < hidden) return hid[0];
+    if (hid.length && U.rand() < hidden) return hid[0];
     return normal.length ? U.pick(normal) : (hid[0] || null);
   },
   // 進化後沿用同一個特性欄位

@@ -189,7 +189,7 @@ Object.assign(Battle.prototype, {
       const a = this.speedOf(this.me, this.vMe), b = this.speedOf(this.foe, this.vFoe);
       const B = Math.floor(b / 4) % 256;
       const F = B === 0 ? 256 : Math.floor(a * 32 / B) + 30 * this.runTries;
-      if (this.typesOf(this.me).includes('ghost') || F > 255 || Math.random() * 256 < F) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
+      if (this.typesOf(this.me).includes('ghost') || F > 255 || U.rand() * 256 < F) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
       await this.msg('沒能逃走！');
     } else if (action.type === 'switch') {
       if (this.trappedBy(this.me)) {
@@ -214,10 +214,10 @@ Object.assign(Battle.prototype, {
       if (ua === 'prankster' && a.mv.cat === 'Status') { a.pri += 1; a.prankster = true; }
       if (ua === 'gale-wings' && a.mv.type === 'flying' && m.hp === Mon.maxHp(m)) a.pri += 1;
       if (ua === 'triage' && (a.mv.heal || a.mv.drain)) a.pri += 3;
-      a.quick = this.itm(m) === 'quick-claw' && Math.random() < .2 ? 1 : 0;
+      a.quick = this.itm(m) === 'quick-claw' && U.rand() < .2 ? 1 : 0;
       a.stall = ua === 'stall' ? 1 : 0;
       a.spe = this.speedOf(m, v) * (this.field.trickRoom ? -1 : 1);
-      a.rnd = Math.random();
+      a.rnd = U.rand();
     }
     acts.sort((x, y) => y.pri - x.pri || y.quick - x.quick || x.stall - y.stall || y.spe - x.spe || x.rnd - y.rnd);
     for (const a of acts) if (a.quick) await this.msg(`${this.label(a.side === 'me' ? this.me : this.foe)} 靠先制之爪搶先行動了！`);
@@ -267,7 +267,7 @@ Object.assign(Battle.prototype, {
   // ---------- AI ----------
   aiChoose() {
     const foe = this.foe, me = this.me;
-    if (this.aiItems > 0 && foe.hp < Mon.maxHp(foe) * .25 && Math.random() < .7) return { heal: true };
+    if (this.aiItems > 0 && foe.hp < Mon.maxHp(foe) * .25 && U.rand() < .7) return { heal: true };
     const usable = foe.moves.map((s, i) => ({ s, i })).filter(({ s, i }) => s.pp > 0 && md(s.id).support !== 'none' && !this.moveBlocked(foe, this.vFoe, s.id));
     if (!usable.length) {
       const any = foe.moves.findIndex(s => s.pp > 0);
@@ -298,7 +298,7 @@ Object.assign(Battle.prototype, {
       else if (m.weather && this.field.weather !== m.weather) score = 25;
       else if (m.stallingMove) score = this.vFoe.protectCount ? 0 : 15;
       else score = m.support === 'partial' ? 5 : 10;
-      score *= .85 + Math.random() * .3;
+      score *= .85 + U.rand() * .3;
       if (!best || score > best.score) best = { i, score };
     }
     return { idx: best.i };
@@ -369,7 +369,7 @@ Object.assign(Battle.prototype, {
       else await this.msg(`${name} 正在呼呼大睡。`);
     }
     if (user.st === 'frz') {
-      if (Math.random() < .2 || mv.flags.defrost) { user.st = null; this.draw(); await this.msg(`${name} 的冰凍融化了！`); }
+      if (U.rand() < .2 || mv.flags.defrost) { user.st = null; this.draw(); await this.msg(`${name} 的冰凍融化了！`); }
       else { await this.msg(`${name} 因冰凍而無法行動！`); return; }
     }
     if (vU.flinch) {
@@ -385,7 +385,7 @@ Object.assign(Battle.prototype, {
       if (vU.conf === 0) await this.msg(`${name} 的混亂解除了！`);
       else {
         await this.msg(`${name} 混亂了！`);
-        if (Math.random() < 1 / 3) {
+        if (U.rand() < 1 / 3) {
           const st = Mon.stats(user);
           const base = Math.floor(Math.floor(Math.floor(2 * user.lv / 5 + 2) * 40 * st[1] * boostMul(vU.stg.atk) / (st[2] * boostMul(vU.stg.def))) / 50) + 2;
           await this.hurt(user, Math.max(1, Math.floor(base * (100 - U.ri(0, 15)) / 100)));
@@ -395,8 +395,8 @@ Object.assign(Battle.prototype, {
         }
       }
     }
-    if (user.st === 'par' && Math.random() < .25) { await this.msg(`${name} 因麻痺而無法動彈！`); vU.locked = null; vU.charging = null; vU.semi = null; return; }
-    if (vU.love && Math.random() < .5) { await this.msg(`${name} 著迷了，無法使出招式！`); return; }
+    if (user.st === 'par' && U.rand() < .25) { await this.msg(`${name} 因麻痺而無法動彈！`); vU.locked = null; vU.charging = null; vU.semi = null; return; }
+    if (vU.love && U.rand() < .5) { await this.msg(`${name} 著迷了，無法使出招式！`); return; }
 
     // 呼叫其他招式
     if (mv.callsMove) {
@@ -601,7 +601,7 @@ Object.assign(Battle.prototype, {
       if (target.lv > user.lv) return false;
       let acc = 30 + user.lv - target.lv;
       if (mv.id === 'sheercold' && !this.typesOf(user).includes('ice')) acc -= 10;
-      return Math.random() * 100 < acc;
+      return U.rand() * 100 < acc;
     }
     let acc = mv.acc;
     const w = this.wx();
@@ -628,7 +628,7 @@ Object.assign(Battle.prototype, {
     if (this.itm(user) === 'wide-lens') acc *= 1.1;
     if (this.itm(user) === 'zoom-lens' && vT.movedThisTurn) acc *= 1.2;
     if (this.field.gravity) acc = acc * 5 / 3;
-    return Math.random() * 100 < acc;
+    return U.rand() * 100 < acc;
   },
 
   // ---------- 威力 ----------
@@ -691,10 +691,10 @@ Object.assign(Battle.prototype, {
       case 'rollout': case 'iceball': bp = 30 * Math.pow(2, Math.min(4, vU.rollout)) * (vU.defenseCurl ? 2 : 1); break;
       case 'round': break;
       case 'magnitude': {
-        const r = Math.random() * 100;
+        const r = U.rand() * 100;
         bp = r < 5 ? 10 : r < 15 ? 30 : r < 35 ? 50 : r < 65 ? 70 : r < 85 ? 90 : r < 95 ? 110 : 150; break;
       }
-      case 'present': { const r = Math.random(); bp = r < .4 ? 40 : r < .7 ? 80 : r < .8 ? 120 : 0; break; }
+      case 'present': { const r = U.rand(); bp = r < .4 ? 40 : r < .7 ? 80 : r < .8 ? 120 : 0; break; }
       case 'beatup': bp = 5 + Math.floor(POKEDEX[user.sp].s[1] / 10); break;
       case 'watershuriken': break;
     }
@@ -736,7 +736,7 @@ Object.assign(Battle.prototype, {
       const [a, b] = mv.multihit;
       if (ua === 'skill-link') hits = b;
       else if (ui === 'loaded-dice') hits = a === 2 && b === 5 ? U.ri(4, 5) : b;
-      else if (a === 2 && b === 5) { const r = Math.random(); hits = r < .35 ? 2 : r < .7 ? 3 : r < .85 ? 4 : 5; }
+      else if (a === 2 && b === 5) { const r = U.rand(); hits = r < .35 ? 2 : r < .7 ? 3 : r < .85 ? 4 : 5; }
       else hits = U.ri(a, b);
     } else if (mv.multihit) hits = mv.multihit;
 
@@ -773,7 +773,7 @@ Object.assign(Battle.prototype, {
         if (vT.endure) survived = 'endure';
         else if (full && this.ab(target) === 'sturdy') survived = 'sturdy';
         else if (full && this.itm(target) === 'focus-sash') survived = 'sash';
-        else if (this.itm(target) === 'focus-band' && Math.random() < .1) survived = 'band';
+        else if (this.itm(target) === 'focus-band' && U.rand() < .1) survived = 'band';
         if (survived) dmg = target.hp - 1;
       }
       dmg = Math.min(dmg, target.hp);
@@ -811,7 +811,7 @@ Object.assign(Battle.prototype, {
       else { await this.healMon(user, h); await this.msg(`從 ${tname} 吸取了體力！`); }
     }
     // 詛咒之軀：30% 封住打中自己的招式
-    if (this.ab(target) === 'cursed-body' && target.hp >= 0 && !vU.disable && Math.random() < .3 && act.slot) {
+    if (this.ab(target) === 'cursed-body' && target.hp >= 0 && !vU.disable && U.rand() < .3 && act.slot) {
       vU.disable = 4; vU.disableMove = act.slot.id;
       await this.abilityMsg(target, `${this.label(user)} 的 ${mv.n} 被封住了！`);
     }
@@ -829,7 +829,7 @@ Object.assign(Battle.prototype, {
     const shielded = subHit || this.ab(target) === 'shield-dust' || this.itm(target) === 'covert-cloak';
     if (!sheer) {
       for (const s of secs) {
-        if (Math.random() * 100 >= (s.chance ?? 100) * (ua === 'serene-grace' ? 2 : 1)) continue;
+        if (U.rand() * 100 >= (s.chance ?? 100) * (ua === 'serene-grace' ? 2 : 1)) continue;
         if (s.self) { if (user.hp > 0 && s.self.boosts) await this.boost(user, s.self.boosts, user); continue; }
         if (target.hp <= 0 || shielded) continue;
         if (s.status) await this.setStatus(target, s.status, user, true);
@@ -837,7 +837,7 @@ Object.assign(Battle.prototype, {
         if (s.boosts) await this.boost(target, s.boosts, user, true);
       }
       // 王者之證、銳利之牙：10% 畏縮
-      if ((ui === 'kings-rock' || ui === 'razor-fang') && target.hp > 0 && !shielded && !secs.some(s => s.volatileStatus === 'flinch') && Math.random() < .1) vT.flinch = true;
+      if ((ui === 'kings-rock' || ui === 'razor-fang') && target.hp > 0 && !shielded && !secs.some(s => s.volatileStatus === 'flinch') && U.rand() < .1) vT.flinch = true;
     }
     // 生命寶珠的反作用力、貝殼之鈴、打倒對手時的特性
     if (user.hp > 0 && total > 0) {
@@ -858,7 +858,7 @@ Object.assign(Battle.prototype, {
     // 對目標的揮發狀態（束縛類）
     if (mv.volatileStatus && target.hp > 0 && !subHit) await this.addVolatile(target, mv.volatileStatus, user, mv);
     // 自身效果
-    if (mv.self && mv.self.boosts && user.hp > 0 && (!mv.self.chance || Math.random() * 100 < mv.self.chance)) await this.boost(user, mv.self.boosts, user);
+    if (mv.self && mv.self.boosts && user.hp > 0 && (!mv.self.chance || U.rand() * 100 < mv.self.chance)) await this.boost(user, mv.self.boosts, user);
     if (mv.self && mv.self.volatileStatus === 'roost') vU.roost = true;
     if (mv.selfBoost && mv.selfBoost.boosts && user.hp > 0) await this.boost(user, mv.selfBoost.boosts, user);
     // 解凍
@@ -924,7 +924,7 @@ Object.assign(Battle.prototype, {
     if ((ta === 'rough-skin' || ta === 'iron-barbs') && !guard) { await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 8))); await this.abilityMsg(target, `${uname} 受到了傷害！`); }
     if (ti === 'rocky-helmet' && !guard && user.hp > 0) { await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 6))); await this.msg(`${uname} 受到了凸凸頭盔的傷害！`); }
     if (user.hp <= 0) return;
-    if (Math.random() < .3) {
+    if (U.rand() < .3) {
       if (ta === 'static') await this.setStatus(user, 'par', target, true);
       if (ta === 'flame-body') await this.setStatus(user, 'brn', target, true);
       if (ta === 'poison-point') await this.setStatus(user, 'psn', target, true);
@@ -934,7 +934,7 @@ Object.assign(Battle.prototype, {
       }
     }
     if (ta === 'gooey' || ta === 'tangling-hair') await this.boost(user, { spe: -1 }, target, true);
-    if (ua === 'poison-touch' && target.hp > 0 && Math.random() < .3) await this.setStatus(target, 'psn', user, true);
+    if (ua === 'poison-touch' && target.hp > 0 && U.rand() < .3) await this.setStatus(target, 'psn', user, true);
   },
   // 樹果：HP 低於一半時回復
   async checkBerry(m) {
@@ -984,7 +984,7 @@ Object.assign(Battle.prototype, {
     const contact = mv.flags.contact && ui !== 'punching-glove' && ua !== 'long-reach';
     // 會心
     let critStage = (mv.critRatio ? mv.critRatio - 1 : 0) + (vU.focus || 0) + (ua === 'super-luck' ? 1 : 0) + (ui === 'scope-lens' || ui === 'razor-claw' ? 1 : 0);
-    let crit = !!mv.willCrit || vU.laserFocus > 0 || Math.random() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
+    let crit = !!mv.willCrit || vU.laserFocus > 0 || U.rand() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
     if (ta === 'battle-armor' || ta === 'shell-armor') crit = false;
     if (vU.laserFocus > 0) vU.laserFocus = 0;
     // 威力修正（Showdown onBasePower）
@@ -1381,7 +1381,7 @@ Object.assign(Battle.prototype, {
       }
       case 'protect': case 'kingsshield': case 'spikyshield': case 'banefulbunker': case 'obstruct': case 'silktrap': case 'burningbulwark': case 'endure': {
         const last = this.order[this.order.length - 1] === this.sideKey(target);
-        if (last || Math.random() > Math.pow(1 / 3, v.protectCount)) { v.protectCount = 0; return fail(); }
+        if (last || U.rand() > Math.pow(1 / 3, v.protectCount)) { v.protectCount = 0; return fail(); }
         v.protectCount++;
         if (vs === 'endure') { v.endure = true; await this.msg(`${name} 擺出了挺住的架式！`); }
         else { v.protect = vs; await this.msg(`${name} 擺出了防守的架式！`); }
@@ -1727,9 +1727,9 @@ Object.assign(Battle.prototype, {
         if (upK) await this.boost(m, { [upK]: 2 }, m);
         if (downK) await this.boost(m, { [downK]: -1 }, m);
       }
-      if (m.hp > 0 && a === 'shed-skin' && m.st && Math.random() < 1 / 3) { m.st = null; this.draw(); await this.abilityMsg(m, `${name} 的異常狀態治好了！`); }
+      if (m.hp > 0 && a === 'shed-skin' && m.st && U.rand() < 1 / 3) { m.st = null; this.draw(); await this.abilityMsg(m, `${name} 的異常狀態治好了！`); }
       // 收穫：吃掉的樹果有 50% 機率長回來（晴天必定）
-      if (m.hp > 0 && a === 'harvest' && !m.item && v.lastBerry && (w === 'sunnyday' || Math.random() < .5)) {
+      if (m.hp > 0 && a === 'harvest' && !m.item && v.lastBerry && (w === 'sunnyday' || U.rand() < .5)) {
         m.item = v.lastBerry; await this.abilityMsg(m, `${name} 收穫了${Held.name(v.lastBerry)}！`);
       }
       // 劇毒寶珠、火焰寶珠

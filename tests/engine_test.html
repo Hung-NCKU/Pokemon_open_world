@@ -497,6 +497,102 @@ async function run() {
     Game.validateState(old);
     check('舊存檔：已捕捉的傳說不會再出現', old.legendsCaught[150] === 1 && !old.legendsCaught[4]);
   }
+  // 機制交互（固定亂數）
+  {
+    const moveSlot = sd => ({ id: moveId(sd), pp: 10 });
+    const foeUses = (b, sd) => { b.foe.moves = [moveSlot(sd)]; b.aiChoose = () => ({ idx: 0 }); };
+    // 守住＋先制：電光一閃（先制 +1）被對手的守住擋下
+    U.seed(101);
+    {
+      const b = setup(25, 50, 143, 50);
+      b.me.moves = [moveSlot('quickattack')];
+      foeUses(b, 'protect');
+      const hp0 = b.foe.hp;
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('交互：守住擋下先制招式（守住的優先度 +4 先發動）', b.foe.hp === hp0, `${b.foe.hp}/${hp0}`);
+    }
+    // 連續守住：第二次成功率 1/3
+    {
+      let ok = 0;
+      for (let i = 0; i < 300; i++) {
+        const b = setup(25, 50, 143, 50);
+        b.me.moves = [moveSlot('tackle')];
+        foeUses(b, 'protect');
+        await b.doTurn({ type: 'move', idx: 0 });
+        const hp0 = b.foe.hp;
+        await b.doTurn({ type: 'move', idx: 0 });
+        if (b.foe.hp === hp0) ok++;
+      }
+      check('交互：連續使用守住的成功率約 1/3', ok > 70 && ok < 130, `${ok}/300`);
+    }
+    // 換人＋特性：換上威嚇的暴鯉龍，對手攻擊 -1；再生力退場回復 1/3
+    {
+      const b = setup(25, 50, 68, 50);
+      const gyara = Mon.create(130, 50); gyara.ability = 'intimidate';
+      G.party.push(gyara);
+      b.me.moves = [moveSlot('tackle')];
+      foeUses(b, 'bulkup');
+      await b.doTurn({ type: 'switch', idx: 1 });
+      check('交互：換上威嚇的寶可夢，對手攻擊先 -1 再因健美 +1', b.vFoe.stg.atk === 0 && b.vFoe.stg.def === 1, JSON.stringify(b.vFoe.stg));
+    }
+    {
+      const b = setup(80, 50, 143, 50);
+      b.me.ability = 'regenerator';
+      const max = Mon.maxHp(b.me);
+      b.me.hp = Math.floor(max / 3);
+      const hp0 = b.me.hp;
+      G.party.push(Mon.create(25, 50));
+      foeUses(b, 'splash');
+      await b.doTurn({ type: 'switch', idx: 1 });
+      check('交互：再生力在退場時回復 1/3', G.party[0].hp === hp0 + Math.floor(max / 3), `${G.party[0].hp}/${max}`);
+    }
+    // 天氣＋道具：潮濕岩石讓降雨持續 8 回合；沙暴扣血後吃剩的東西回復
+    {
+      const b = setup(186, 50, 143, 50);
+      b.me.ability = 'drizzle'; b.me.item = 'damp-rock';
+      b.initEngine();
+      await b.abilityStart(b.me);
+      check('交互：降雨＋潮濕岩石 → 下雨 8 回合', b.field.weather === 'raindance' && b.field.weatherT === 8, `${b.field.weather} ${b.field.weatherT}`);
+      b.me.item = null; b.field.weather = null;
+      await b.abilityStart(b.me);
+      check('交互：沒有潮濕岩石 → 下雨 5 回合', b.field.weatherT === 5);
+    }
+    {
+      const b = setup(143, 50, 25, 50);
+      b.me.item = 'leftovers';
+      b.initEngine();
+      b.field.weather = 'sandstorm'; b.field.weatherT = 5;
+      b.me.moves = [moveSlot('splash')];
+      foeUses(b, 'splash');
+      const max = Mon.maxHp(b.me);
+      b.me.hp = max - 30;
+      await b.doTurn({ type: 'move', idx: 0 });
+      // 沙暴 −1/16，吃剩的東西 +1/16：一來一回不變
+      check('交互：沙暴扣血後吃剩的東西回復（淨變化 0）', b.me.hp === max - 30, `${b.me.hp}/${max}`);
+    }
+    U.unseed();
+  }
+  // 固定亂數重播：同一個種子＋同一串指令 → 完全相同的戰鬥紀錄
+  {
+    const replay = async seed => {
+      U.seed(seed);
+      const log = [];
+      const b = setup(6, 40, 9, 40);
+      b.me.moves = Mon.movesFor(6, 40).map(id => ({ id, pp: MOVES[id].pp }));
+      b.foe.moves = Mon.movesFor(9, 40).map(id => ({ id, pp: MOVES[id].pp }));
+      b.msg = async t => { log.push(t); };
+      for (let t = 0; t < 15; t++) {
+        const r = await b.doTurn({ type: 'move', idx: t % b.me.moves.length });
+        log.push(`[${b.me.hp},${b.foe.hp}]`);
+        if (r) break;
+      }
+      U.unseed();
+      return log.join('|');
+    };
+    const a = await replay(777), b2 = await replay(777), c = await replay(778);
+    check('重播：相同種子與指令得到完全相同的紀錄', a === b2 && a.length > 50, `${a.length} 字`);
+    check('重播：不同種子的紀錄不同（亂數確實有作用）', a !== c);
+  }
   // 地點專屬生態
   {
     const keep = G.state;

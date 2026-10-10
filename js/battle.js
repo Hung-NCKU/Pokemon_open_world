@@ -162,7 +162,7 @@ class Battle {
         const c = await UI.choose(['換下一隻', '逃跑'], { prompt: '要使用下一隻寶可夢嗎？', cancel: false });
         if (c === 1) {
           const a = Mon.stats(G.party.find(m => m.hp > 0))[5], b = this.speedOf(this.foe, this.vFoe);
-          if (a >= b || Math.random() < .5) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
+          if (a >= b || U.rand() < .5) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
           await this.msg('沒能逃走！');
         }
       }
@@ -237,13 +237,13 @@ class Battle {
     const a = ((3 * M - 2 * H) * rate * it.rate) / (3 * M) * bonus * lowLevel;
     const caughtCount = Object.keys(G.state.caught).length;
     const critMul = caughtCount > 600 ? 2.5 : caughtCount > 450 ? 2 : caughtCount > 300 ? 1.5 : caughtCount > 150 ? 1 : caughtCount > 30 ? .5 : 0;
-    const critical = Math.random() * 256 < Math.floor(Math.min(255, a) * critMul / 6);
+    const critical = U.rand() * 256 < Math.floor(Math.min(255, a) * critMul / 6);
     let shakes = 0, caught = false;
     if (it.rate >= 255 || a >= 255) { caught = true; shakes = 3; }
     else {
       const b = 65536 / Math.pow(255 / a, 0.1875);
       const checks = critical ? 1 : 4;
-      for (shakes = 0; shakes < checks; shakes++) if (Math.random() * 65536 >= b) break;
+      for (shakes = 0; shakes < checks; shakes++) if (U.rand() * 65536 >= b) break;
       caught = shakes >= checks;
       shakes = critical ? (caught ? 1 : 0) : Math.min(shakes, 3);
     }

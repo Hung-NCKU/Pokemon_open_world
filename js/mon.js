@@ -67,7 +67,7 @@ const Mon = {
   create(id, lv, opts = {}) {
     const s = POKEDEX[id];
     const m = {
-      uid: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      uid: Date.now().toString(36) + U.rand().toString(36).slice(2, 7),
       sp: id, lv, exp: Mon.expFor(s.gr, lv),
       iv: Array.from({ length: 6 }, () => U.ri(0, 31)),
       ev: [0, 0, 0, 0, 0, 0],
@@ -77,7 +77,7 @@ const Mon = {
       item: opts.item || null,
       happy: s.hap,
       st: null,
-      shiny: opts.shiny ?? Math.random() < 1 / 4096,
+      shiny: opts.shiny ?? U.rand() < 1 / 4096,
       moves: Mon.movesFor(id, lv).filter(x => MOVES[x]).map(x => ({ id: x, pp: MOVES[x].pp })),
     };
     if (opts.perfect) m.iv = m.iv.map(v => Math.max(v, opts.perfect));
@@ -187,7 +187,7 @@ const Mon = {
   genderOf(id) {
     const r = POKEDEX[id].gr8;
     if (r === undefined || r < 0) return null;
-    return Math.random() * 8 < r ? 'F' : 'M';
+    return U.rand() * 8 < r ? 'F' : 'M';
   },
   genderMark(m) { return m.gender === 'F' ? '♀' : m.gender === 'M' ? '♂' : ''; },
 };
