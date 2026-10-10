@@ -52,6 +52,7 @@
 <script src="../js/mapui.js"></script>
 <script src="../js/summaryui.js"></script>
 <script src="../js/storageui.js"></script>
+<script src="../js/shopui.js"></script>
 <script src="../js/battle.js"></script>
 <script src="../js/engine.js"></script>
 <script src="../js/battle_view.js"></script>
@@ -1511,6 +1512,30 @@ async function run() {
     Interior.exit();
     check('洞窟解謎：離開洞窟回到地標前', !G.room && G.state.x === 100 && G.state.y === 101);
     window.INTERIORS_FORCE = false;
+    G.state = keep;
+  }
+  // 綠寶石友好商店：用按鍵買 10 個精靈球（加送 1 個紀念球）
+  {
+    const keep = G.state, keepChoose = UI.choose, keepSay = UI.say;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(4, 5)]; G.state.money = 3000; G.state.bag = {};
+    UI.choose = async () => 0; UI.say = async () => { };
+    const key = k => UI.handleKey(new KeyboardEvent('keydown', { key: k }));
+    const tick = () => new Promise(r => setTimeout(r, 0));
+    const done = ShopUI.open(SHOP_LIST);
+    const row = () => document.querySelector('.shopui .srow.sel .n').textContent;
+    const first = row();
+    key('z');                       // 精靈球 → 選數量
+    for (let i = 0; i < 9; i++) key('ArrowUp');
+    const qtyText = document.querySelector('.shopui .qty').textContent;
+    key('z'); await tick(); await tick();
+    const money = G.state.money, balls = G.state.bag['poke-ball'], bonus = G.state.bag['premier-ball'] || 0;
+    // 錢不夠買的東西：停在清單
+    G.state.money = 100; key('z'); await tick(); await tick();
+    const stillList = document.querySelector('.shopui .qty').classList.contains('hidden');
+    key('x'); await done;
+    check('友好商店：用按鍵選數量購買，扣錢並加送 1 個球', first === ITEMS['poke-ball'].n && qtyText.includes('×10') && money === 1000 && balls + bonus === 11, `${qtyText} ${money} ${balls} ${bonus}`);
+    check('友好商店：錢不夠時不會進入選數量，按 X 離開', stillList && !document.querySelector('.shopui'));
+    UI.choose = keepChoose; UI.say = keepSay;
     G.state = keep;
   }
   // 寄放系統（箱子）

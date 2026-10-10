@@ -230,8 +230,21 @@ def build_storage():
     return names
 
 
+def build_shop():
+    """友好商店的購買畫面框（graphics/shop/menu.png + menu.bin，調色盤取自 png 內建）。
+    透明的部分（左上）在遊戲中會看到商店的地圖，和原作一樣。"""
+    S = os.path.join(EM, "graphics/shop")
+    if not os.path.exists(os.path.join(S, "menu.bin")):
+        return False
+    tmp = os.path.join(OUT, "_shop.pal")
+    _write_pal(tmp, _png_pal(os.path.join(S, "menu.png"))[:16])
+    render_tilemap(os.path.join(S, "menu.png"), os.path.join(S, "menu.bin"), tmp, 32).crop((0, 0, 240, 160)).save(os.path.join(OUT, "ui_shop.png"))
+    os.remove(tmp)
+    return True
+
+
 def build_all():
-    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary(), "storage": build_storage()}
+    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary(), "storage": build_storage(), "shop": build_shop()}
 
 
 if __name__ == "__main__":

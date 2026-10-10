@@ -138,3 +138,24 @@
 .quest-panel p { margin: 0 0 6px; }
 .log-panel { font-size: 15px; line-height: 22px; }
 .log-panel .err { color: #c03028; word-break: break-all; }
+
+/* 綠寶石友好商店（js/shopui.js；視窗位置依 src/shop.c，1 格 24px） */
+.shopui { position: absolute; inset: 0; z-index: 45; background: url("../assets/gen3/ui_shop.png") 0 0 / 720px 480px no-repeat; image-rendering: pixelated;
+  font-size: 24px; color: #383838; text-shadow: 2px 2px 0 #d0d0c8; }
+.shopui > div { position: absolute; box-sizing: border-box; }
+.shopui .shop-win { border: 24px solid transparent; border-image: url("../assets/gen3/ui_window_1.png") 8 fill / 24px stretch; padding: 0 6px;
+  display: flex; justify-content: space-between; align-items: center; margin: -12px; width: auto; height: auto; }
+.shopui .shop-win.money { width: 264px; height: 72px; }
+.shopui .shop-win.inbag { width: 312px; height: 72px; }
+.shopui .shop-win.qty { width: 264px; height: 72px; }
+.shopui .shop-list { padding: 0 12px 0 28px; }
+.shopui .srow { height: 48px; display: flex; justify-content: space-between; align-items: center; position: relative; white-space: nowrap; }
+.shopui .srow .n { overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.shopui .srow.sel::before { content: '▶'; position: absolute; left: -24px; font-size: 20px; }
+.shopui .shop-icon { left: 12px; top: 210px; width: 96px; height: 84px; display: flex; align-items: center; justify-content: center; }
+.shopui .bag-ic { width: 72px; height: 72px; background-repeat: no-repeat; image-rendering: pixelated; object-fit: contain; }
+.shopui .shop-desc { padding: 6px 10px; font-size: 20px; line-height: 30px; white-space: normal; overflow: hidden; color: #383838; }
+.shopui .shop-up, .shopui .shop-down { left: 506px; font-size: 18px; color: #e04848; text-shadow: none; animation: blink .8s infinite; }
+.shopui .shop-up { top: 30px; } .shopui .shop-down { top: 432px; }
+.shopui .hidden { display: none !important; }
+body.gen3 #choices.shop-yesno { bottom: 162px; right: 8px; }

@@ -633,6 +633,17 @@ const Game = {
 
   async shopMenu() {
     let start = 0;
+    // 綠寶石的購買畫面（有素材時）
+    if (Gen3.on && typeof ShopUI !== 'undefined') {
+      while (true) {
+        const c = await UI.choose(['購買', '離開'], { prompt: '歡迎光臨！\n請問需要什麼呢？' });
+        if (c !== 0) break;
+        UI.hideDialog();
+        await ShopUI.open(SHOP_LIST);
+      }
+      await UI.say('歡迎再次光臨！');
+      return;
+    }
     await UI.say('歡迎光臨！請問需要什麼呢？');
     while (true) {
       const rows = SHOP_LIST.map(id => `<div class="grow"><b>${U.esc(ITEMS[id].n)}</b><div class="dim small">${U.esc(ITEMS[id].d)}</div></div><div class="dim">持有 ${G.state.bag[id] || 0}</div><div class="price">${ITEMS[id].price} 元</div>`);
