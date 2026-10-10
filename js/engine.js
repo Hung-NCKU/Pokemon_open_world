@@ -178,15 +178,18 @@ Object.assign(Battle.prototype, {
     for (const v of [this.vMe, this.vFoe]) { v.hitBy = []; v.damagedThisTurn = false; v.movedThisTurn = false; v.statsLoweredThisTurn = false; }
     const foeAction = this.aiChoose();
     this.queued = { me: action, foe: foeAction };
+    this.selfKO = null;
     // 1. 逃跑、交換、道具（Showdown：優先度高於所有招式）
     if (action.type === 'run') {
       if (this.trainer) { await this.msg('不行！不能從訓練家對戰中逃走！'); this.turn--; return null; }
       if (this.ab(this.me) === 'run-away') { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
       if (this.trappedBy(this.me)) { await this.msg(`${this.trappedBy(this.me)}，無法逃走！`); this.turn--; return null; }
+      // 逃走：幽靈屬性必定成功；其餘 F = A×32 ÷（B÷4 mod 256）＋ 30×C，F > 255 必定成功
       this.runTries++;
       const a = this.speedOf(this.me, this.vMe), b = this.speedOf(this.foe, this.vFoe);
-      const odds = (Math.floor(a * 128 / Math.max(1, b)) + 30 * this.runTries) % 256;
-      if (a >= b || Math.random() * 256 < odds) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
+      const B = Math.floor(b / 4) % 256;
+      const F = B === 0 ? 256 : Math.floor(a * 32 / B) + 30 * this.runTries;
+      if (this.typesOf(this.me).includes('ghost') || F > 255 || Math.random() * 256 < F) { Sound.sfx('run'); await this.msg('順利逃走了！'); return 'run'; }
       await this.msg('沒能逃走！');
     } else if (action.type === 'switch') {
       if (this.trappedBy(this.me)) {
@@ -817,7 +820,7 @@ Object.assign(Battle.prototype, {
       if (mv.recoil && ua !== 'rock-head') rec = Math.max(1, Math.round(total * mv.recoil[0] / mv.recoil[1]));
       if (mv.struggleRecoil) rec = Math.max(1, Math.round(Mon.maxHp(user) / 4));
       if (mv.mindBlownRecoil || mv.chloroblastRecoil) rec = Math.ceil(Mon.maxHp(user) / 2);
-      if (rec) { await this.hurt(user, Math.min(rec, user.hp)); await this.msg(`${this.label(user)} 受到了反作用力的傷害！`); }
+      if (rec) { await this.selfDamage(user, rec); await this.msg(`${this.label(user)} 受到了反作用力的傷害！`); }
     }
 
     // 追加效果（強行會消除；天恩機率加倍；替身、鱗粉、密探斗篷擋下對目標的追加效果）
@@ -838,7 +841,7 @@ Object.assign(Battle.prototype, {
     }
     // 生命寶珠的反作用力、貝殼之鈴、打倒對手時的特性
     if (user.hp > 0 && total > 0) {
-      if (ui === 'life-orb' && ua !== 'magic-guard' && !sheer) { await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 10))); await this.msg(`${this.label(user)} 的體力被削減了！`); }
+      if (ui === 'life-orb' && ua !== 'magic-guard' && !sheer) { await this.selfDamage(user, Math.max(1, Math.floor(Mon.maxHp(user) / 10))); await this.msg(`${this.label(user)} 的體力被削減了！`); }
       if (ui === 'shell-bell' && user.hp > 0 && user.hp < Mon.maxHp(user)) { await this.healMon(user, Math.max(1, Math.floor(total / 8))); await this.msg(`${this.label(user)} 用貝殼之鈴回復了少許體力！`); }
       if (ui === 'throat-spray' && mv.flags.sound && user.hp > 0) { await this.consume(user, `${this.label(user)} 使用了{i}！`); await this.boost(user, { spa: 1 }, user); }
     }
@@ -1487,12 +1490,18 @@ Object.assign(Battle.prototype, {
     if (p === 'silktrap') await this.boost(user, { spe: -1 }, target, true);
   },
   async crash(user) {
-    await this.hurt(user, Math.floor(Mon.maxHp(user) / 2));
+    await this.selfDamage(user, Math.floor(Mon.maxHp(user) / 2));
     await this.msg(`${this.label(user)} 摔了下去，受到了傷害！`);
   },
   async selfFaint(user) {
     if (user.hp <= 0) return;
+    this.selfKO = this.sideKey(user);
     await this.hurt(user, user.hp);
+  },
+  // 自己造成的傷害（反作用力、生命寶珠、撞空）：倒下時記錄是哪一方造成的
+  async selfDamage(user, dmg) {
+    await this.hurt(user, Math.min(dmg, user.hp));
+    if (user.hp <= 0) this.selfKO = this.sideKey(user);
   },
 
   // 吹飛：野生戰鬥直接結束；訓練家戰隨機換上下一隻

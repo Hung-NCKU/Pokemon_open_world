@@ -162,11 +162,10 @@ const Mon = {
     return s;
   },
 
-  // 最新世代經驗值公式（含學習裝置：未上場者獲得一半）
+  // 第七世代起的經驗值公式（第九世代沿用）：沒有訓練家對戰 1.5 倍；學習裝置常駐，未上場者獲得一半
   expGain(foe, me, trainer, participated) {
     const b = POKEDEX[foe.sp].xp, L = foe.lv, Lp = me.lv;
     let e = (b * L / 5) * Math.pow((2 * L + 10) / (L + Lp + 10), 2.5) + 1;
-    if (trainer) e *= 1.5;
     if (!participated) e /= 2;
     return Math.max(1, Math.floor(e));
   },

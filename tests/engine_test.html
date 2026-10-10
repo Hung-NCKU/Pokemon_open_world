@@ -219,6 +219,33 @@ async function run() {
     const want = st[1] > st[2] ? 106 : st[1] < st[2] ? 107 : 237;
     check('無畏小子依攻擊與防禦的大小進化', Mon.pickEvo(ty, Mon.evoCandidates(ty)) === want);
   }
+  // 18. 雙方最後一隻同時倒下
+  {
+    const b = setup(74, 30, 10, 3);
+    b.foe.hp = 1;
+    await use(b, b.me, 'selfdestruct');
+    check('我方自爆同時倒下 → 我方落敗', await b.checkFaints() === 'lose');
+    const b2 = setup(10, 3, 74, 30);
+    b2.me.hp = 1;
+    b2.order = ['foe', 'me'];
+    await use(b2, b2.foe, 'explosion');
+    check('對方大爆炸同時倒下 → 我方獲勝', await b2.checkFaints() === 'win');
+    const b3 = setup(1, 20, 1, 20);
+    b3.me.hp = 1; b3.foe.hp = 1; b3.me.st = 'psn'; b3.foe.st = 'psn';
+    b3.selfKO = null;
+    await b3.endOfTurn();
+    check('回合末中毒同時倒下 → 視為全滅', b3.me.hp === 0 && b3.foe.hp === 0 && await b3.checkFaints() === 'lose');
+    const b4 = setup(143, 60, 10, 3);
+    b4.me.hp = 1; b4.foe.hp = 1;
+    b4.selfKO = null;
+    await use(b4, b4.me, 'doubleedge');
+    check('反作用力同時倒下 → 使用者落敗', b4.me.hp === 0 && await b4.checkFaints() === 'lose');
+    const b5 = setup(10, 3, 143, 60);
+    b5.me.hp = 1; b5.foe.hp = 1; b5.foe.ability = 'guts';
+    b5.selfKO = null; b5.order = ['foe', 'me'];
+    await use(b5, b5.foe, 'doubleedge');
+    check('對方反作用力同時倒下 → 我方獲勝', b5.foe.hp === 0 && await b5.checkFaints() === 'win');
+  }
   // 15. 特性
   {
     const b = setup(130, 50, 68, 50);

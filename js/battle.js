@@ -105,6 +105,13 @@ class Battle {
   async checkFaints() {
     if (this.fled) return 'run';
     let changed = null;
+    // 雙方最後一隻同時倒下：自己造成的倒下（自爆、反作用力、生命寶珠等）由造成的一方落敗，其餘視為玩家全滅
+    if (this.me.hp <= 0 && this.foe.hp <= 0 && !G.party.some(m => m.hp > 0) && !this.foeParty.some(m => m.hp > 0)) {
+      await this.faint('foe');
+      await this.faint('me');
+      await this.msg('雙方的寶可夢同時倒下了！');
+      return this.selfKO === 'foe' ? 'win' : 'lose';
+    }
     // 同歸：倒下的一方帶走對手
     for (const [m, v, o] of [[this.foe, this.vFoe, this.me], [this.me, this.vMe, this.foe]]) {
       if (m.hp <= 0 && v.destinyBond && o.hp > 0) {
@@ -202,7 +209,10 @@ class Battle {
     return null;
   }
 
-  // 捕捉（第三世代起的公式；搖晃判定 4 次）
+  // 捕捉（第八、九世代的公式）：
+  //   a = (3M − 2H) × 捕獲率 × 球 ÷ 3M × 異常狀態（睡眠、冰凍 2.5，其他 1.5）× 低等級加成 max(1, (36 − 2L) ÷ 10)
+  //   搖晃判定 4 次，每次通過機率 b ÷ 65536，b = 65536 ÷ (255 ÷ a)^(3/16)
+  //   會心捕捉：依已捕捉種數決定倍率，只需通過 1 次判定
   async throwBall(item) {
     const it = ITEMS[item];
     if (this.trainer) { await this.msg('不能搶奪別人的寶可夢！'); return null; }
@@ -213,15 +223,21 @@ class Battle {
     const M = Mon.maxHp(foe), H = foe.hp;
     const rate = POKEDEX[foe.sp].cr;
     const bonus = ['slp', 'frz'].includes(foe.st) ? 2.5 : foe.st ? 1.5 : 1;
-    const a = ((3 * M - 2 * H) * rate * it.rate) / (3 * M) * bonus;
+    const lowLevel = Math.max(1, (36 - 2 * foe.lv) / 10);
+    const a = ((3 * M - 2 * H) * rate * it.rate) / (3 * M) * bonus * lowLevel;
+    const caughtCount = Object.keys(G.state.caught).length;
+    const critMul = caughtCount > 600 ? 2.5 : caughtCount > 450 ? 2 : caughtCount > 300 ? 1.5 : caughtCount > 150 ? 1 : caughtCount > 30 ? .5 : 0;
+    const critical = Math.random() * 256 < Math.floor(Math.min(255, a) * critMul / 6);
     let shakes = 0, caught = false;
     if (it.rate >= 255 || a >= 255) { caught = true; shakes = 3; }
     else {
       const b = 65536 / Math.pow(255 / a, 0.1875);
-      for (shakes = 0; shakes < 4; shakes++) if (Math.random() * 65536 >= b) break;
-      caught = shakes >= 4;
-      shakes = Math.min(shakes, 3);
+      const checks = critical ? 1 : 4;
+      for (shakes = 0; shakes < checks; shakes++) if (Math.random() * 65536 >= b) break;
+      caught = shakes >= checks;
+      shakes = critical ? (caught ? 1 : 0) : Math.min(shakes, 3);
     }
+    if (critical) await this.msg('會心捕捉！');
     const ball = await this.catchAnim(item, shakes, caught);
     if (caught) {
       await this.msg(`抓到了！成功捕捉了 ${Mon.name(foe)}！`);
@@ -229,6 +245,8 @@ class Battle {
       const skip = UI.waitKey();
       await Promise.race([Sound.jingle('caught'), skip]);
       skip.cancel();
+      // 第六世代起：捕捉成功也會獲得經驗值
+      await this.awardExp();
       if (ball) ball.remove();
       return 'catch';
     }
@@ -256,7 +274,9 @@ class Battle {
     if (result === 'catch') await Game.addCaught(this.foe);
     if (result === 'lose') {
       await this.msg(`${G.state.name} 已經沒有可以戰鬥的寶可夢了……`);
-      const lost = Math.floor(G.state.money / 2);
+      // 第四世代起：掉落金額 = 隊伍最高等級 × 依徽章數的倍率
+      const base = [8, 16, 24, 36, 48, 64, 80, 100, 120][Math.min(8, Game.badgeCount())];
+      const lost = Math.min(G.state.money, Math.max(...G.party.map(m => m.lv)) * base);
       G.state.money -= lost;
       await this.msg(`慌亂中掉了 ${lost} 元……眼前變得一片漆黑！`);
     }

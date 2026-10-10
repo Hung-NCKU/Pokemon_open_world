@@ -71,6 +71,7 @@ Object.assign(Battle.prototype, {
     const P = Gen3.on && GEN3.pic && GEN3.pic[m.sp];
     const place = scale => {
       img.style.width = img.naturalWidth * scale + 'px';
+      this.measureBody(side, img, scale);
       if (P && m.sp <= 386 && scale === 3) {
         const cy = back ? 80 + P[1] : 40 + P[0] - P[2];
         img.style.top = (cy - 32) * 3 - (back ? 96 : 0) + 'px';
@@ -155,7 +156,35 @@ Object.assign(Battle.prototype, {
   sideOf(m) { return m === this.me ? 'me' : 'foe'; },
 
   // ---------- 特效 ----------
-  center(side) { return side === 'foe' ? { x: 528, y: 120 } : { x: 216, y: 240 }; },
+  // 量出圖片中實際有顏色的範圍（相對於圖片左上角，已乘上放大倍率）
+  measureBody(side, img, scale) {
+    this.body = this.body || {};
+    try {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let t = c.height, b = -1, l = c.width, r = -1;
+      for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+        if (d[(y * c.width + x) * 4 + 3] > 16) { if (y < t) t = y; if (y > b) b = y; if (x < l) l = x; if (x > r) r = x; }
+      }
+      if (b >= 0) this.body[side] = { t: t * scale, b: (b + 1) * scale, l: l * scale, r: (r + 1) * scale };
+    } catch { this.body[side] = null; }
+  },
+  // 特效的中心點：寶可夢身體（圖片中有顏色的範圍）的中心；我方被文字框遮住的部分不算
+  center(side) {
+    const img = this.el && this.el.querySelector(`.bmon.${side} img`);
+    const body = this.body && this.body[side];
+    if (img && body) {
+      const box = this.el.getBoundingClientRect(), r = img.getBoundingClientRect();
+      const s = box.width / 720 || 1;
+      const left = (r.left - box.left) / s, top = (r.top - box.top) / s;
+      const t = top + body.t, b = Math.min(336, top + body.b);
+      if (b > t) return { x: Math.round(left + (body.l + body.r) / 2), y: Math.round((t + b) / 2) };
+    }
+    return side === 'foe' ? { x: 528, y: 140 } : { x: 216, y: 280 };
+  },
   spawn(name, x, y, { dur = 500, loop = 1, scale = 3, size = null } = {}) {
     const url = Gen3.animUrl(name);
     if (!url) return null;
