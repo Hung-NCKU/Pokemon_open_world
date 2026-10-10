@@ -481,7 +481,15 @@ const Game = {
   },
 
   // list：可用 ↑↓ 切換的寶可夢（隊伍）
+  // 全螢幕畫面打開前收起對話框與選項（對話框的層級比較高，會蓋住畫面；呼叫的選單之後會重新顯示提示）
+  coverUI() {
+    UI.hideDialog();
+    const ch = document.getElementById('choices'), info = document.getElementById('choice-info');
+    if (ch) ch.classList.add('hidden');
+    if (info) info.classList.add('hidden');
+  },
   async summary(m, list = null) {
+    Game.coverUI();
     if (Game.emeraldUI('summary')) {
       const l = list || (G.party.includes(m) ? G.party : [m]);
       return SummaryUI.show(l, Math.max(0, l.indexOf(m)));
@@ -618,6 +626,7 @@ const Game = {
   },
   // 圖鑑頁（捕捉新寶可夢後也會顯示）
   async dexEntry(id) {
+    Game.coverUI();
     if (Game.emeraldUI('dex')) return DexUI.entry(id);
     const s = POKEDEX[id];
     // 進化條件：列出所有條件組，改編的條件會註明原作的方式
@@ -738,7 +747,7 @@ const Game = {
       if (dest) {
         const flyer = G.party.find(m => m.hp > 0 && (Mon.types(m).includes('flying') || m.moves.some(x => x.id === 19)));
         await UI.say(`${Mon.name(flyer)} 使用了飛翔！`);
-        Game.warp(dest.x + 4, dest.y + 6, 'down');
+        Game.flyTo(dest);
       }
       return;
     }
@@ -806,10 +815,16 @@ const Game = {
     if (dest) {
       const flyer = G.party.find(m => m.hp > 0 && (Mon.types(m).includes('flying') || m.moves.some(x => x.id === 19)));
       await UI.say(`${Mon.name(flyer)} 使用了飛翔！`);
-      Game.warp(dest.x + 4, dest.y + 6, 'down');
+      Game.flyTo(dest);
     }
   },
 
+  // 飛翔：降落在目的地寶可夢中心的門口（和原作一樣）；沒有中心的地方降落在城鎮中央
+  flyTo(t) {
+    const c = World.buildings.find(b => b.town === t && b.kind === 'center');
+    if (c) Game.warp(c.door.x, c.door.y + 1, 'down');
+    else Game.warp(t.cx, t.cy, 'down');
+  },
   async mainMenu() {
     const items = ['寶可夢', '圖鑑', '背包', '野餐', '任務', '地圖', '訓練家卡片', '存檔', '設定', '返回標題', '關閉'];
     while (true) {
@@ -842,6 +857,7 @@ const Game = {
   },
 
   async trainerCard() {
+    Game.coverUI();
     if (Game.emeraldUI('card')) return CardUI.show();
     const [seen, caught] = Game.dexCount();
     const ms = G.state.playMs;
@@ -1029,22 +1045,26 @@ const Game = {
     const rematch = got && G.state.champs[t.region];
     if (got && !rematch) { await UI.say(`${name}：「你的實力我已經見識過了。成為${REGIONS[t.region].n}冠軍之後，再來找我重賽吧！」`); return; }
     if (rematch) await UI.say(`${name}：「新冠軍！我也變強了，再來比一場吧！」`);
+    else if (t.region === 'alola') await UI.say(`這裡是${t.name}，${name}負責的${TYPES[type].n}屬性試煉！\n（試煉的強度會配合你通過的試煉數調整，目前 ${Game.badgeCount()} 個）`);
     else await UI.say(`這裡是${t.name}道館，館主是擅長${TYPES[type].n}屬性的${name}！\n（館主的隊伍會配合你的徽章數調整，目前 ${Game.badgeCount()} 枚）`);
     const c = await UI.choose([rematch ? '重賽' : '挑戰', '離開'], { prompt: `要挑戰${title}${name}嗎？（對手約 Lv.${World.gymLevel(t)}）` });
     if (c !== 0) return;
     if (!rematch) await UI.say(`${name}：「歡迎你，挑戰者！就讓我用${TYPES[type].n}屬性寶可夢來試試你的實力吧！」`);
     const party = World.gymParty(t);
+    // 阿羅拉的試煉：霸主寶可夢（帶頭、有氣場）
+    const trial = t.region === 'alola';
+    if (trial) await UI.say(`${t.name}的試煉開始了！\n打倒有氣場的霸主寶可夢 ${POKEDEX[party[0].sp].n} 吧！`);
     // 後期（徽章 8 枚以上）：館主展開屬性對應的場地，並可使用 3 個回復道具
     const late = Game.badgeCount() >= 8;
     const FIELD = { water: 'raindance', fire: 'sunnyday', rock: 'sandstorm', ground: 'sandstorm', ice: 'snowscape', electric: 'electricterrain',
       grass: 'grassyterrain', psychic: 'psychicterrain', fairy: 'mistyterrain' };
     const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: rematch ? 150 : 100, sprite: LEADER_SPRITES[t.region][t.gym],
-      field: late ? FIELD[type] : null, items: late ? 3 : 2, dmax: t.region === 'galar', lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
+      field: late ? FIELD[type] : null, items: late ? 3 : 2, dmax: t.region === 'galar', aura: trial, lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
     if (r === 'win' && rematch) { Game.save(true); return; }
     if (r === 'win') {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
       Sound.jingle('badge');
-      await UI.say(`獲得了${t.name}道館的徽章！（${REGIONS[t.region].n}徽章 ${Game.badgeCount(t.region)}／8）`);
+      await UI.say(t.region === 'alola' ? `通過了${t.name}的試煉！（${REGIONS[t.region].n}的試煉 ${Game.badgeCount(t.region)}／8）` : `獲得了${t.name}道館的徽章！（${REGIONS[t.region].n}徽章 ${Game.badgeCount(t.region)}／8）`);
       if (!G.state.bag['tera-orb']) {
         Game.giveItem('tera-orb', 1); G.state.teraCharged = true;
         await UI.say(`${name}：「你也該有這個了。」
@@ -1074,19 +1094,20 @@ const Game = {
     }
     const champLv = World.championParty(t).reduce((a, m) => Math.max(a, m.lv), 0);
     const e4 = typeof ELITE_FOUR !== 'undefined' && ELITE_FOUR[t.region];
-    const c = await UI.choose(['挑戰', '離開'], { prompt: `要挑戰${reg.n}寶可夢聯盟嗎？${e4 ? '要連續打敗四天王與冠軍。' : ''}（冠軍最高 Lv.${champLv}${G.state.champs[t.region] ? '，重賽' : ''}）` });
+    const c = await UI.choose(['挑戰', '離開'], { prompt: `要挑戰${reg.n}寶可夢聯盟嗎？${e4 ? (e4[0].title ? `要先在${e4[0].title}連勝 ${e4.length} 場，再挑戰冠軍。` : '要連續打敗四天王與冠軍。') : ''}（冠軍最高 Lv.${champLv}${G.state.champs[t.region] ? '，重賽' : ''}）` });
     if (c !== 0) return;
     // 四天王連戰：中間可以整理隊伍、使用道具，但不能回寶可夢中心
     if (e4) {
       for (let i = 0; i < e4.length; i++) {
         const e = e4[i];
-        await UI.say(`四天王 ${e.name}：「我是四天王的${e.name}，擅長${TYPES[e.type].n}屬性。來吧！」`);
-        const r = await Game.battle({ trainer: { title: '四天王', name: e.name, party: World.eliteParty(t, i), kind: 'gym', ai: 3, money: 150, sprite: e.sprite, lose: '……你通過了。前進吧。' }, biome: 'gym' });
+        await UI.say(e.title ? `${e.title}：第 ${i + 1} 戰，對手是擅長${TYPES[e.type].n}屬性的${e.name}！` : `四天王 ${e.name}：「我是四天王的${e.name}，擅長${TYPES[e.type].n}屬性。來吧！」`);
+        const ttl = e.title || '四天王';
+        const r = await Game.battle({ trainer: { title: ttl, name: e.name, party: World.eliteParty(t, i), kind: 'gym', ai: 3, money: 150, sprite: e.sprite, lose: e.title ? '……恭喜你晉級。' : '……你通過了。前進吧。' }, biome: 'gym' });
         if (r !== 'win') return;
         {
           const last = i === e4.length - 1;
           while (true) {
-            const n = await UI.choose([last ? '前往冠軍的房間' : '前往下一個房間', '寶可夢', '背包'], { prompt: `打敗了四天王 ${e.name}！（${i + 1}／4）${last ? '\n接下來是冠軍戰，先整頓隊伍吧。' : ''}`, cancel: false });
+            const n = await UI.choose([last ? '前往冠軍的房間' : '前往下一個房間', '寶可夢', '背包'], { prompt: `打敗了${e.title || '四天王'} ${e.name}！（${i + 1}／${e4.length}）${last ? '\n接下來是冠軍戰，先整頓隊伍吧。' : ''}`, cancel: false });
             if (n === 0) break;
             if (n === 1) await Game.partyMenu();
             if (n === 2) await Game.bagMenu();
@@ -1119,6 +1140,8 @@ const Game = {
     const dbl = opts.double && typeof DoubleBattle !== 'undefined' && opts.trainer && opts.trainer.party.length >= 2 && G.party.filter(m => m.hp > 0).length >= 2;
     const b = dbl ? new DoubleBattle(opts) : new Battle(opts);
     b.raid = opts.raid ? { ...opts.raid } : null;
+    // 霸主寶可夢、寶主寶可夢的氣場：登場時全能力提升
+    b.aura = !!(opts.aura || (opts.trainer && opts.trainer.aura));
     const kind = opts.trainer ? (opts.trainer.kind || 'trainer') : opts.raid ? 'raid' : 'wild';
     // 野外的天氣帶進對戰（道館、室內、團體戰除外）
     if (!G.room && !opts.raid && opts.biome !== 'gym' && !(opts.trainer && opts.trainer.field)) b.owWeather = Weather.KINDS[Weather.here()].battle || null;
@@ -1231,8 +1254,23 @@ const Game = {
     if (World.trainers.has(x + ',' + y)) return false;
     if (World.legendAt && World.legendAt(x, y)) return false;
     if (World.eventAt && World.eventAt(x, y)) return false;
-    if (t === T.WATER || t === T.DEEP) return G.state.surf || Game.canSurf();
+    // 水面：已經在衝浪時才能直接走（上水前會先詢問，見 askSurf）
+    if (t === T.WATER || t === T.DEEP) return !!G.state.surf;
     return true;
+  },
+  // 衝浪：和原作一樣先詢問（「水面一片蔚藍……要使用衝浪嗎？」）
+  surfer() { return G.party.find(m => m.hp > 0 && m.moves.some(x => x.id === 57)) || G.party.find(m => m.hp > 0 && Mon.types(m).includes('water')); },
+  async askSurf(tx, ty) {
+    const m = Game.surfer();
+    if (!m) return;
+    const c = await UI.choose(['是', '否'], { prompt: `水面一片蔚藍……\n要讓 ${Mon.name(m)} 使用衝浪嗎？` });
+    UI.hideDialog();
+    if (c !== 0) return;
+    await UI.say(`${Mon.name(m)} 使用了衝浪！`, { auto: 700 });
+    UI.hideDialog();
+    const s = G.state;
+    s.surf = true;
+    G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: 160 };
   },
 
   async interact() {
@@ -1261,7 +1299,8 @@ const Game = {
       return Game.trainerBattle(tr);
     }
     const t = World.tile(fx, fy);
-    if ((t === T.WATER || t === T.DEEP) && !Game.canSurf()) {
+    if ((t === T.WATER || t === T.DEEP) && !s.surf) {
+      if (Game.canSurf()) return Game.askSurf(fx, fy);
       return UI.say('水面一片蔚藍……如果隊伍中有水屬性寶可夢（或會衝浪的寶可夢），就能在水上移動。');
     }
   },
@@ -1318,6 +1357,13 @@ const Game = {
     if (ev) { Game.flow(() => Story.eventEntity(ev)); G.keys.clear(); return; }
     const ow = typeof OverworldMons !== 'undefined' && OverworldMons.at(tx, ty);
     if (ow) { OverworldMons.touch(ow); return; }
+    // 走向水面：可以衝浪時先詢問
+    const wt = World.tile(tx, ty);
+    if ((wt === T.WATER || wt === T.DEEP) && !s.surf && World.inside(tx, ty) && !World.trainers.has(tx + ',' + ty) && Game.canSurf()) {
+      G.keys.clear();
+      Game.flow(() => Game.askSurf(tx, ty));
+      return;
+    }
     if (!Game.walkable(tx, ty)) return;
     const run = G.keys.has('Shift');
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: s.surf ? 120 : run ? 85 : 160 };

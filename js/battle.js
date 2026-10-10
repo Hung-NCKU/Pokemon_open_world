@@ -69,6 +69,11 @@ class Battle {
       await this.msg(`${this.trainer.name} 展開了道館的場地！${zh}！`);
     }
 
+    // 氣場（霸主寶可夢、寶主寶可夢）：帶頭的對手全能力提升 1 級
+    if (this.aura) {
+      for (const k of ['atk', 'def', 'spa', 'spd', 'spe']) this.vFoe.stg[k] = Math.min(6, this.vFoe.stg[k] + 1);
+      await this.msg(`${this.label(this.foe)} 散發著氣場！全部能力都提升了！`);
+    }
     // 野外的天氣（整場對戰持續）
     if (this.owWeather && !this.field.weather) {
       this.field.weather = this.owWeather; this.field.weatherT = 99;

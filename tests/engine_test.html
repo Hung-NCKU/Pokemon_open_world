@@ -41,6 +41,7 @@
 <script src="../js/story.js"></script>
 <script src="../js/events.js"></script>
 <script src="../js/regions.js"></script>
+<script src="../js/regions2.js"></script>
 <script src="../data/towns.js"></script>
 <script src="../js/town_events.js"></script>
 <script src="../js/weather.js"></script>
@@ -538,7 +539,7 @@ async function run() {
     const bad = placed.filter(l => !World.inside(l.x, l.y) || BLOCKED.has(World.tile(l.x, l.y)) || World.doors.has(l.x + ',' + l.y) || World.trainers.has(l.x + ',' + l.y));
     check('傳說站在可以抵達的格子上', !bad.length, bad.map(l => POKEDEX[l.sp].n).join('、'));
     const ev = placed.filter(l => EVENT_LEGENDS.has(l.sp));
-    check('事件傳說站在地標入口前', ev.length === EVENT_LEGENDS.size && ev.every(l => l.lm && l.lm.sp === l.sp));
+    check('事件傳說站在地標入口前', ev.length === EVENT_LEGENDS.size && ev.every(l => l.lm && l.lm.sp === l.sp), ev.filter(l => !l.lm).map(l => POKEDEX[l.sp].n).join('、') + ' 未放置：' + [...EVENT_LEGENDS].filter(sp => !ev.some(l => l.sp === sp)).map(sp => sp + POKEDEX[sp].n).join('、'));
     const mew = placed.find(l => l.sp === 151);
     check('傳說擋住去路（不能走上去）', mew && !Game.walkable(mew.x, mew.y));
     G.state.legendsCaught = { 151: 1 };
@@ -1732,6 +1733,109 @@ async function run() {
     U.isNight = realNight; World.rollWild = realRoll;
     check('習性：夜行性的白天不出現、晚上會出現', dayN === 0 && nightN > 0, `${dayN} / ${nightN}`);
     OverworldMons.clear();
+    G.state = keep;
+  }
+  // 使用者回報：衝浪先詢問、飛翔降落在寶可夢中心前、寶可夢資訊不被對話框遮住
+  {
+    const keep = G.state, keepChoose = UI.choose, keepSay = UI.say;
+    G.state = Game.newState('T', 'kanto', 7); G.state.party = [Mon.create(7, 20)];
+    World.generate(20261010, 'kanto');
+    // 找一格旁邊是水的陸地
+    let spot = null;
+    for (let y = 5; y < WH - 5 && !spot; y++) for (let x = 5; x < WW - 5 && !spot; x++)
+      if (World.tile(x, y) === T.GRASS && World.tile(x + 1, y) === T.WATER && !World.trainers.has((x + 1) + ',' + y)) spot = [x, y];
+    G.state.x = spot[0]; G.state.y = spot[1]; G.state.dir = 'right'; G.state.surf = false;
+    let asked = 0;
+    UI.choose = async (o, opt) => { asked++; return 1; };   // 回答「否」
+    UI.say = async () => { };
+    check('衝浪：沒有在衝浪時不能直接走上水面', !Game.walkable(spot[0] + 1, spot[1]));
+    await Game.interact();
+    check('衝浪：面向水面按確認會先詢問，回答否就不下水', asked === 1 && !G.state.surf && G.state.x === spot[0]);
+    UI.choose = async () => 0;                             // 回答「是」
+    await Game.askSurf(spot[0] + 1, spot[1]);
+    check('衝浪：回答是之後開始衝浪並往水面移動', G.state.surf && G.move && G.move.tx === spot[0] + 1);
+    G.move = null; G.state.surf = false;
+    UI.choose = keepChoose; UI.say = keepSay;
+    // 飛翔
+    const t = World.towns.find(x => x.region === 'kanto' && x.gym === 2);
+    const c = World.buildings.find(b => b.town === t && b.kind === 'center');
+    Game.flyTo(t);
+    check('飛翔：降落在寶可夢中心的門口', G.state.x === c.door.x && G.state.y === c.door.y + 1 && G.state.dir === 'down');
+    // 寶可夢資訊打開前收起對話框
+    UI.showText('捕捉到了！要做什麼？');
+    const realShow = typeof SummaryUI !== 'undefined' ? SummaryUI.show : null;
+    let dlgHidden = null;
+    if (realShow) SummaryUI.show = async () => { dlgHidden = document.getElementById('dialog').classList.contains('hidden'); };
+    const realPanel = UI.panel;
+    UI.panel = async () => { if (dlgHidden === null) dlgHidden = document.getElementById('dialog').classList.contains('hidden'); };
+    await Game.summary(G.party[0]);
+    if (realShow) SummaryUI.show = realShow;
+    UI.panel = realPanel;
+    check('寶可夢資訊：打開時收起對話框，不會被遮住', dlgHidden === true);
+    G.state = keep;
+  }
+  // 合眾到帕底亞的專屬內容（世界配置第 5 版）
+  {
+    const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;
+    const R5 = ['unova', 'kalos', 'alola', 'galar', 'paldea'];
+    check('五個地區都有招牌隊伍（8 座道館）、冠軍、4 位四天王（伽勒爾是冠軍盃）',
+      R5.every(r => SIGNATURE[r] && SIGNATURE[r].gyms.length === 8 && SIGNATURE[r].champ().length === 6 && ELITE_FOUR[r] && ELITE_FOUR[r].length === 4)
+      && R5.every(r => [...SIGNATURE[r].gyms.flat(2), ...SIGNATURE[r].champ(), ...ELITE_FOUR[r].flatMap(e => e.team)].every(id => POKEDEX[id])));
+    G.state = Game.newState('T', 'unova', 495); G.state.party = [Mon.create(495, 20)];
+    World.generate(20261010, 'unova', 5);
+    const lm5 = [...World.landmarks.values()].filter(l => R5.includes(l.region));
+    const want = R5.reduce((a, r) => a + LANDMARKS[r].length, 0);
+    const names = World.towns.filter(t => t.region === 'unova' && t.kind === 'gym').sort((a, b) => a.gym - b.gym).map(t => t.name);
+    check('第 5 版：合眾的道館城鎮使用原作名稱（三曜市……雙龍市）', names[0] === '三曜市' && names[7] === '雙龍市', names.join(' '));
+    check('第 5 版：合眾到帕底亞的地標大多放置成功', lm5.length >= want - 2, `${lm5.length}/${want}`);
+    World.generate(20261010, 'unova', 4);
+    check('第 4 版以前的世界沒有新的地標（舊存檔不變）', ![...World.landmarks.values()].some(l => R5.includes(l.region)));
+    World.generate(20261010, 'unova', 5);
+    // 阿羅拉：霸主寶可夢帶頭；氣場
+    G.state.badges = { alola: [0, 1] };
+    const at = World.towns.find(t => t.region === 'alola' && t.gym === 2);
+    const tp = World.gymParty(at);
+    check('阿羅拉的試煉：霸主寶可夢（焰后蜥）帶頭、等級比館主高', tp[0].sp === 758 && tp[0].lv === World.gymLevel(at) + 1, tp.map(m => m.sp + ':' + m.lv).join(' '));
+    let aura = null, title = [];
+    const realRun = Battle.prototype.run;
+    Battle.prototype.run = async function () { aura = this.aura; return 'win'; };
+    UI.choose = async () => 0; UI.say = async () => { };
+    await Game.gymChallenge(at);
+    Battle.prototype.run = realRun;
+    check('阿羅拉的試煉：對戰帶有氣場，通過後算一個試煉', aura === true && G.state.badges.alola.includes(2));
+    // 組織的首領：連戰後設定旗標並給獎勵
+    Game.battle = async o => { title.push(o.trainer.title + o.trainer.name); return 'win'; };
+    const plasma = { ...LANDMARKS.unova[0], region: 'unova', x: 100, y: 100 };
+    G.state.badges = { unova: [0, 1, 2] };
+    const rc0 = G.state.bag['rare-candy'] || 0;
+    await Regions2.boss(plasma);
+    check('等離子隊：連戰兩場手下，完成後拿到獎勵', title.length === 2 && G.state.flags.boss_plasma && (G.state.bag['rare-candy'] || 0) === rc0 + 2, title.join(','));
+    const n = { ...LANDMARKS.unova[1], region: 'unova', x: 100, y: 100 };
+    title = [];
+    await Regions2.boss(n);
+    check('Ｎ：需要 5 枚徽章才會出現', !title.length && !G.state.flags.boss_nscastle);
+    // 寶主寶可夢
+    G.state.region = 'paldea';
+    const titan = { ...LANDMARKS.paldea[0], region: 'paldea', x: 100, y: 100 };
+    let tAura = null;
+    Game.battle = async o => { tAura = o.trainer.aura; return 'win'; };
+    await Regions2.titan(titan);
+    check('寶主寶可夢：有氣場、打倒後算傳說之路的進度', tAura === true && Regions2.count('titan') === 1);
+    // 伽勒爾的冠軍盃
+    title = [];
+    Game.battle = async o => { title.push(o.trainer.title + ':' + o.trainer.name); return 'win'; };
+    G.state.badges = { galar: [0, 1, 2, 3, 4, 5, 6, 7] };
+    const gl = World.towns.find(t => t.region === 'galar' && t.kind === 'league');
+    await Game.leagueChallenge(gl);
+    check('伽勒爾：冠軍盃連勝 4 場（瑪俐、赫普、露璃娜、奇巴納）後挑戰冠軍丹帝', title.length === 5 && title[0] === '冠軍盃:瑪俐' && title[4] === '冠軍:丹帝' && G.state.champs.galar, title.join(' '));
+    // 傳說地標的旗標條件
+    G.state.flags.boss_flare = 0;
+    const xl = { ...LANDMARKS.kalos[1], region: 'kalos' };
+    const before = LegendGate.ok(xl);
+    G.state.flags.boss_flare = 1;
+    check('卡洛斯：打倒弗拉達利之前，基地深處的哲爾尼亞斯無法接近', !before && LegendGate.ok(xl));
+    Game.battle = keepBattle; UI.choose = keepChoose; UI.say = keepSay;
+    World.generate(20261010, 'kanto');
     G.state = keep;
   }
   // 寄放系統（箱子）

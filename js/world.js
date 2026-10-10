@@ -4,7 +4,7 @@ const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5], house_s: [4, 4, 1, 3], sign: [1, 1, 0, 0] };
 const WW = 960, WH = 600;
-const WORLD_VER = 4; // 世界配置的版本（見 World.generate）
+const WORLD_VER = 5; // 世界配置的版本（見 World.generate）
 const SAVE_VER = 2;  // 存檔格式的版本（見 Game.MIGRATE）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
@@ -50,6 +50,7 @@ const World = {
   //   2：道館編號依「離家由近到遠」，城鎮編號與位置不變，只改哪座城鎮是第幾座道館
   //   3：關都重要城鎮改用手工配置（data/towns.js：小屋事件、告示牌、花圃、池塘）
   //   4：道路旁增加訓練家（原本平均 38 格道路才有 1 位，路上幾乎沒有對戰；不改變地形）
+  //   5：合眾到帕底亞的地標（等離子隊、閃焰隊、天星隊、寶主寶可夢、傳說寶可夢；js/regions2.js 的 ver: 5）
   generate(seed, homeRegion, worldVer = WORLD_VER) {
     this.seed = seed;
     this.worldVer = worldVer;
@@ -313,6 +314,7 @@ const World = {
     if (typeof LANDMARKS === 'undefined') return;
     const hard = [T.WATER, T.DEEP, T.BRIDGE, T.PATH, T.TOWN, T.BLDG, T.DOOR, T.LANDMARK];
     for (const [region, list] of Object.entries(LANDMARKS)) for (const lm of list) {
+      if (lm.ver && lm.ver > this.worldVer) continue; // 較新版本才有的地標（舊存檔的世界不變）
       const anchor = this.towns.find(t => t.region === region && (lm.near === 'home' ? t.kind === 'home' : lm.near === 'league' ? t.kind === 'league' : t.gym === lm.near));
       if (!anchor) continue;
       let best = null;
