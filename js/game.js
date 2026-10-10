@@ -1305,7 +1305,12 @@ const Game = {
     const sign = World.signs && World.signs.get(fx + ',' + fy);
     if (sign) return UI.say(sign);
     const hid = Hidden.at(fx, fy);
-    if (hid) return Hidden.pickUp(hid);
+    if (hid) {
+      // 撿東西之前先確認
+      const c = await UI.choose(['撿起來', '不要'], { prompt: '地上好像藏著什麼東西……\n要撿起來嗎？' });
+      UI.hideDialog();
+      return c === 0 ? Hidden.pickUp(hid) : undefined;
+    }
     const lm = World.landmarks && World.landmarks.get(fx + ',' + fy);
     if (lm) return Story.landmark(lm);
     const lg = World.legendAt && World.legendAt(fx, fy);
@@ -1379,13 +1384,7 @@ const Game = {
     if (ev) { Game.flow(() => Story.eventEntity(ev)); G.keys.clear(); return; }
     const ow = typeof OverworldMons !== 'undefined' && OverworldMons.at(tx, ty);
     if (ow) { OverworldMons.touch(ow); return; }
-    // 走向水面：可以衝浪時先詢問
-    const wt = World.tile(tx, ty);
-    if ((wt === T.WATER || wt === T.DEEP) && !s.surf && World.inside(tx, ty) && !World.trainers.has(tx + ',' + ty) && Game.canSurf()) {
-      G.keys.clear();
-      Game.flow(() => Game.askSurf(tx, ty));
-      return;
-    }
+    // 走向水面：停在岸邊（要衝浪時面向水面按確認）
     if (!Game.walkable(tx, ty)) return;
     const run = G.keys.has('Shift');
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: s.surf ? 120 : run ? 85 : 160 };

@@ -51,6 +51,8 @@ const OverworldMons = (() => {
     if (World.legendAt && World.legendAt(x, y)) return false;
     const t = World.tile(x, y);
     if (BLOCKED.has(t) || t === T.DOOR || t === T.TOWN || t === T.PATH) return false; // 不進城鎮與道路
+    // 城鎮與外圍 2 格是人的地方，野生寶可夢不會進去
+    if (World.towns.some(tw => x >= tw.x - 2 && y >= tw.y - 2 && x < tw.x + TOWN_W + 2 && y < tw.y + TOWN_H + 2)) return false;
     if (t === T.WATER || t === T.DEEP) return false;
     return true;
   };
@@ -203,5 +205,6 @@ const OverworldMons = (() => {
     // 測試用
     _spawnAt(x, y, mon, mood = 'wander') { const w = { x, y, px: x, py: y, t: 0, mon, mood, dir: 'down', biome: 'tall' }; list.push(w); return w; },
     _step: step,
+    _canStand: (x, y) => canStand(null, x, y),
   };
 })();

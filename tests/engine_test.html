@@ -1885,6 +1885,61 @@ async function run() {
     check('傳說／幻之寶可夢：打倒之後消失，不會再出現', !World.legendAt(l.x, l.y) && Story.legendDone(l.sp));
     G.state = keep;
   }
+  // 地形平滑（世界配置第 7 版）：沒有 6 格以下的零星草叢；第 6 版的地形不變
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4);
+    const small = () => {
+      const tiles = World.tiles, seen = new Uint8Array(WW * WH);
+      let n = 0;
+      for (let i = 0; i < WW * WH; i++) {
+        if (seen[i] || tiles[i] !== T.TALL) continue;
+        const st = [i]; seen[i] = 1; let size = 0;
+        while (st.length) { const c = st.pop(); size++; const x = c % WW, y = (c / WW) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= WW || ny >= WH) continue; const k = ny * WW + nx; if (!seen[k] && tiles[k] === T.TALL) { seen[k] = 1; st.push(k); } } }
+        if (size <= 6) n++;
+      }
+      return n;
+    };
+    World.generate(20261010, 'kanto', 6);
+    const before = small(), h6 = Array.from(World.tiles.slice(0, 5000)).join('');
+    World.generate(20261010, 'kanto', 7);
+    const after = small();
+    World.generate(20261010, 'kanto', 6);
+    const h6b = Array.from(World.tiles.slice(0, 5000)).join('');
+    check('地形平滑：第 7 版大幅減少零星的小草叢', before > 50 && after < before * .2, `${before} → ${after}`);
+    check('地形平滑：第 6 版以前的地形不變', h6 === h6b);
+    World.generate(20261010, 'kanto');
+    G.state = keep;
+  }
+  // 城鎮與野外分開（第 7 版）：城鎮外圍有樹、道路有出入口、野生寶可夢不進城鎮；聯盟大樓在城鎮上方靠著岩壁；撿東西前確認
+  {
+    const keep = G.state, keepChoose = UI.choose, keepSay = UI.say;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(4, 20)];
+    World.generate(20261010, 'kanto');
+    const kt = World.towns.filter(t => t.region === 'kanto');
+    let trees = 0, ring = 0;
+    for (const t of kt) for (let y = -2; y < TOWN_H + 2; y++) for (let x = -2; x < TOWN_W + 2; x++) {
+      if (x >= 0 && y >= 0 && x < TOWN_W && y < TOWN_H) continue;
+      ring++; if (World.tile(t.x + x, t.y + y) === T.TREE) trees++;
+    }
+    check('城鎮邊界：關都城鎮外圍大多種了樹', trees / ring > .4, `${trees}/${ring}`);
+    const t0 = kt.find(t => t.kind === 'home');
+    check('城鎮邊界：野生寶可夢不能站在城鎮或外圍', !OverworldMons._canStand(t0.x + 3, t0.y + 3) && !OverworldMons._canStand(t0.x - 1, t0.y + 3));
+    const lg = World.buildings.find(b => b.kind === 'league' && b.town.region === 'kanto');
+    check('聯盟（第 7 版）：大樓在城鎮最上面，背後是岩壁', lg.y === lg.town.y && World.tile(lg.x + 3, lg.y - 1) === T.MOUNT);
+    // 撿東西前確認
+    const h = [...World.hidden.values()].find(x => x.region === 'kanto');
+    G.state.x = h.x; G.state.y = h.y + 1; G.state.dir = 'up';
+    UI.choose = async () => 1; UI.say = async () => { };
+    await Game.interact();
+    const skipped = !!Hidden.at(h.x, h.y);
+    UI.choose = async () => 0;
+    await Game.interact();
+    check('隱藏道具：撿之前先確認，選「不要」就不撿', skipped && !Hidden.at(h.x, h.y));
+    UI.choose = keepChoose; UI.say = keepSay;
+    G.state = keep;
+  }
   // 對戰塔（世界配置第 6 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;

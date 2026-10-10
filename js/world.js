@@ -4,7 +4,7 @@ const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5], house_s: [4, 4, 1, 3], sign: [1, 1, 0, 0] };
 const WW = 960, WH = 600;
-const WORLD_VER = 6; // 世界配置的版本（見 World.generate）
+const WORLD_VER = 7; // 世界配置的版本（見 World.generate）
 const SAVE_VER = 2;  // 存檔格式的版本（見 Game.MIGRATE）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
@@ -52,6 +52,7 @@ const World = {
   //   4：道路旁增加訓練家（原本平均 38 格道路才有 1 位，路上幾乎沒有對戰；不改變地形）
   //   5：合眾到帕底亞的地標（等離子隊、閃焰隊、天星隊、寶主寶可夢、傳說寶可夢；js/regions2.js 的 ver: 5）
   //   6：各地區聯盟旁的對戰塔（js/battletower.js）
+  //   7：地形平滑（去掉 6 格以下零星的草叢、樹、岩石、沙地），不改變其他配置的規則
   generate(seed, homeRegion, worldVer = WORLD_VER) {
     this.seed = seed;
     this.worldVer = worldVer;
@@ -90,9 +91,11 @@ const World = {
         tiles[y * WW + x] = t;
       }
     }
+    if (this.worldVer >= 7) this.smoothTerrain();
     this.placeTowns(rng, homeRegion);
     this.carveRoads(rng);
     this.stampTowns();
+    if (this.worldVer >= 7) { this.smoothTerrain(); this.townBorders(); } // 道路、城鎮切出來的小區塊再整理一次；城鎮外圍種樹
     this.alignTrees();
     this.placeLandmarks(rng);
     this.placeLegends(rng);
@@ -280,12 +283,87 @@ const World = {
       };
       const design = this.worldVer >= 3 && typeof TOWN_DESIGNS !== 'undefined' && t.kind !== 'league' && TOWN_DESIGNS[t.name];
       if (design) this.stampDesign(t, design, add);
-      else if (t.kind === 'league') {
+      else if (t.kind === 'league' && this.worldVer >= 7) {
+        // 第 7 版：和彩幽市一樣，聯盟大樓在城鎮最上面、背後與兩側是岩壁（大樓的圖上緣在原作就是被地圖邊緣切掉的）
+        add('league', 2, 0); add('center', 0, 7); add('mart', 12, 7);
+        for (let x = -2; x < TOWN_W + 2; x++) for (const y of [-2, -1]) { const c = this.tile(t.x + x, t.y + y); if (c !== T.PATH && c !== T.BRIDGE) this.set(t.x + x, t.y + y, T.MOUNT); }
+        for (let y = 0; y <= 4; y++) for (const x of [-2, -1, 0, 1, 13, 14, 15, 16, 17]) { const c = this.tile(t.x + x, t.y + y); if (c !== T.PATH && c !== T.BRIDGE && c !== T.BLDG && c !== T.DOOR) this.set(t.x + x, t.y + y, T.MOUNT); }
+      } else if (t.kind === 'league') {
         add('center', 0, 1); add('mart', 12, 1); add('league', 2, 5);
       } else {
         add('center', 1, 1); add('mart', 11, 1);
         if (t.kind === 'gym') add('gym', 5, 6);
         if (t.kind === 'home') { add('house', 1, 6); add('lab', 8, 6); }
+      }
+    }
+  },
+
+  // 地形平滑（第 7 版）：零星的小區塊（6 格以下）換成周圍最多的地面，讓地圖看起來自然
+  // 只處理草叢、雪地草叢、樹、岩山、岩地、沙地、花；水面與沙漠不動（海岸線、湖泊保留）
+  smoothTerrain() {
+    const tiles = this.tiles, N = WW * WH;
+    const SMALL = 6;
+    const target = new Set([T.TALL, T.SNOWTALL, T.TREE, T.MOUNT, T.CAVE, T.SAND, T.FLOWER]);
+    const seen = new Uint8Array(N);
+    const q = new Int32Array(N);
+    for (let i = 0; i < N; i++) {
+      if (seen[i] || !target.has(tiles[i])) continue;
+      const t = tiles[i];
+      let head = 0, tail = 0;
+      q[tail++] = i; seen[i] = 1;
+      const cells = [];
+      const around = new Map();
+      while (head < tail) {
+        const c = q[head++];
+        cells.push(c);
+        const x = c % WW, y = (c / WW) | 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= WW || ny >= WH) continue;
+          const n = ny * WW + nx, nt = tiles[n];
+          if (nt === t) { if (!seen[n]) { seen[n] = 1; q[tail++] = n; } }
+          else around.set(nt, (around.get(nt) || 0) + 1);
+        }
+        if (cells.length > SMALL) break;
+      }
+      if (cells.length > SMALL) {
+        // 大區塊：把剩下的同一塊標記完，避免重複搜尋
+        while (head < tail) {
+          const c = q[head++];
+          const x = c % WW, y = (c / WW) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= WW || ny >= WH) continue;
+            const n = ny * WW + nx;
+            if (tiles[n] === t && !seen[n]) { seen[n] = 1; q[tail++] = n; }
+          }
+        }
+        continue;
+      }
+      // 換成周圍最多的地面（水面除外）
+      let best = null, bn = 0;
+      const NOT = new Set([T.WATER, T.DEEP, T.PATH, T.BRIDGE, T.TOWN, T.BLDG, T.DOOR, T.LANDMARK]);
+      for (const [k, v] of around) if (!NOT.has(k) && v > bn) { best = k; bn = v; }
+      if (best === null) continue;
+      for (const c of cells) tiles[c] = best;
+    }
+  },
+
+  // 城鎮的邊界（第 7 版）：城鎮外圍 2 格種樹，和野外分開；道路經過的地方留下出入口
+  townBorders() {
+    for (const t of this.towns) {
+      for (let y = -2; y < TOWN_H + 2; y++) for (let x = -2; x < TOWN_W + 2; x++) {
+        if (x >= 0 && y >= 0 && x < TOWN_W && y < TOWN_H) continue;
+        const px = t.x + x, py = t.y + y;
+        if (!this.inside(px, py)) continue;
+        const c = this.tile(px, py);
+        if (c === T.GRASS || c === T.FLOWER || c === T.TALL || c === T.SNOW || c === T.SNOWTALL || c === T.SAND || c === T.DESERT) this.set(px, py, T.TREE);
+      }
+      // 道路的入口：城鎮外圍緊鄰道路的樹清掉一格，入口比較寬
+      for (let y = -2; y < TOWN_H + 2; y++) for (let x = -2; x < TOWN_W + 2; x++) {
+        const px = t.x + x, py = t.y + y;
+        if (this.tile(px, py) !== T.TREE) continue;
+        if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => this.tile(px + a, py + b) === T.PATH) && !(x >= 0 && y >= 0 && x < TOWN_W && y < TOWN_H)) this.set(px, py, T.GRASS);
       }
     }
   },
@@ -636,11 +714,13 @@ const World = {
   gen3Tile(t, x, y) {
     const at = (a, b) => this.tile(a, b);
     switch (t) {
-      case T.GRASS: case T.TOWN: case T.BLDG: case T.DOOR: return Gen3.single('grass');
-      case T.FLOWER: return Gen3.single('flower');
+      // 地面：周圍以雪地為主時畫成雪（雪地城鎮、雪原裡零星的草地不再是突兀的綠色方塊）
+      case T.GRASS: case T.TOWN: case T.BLDG: case T.DOOR: return this.snowyArea(x, y) ? Gen3.single('snow') : Gen3.single('grass');
+      case T.FLOWER: return this.snowyArea(x, y) ? Gen3.single('snow') : Gen3.single('flower');
       case T.TALL: return Gen3.single('tall');
       case T.SNOW: return Gen3.single('snow');
-      case T.SNOWTALL: return Gen3.single('snowtall');
+      // 雪地的草叢：用一般草叢結霜的樣子（原本的藍色草叢在雪地上很突兀）
+      case T.SNOWTALL: return Gen3.recolor(Gen3.single('tall'), 'frost') || Gen3.single('snowtall');
       case T.CAVE: return Gen3.single('cave');
       case T.BRIDGE: return Gen3.single('bridge') || Gen3.auto('path', (a, b) => at(a, b) === T.PATH || at(a, b) === T.BRIDGE, x, y);
       case T.WATER: case T.DEEP: {
@@ -649,7 +729,13 @@ const World = {
       }
       case T.SAND: return Gen3.auto('sand', (a, b) => at(a, b) === T.SAND || !this.inside(a, b), x, y);
       case T.DESERT: return Gen3.auto('desert', (a, b) => at(a, b) === T.DESERT || at(a, b) === T.CAVE, x, y);
-      case T.PATH: return Gen3.auto('path', (a, b) => at(a, b) === T.PATH || at(a, b) === T.BRIDGE, x, y);
+      case T.PATH: {
+        const im = Gen3.auto('path', (a, b) => at(a, b) === T.PATH || at(a, b) === T.BRIDGE, x, y);
+        // 道路的邊緣依旁邊的地形換色：雪地、沙漠
+        // 用 7×7 範圍判斷（雙線道的兩邊結果一致），結果快取
+        const kind = this.pathLook(x, y);
+        return kind ? Gen3.recolor(im, kind) : im;
+      }
       case T.MOUNT: {
         let d = 0;
         while (d < 3 && at(x, y + d + 1) === T.MOUNT) d++;
@@ -669,6 +755,41 @@ const World = {
       }
     }
     return null;
+  },
+
+  // 附近（半徑 10 格，每 2 格取樣）的自然地形以雪地為主；以 4×4 區塊快取
+  snowyArea(x, y) {
+    this._snowy = this._snowy && this._snowy.seed === this.seed ? this._snowy : { seed: this.seed, m: new Map() };
+    const k = (x >> 2) + ',' + (y >> 2);
+    if (this._snowy.m.has(k)) return this._snowy.m.get(k);
+    let snow = 0, nat = 0;
+    const cx = (x & ~3) + 2, cy = (y & ~3) + 2;
+    for (let dy = -10; dy <= 10; dy += 2) for (let dx = -10; dx <= 10; dx += 2) {
+      const t = this.tile(cx + dx, cy + dy);
+      if (t === T.SNOW || t === T.SNOWTALL) { snow++; nat++; }
+      else if (t === T.GRASS || t === T.TALL || t === T.FLOWER || t === T.TREE || t === T.DESERT || t === T.SAND || t === T.CAVE) nat++;
+    }
+    const v = nat > 0 && snow / nat > .55;
+    this._snowy.m.set(k, v);
+    return v;
+  },
+  // 道路的外觀：周圍 7×7 以雪地為主 → 雪地道路；以沙漠、沙灘為主 → 沙地道路
+  pathLook(x, y) {
+    this._pathLook = this._pathLook && this._pathLook.seed === this.seed ? this._pathLook : { seed: this.seed, m: new Map() };
+    const k = (x >> 1) + ',' + (y >> 1);
+    if (this._pathLook.m.has(k)) return this._pathLook.m.get(k);
+    let snow = 0, sand = 0, land = 0;
+    const bx = x & ~1, by = y & ~1;
+    for (let dy = -3; dy <= 4; dy++) for (let dx = -3; dx <= 4; dx++) {
+      const t = this.tile(bx + dx, by + dy);
+      if (t === T.PATH || t === T.BRIDGE) continue;
+      land++;
+      if (t === T.SNOW || t === T.SNOWTALL) snow++;
+      else if (t === T.DESERT || t === T.SAND) sand++;
+    }
+    const v = land && snow / land > .4 ? 'snowpath' : land && sand / land > .4 ? 'desertpath' : null;
+    this._pathLook.m.set(k, v);
+    return v;
   },
 
   drawTile(g, t, x, y, px, py, frame) {

@@ -50,6 +50,30 @@ const Gen3 = (() => {
   function tile(i) {
     return cut('t' + i, img.tiles, (i % 32) * 16, Math.floor(i / 32) * 16, 16, 16);
   }
+  // 依環境換色的圖塊（綠寶石沒有雪地、沙漠的道路，也沒有雪地的草叢）：
+  //   snowpath：道路的草邊換成雪、路面帶一點積雪；desertpath：草邊換成沙；frost：草叢結霜（偏白的淡綠）
+  const MIX = (a, b, k) => a.map((v, i) => Math.round(v * (1 - k) + b[i] * k));
+  function recolor(src, kind) {
+    if (!src) return null;
+    const k = 'rc_' + kind + '_' + (src._id || (src._id = Math.random().toString(36).slice(2)));
+    if (cache.has(k)) return cache.get(k);
+    const [c, g] = canvas(src.width, src.height);
+    g.drawImage(src, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
+    for (let i = 0; i < p.length; i += 4) {
+      const r = p[i], gg = p[i + 1], b = p[i + 2];
+      const green = gg > r + 10 && gg >= b - 10;
+      const lum = (r + gg + b) / 3 / 255;
+      let o = null;
+      if (kind === 'snowpath') o = green ? MIX([196, 206, 228], [240, 244, 252], lum) : MIX([r, gg, b], [232, 236, 246], .45);
+      else if (kind === 'desertpath') o = green ? MIX([200, 168, 104], [236, 208, 140], lum) : null;
+      else if (kind === 'frost') o = green ? MIX(MIX([r, gg, b], [240, 246, 250], .62), [214, 232, 226], .25) : MIX([r, gg, b], [236, 240, 250], .3);
+      if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
+    }
+    g.putImageData(d, 0, 0);
+    cache.set(k, c);
+    return c;
+  }
   function building(kind) {
     let b = img['bld_' + kind];
     // 室內地圖建置時另外輸出的建築（小屋、告示牌）
@@ -106,7 +130,7 @@ const Gen3 = (() => {
   const anims = on ? new Set(GEN3.anims) : new Set();
   function animUrl(name) { return anims.has(name) ? `${base}anim/${name}.png` : null; }
 
-  return { on, ready, ensure, tile, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
+  return { on, ready, ensure, tile, recolor, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
     hasTrainer: n => on && GEN3.trainers.includes(n), bld: k => on && GEN3.buildings[k] };
 })();
 
