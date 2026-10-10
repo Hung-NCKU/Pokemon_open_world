@@ -31,6 +31,7 @@
 <script src="../js/audio.js"></script>
 <script src="../js/world.js"></script>
 <script src="../js/ecology.js"></script>
+<script src="../js/overworld_mons.js"></script>
 <script src="../js/story.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/bagui.js"></script>
@@ -633,6 +634,35 @@ async function run() {
     check('用過太晶珠後需要充能', G.state.teraCharged === false);
     Game.healParty();
     check('在寶可夢中心回復後太晶珠充能完成', G.state.teraCharged === true);
+  }
+  // 地圖上的野生寶可夢
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party.push(Mon.create(4, 5));
+    // 找一片空曠的草地
+    let spot = null;
+    outer: for (let y = 40; y < WH - 40; y += 3) for (let x = 40; x < WW - 40; x += 3) {
+      let ok = true;
+      for (let a = -4; a <= 4 && ok; a++) for (let c = -4; c <= 4; c++) if (World.tile(x + a, y + c) !== T.TALL || World.trainers.has((x + a) + ',' + (y + c))) { ok = false; break; }
+      if (ok) { spot = [x, y]; break outer; }
+    }
+    G.state.x = spot[0]; G.state.y = spot[1];
+    OverworldMons.clear();
+    const cur = OverworldMons._spawnAt(spot[0] + 3, spot[1], Mon.create(25, 5), 'curious');
+    const shy = OverworldMons._spawnAt(spot[0] - 2, spot[1], Mon.create(133, 5), 'shy');
+    const d0c = Math.abs(cur.x - spot[0]) + Math.abs(cur.y - spot[1]), d0s = Math.abs(shy.x - spot[0]) + Math.abs(shy.y - spot[1]);
+    OverworldMons._step(1e9);
+    check('好奇的寶可夢會靠近玩家', Math.abs(cur.x - spot[0]) + Math.abs(cur.y - spot[1]) < d0c);
+    check('膽小的寶可夢會逃離玩家', Math.abs(shy.x - spot[0]) + Math.abs(shy.y - spot[1]) > d0s);
+    const realBattle = Game.battle; let fought = null;
+    Game.battle = async o => { fought = o.wild; return 'win'; };
+    OverworldMons.touch(cur);
+    await U.sleep(0); await new Promise(r => setTimeout(r, 0));
+    for (let i = 0; i < 5 && G.busy; i++) await new Promise(r => setTimeout(r, 10));
+    check('碰到地圖上的寶可夢會開始戰鬥，之後從地圖消失', fought === cur.mon && !OverworldMons.list.includes(cur));
+    Game.battle = realBattle;
+    OverworldMons.clear();
+    G.state = keep;
   }
   // 地點專屬生態
   {

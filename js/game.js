@@ -1014,6 +1014,7 @@ const Game = {
     else if ((t === T.WATER || t === T.DEEP) && s.surf) { biome = 'water'; rate = .045; }
     else if (t === T.CAVE) { biome = 'cave'; rate = .07; }
     else if (t === T.DESERT) { biome = 'desert'; rate = .05; }
+    if (typeof OverworldMons !== 'undefined' && OverworldMons.list.length) rate /= 2; // 看得到的寶可夢在附近時，隨機遇敵減半
     if (biome && !s.repel && Math.random() < rate) {
       const wild = World.rollWild(s.x, s.y, biome);
       Sound.sfx('encounter');
@@ -1082,6 +1083,7 @@ const Game = {
   update(dt) {
     if (G.mode !== 'world') return;
     G.state.playMs += dt;
+    if (typeof OverworldMons !== 'undefined') OverworldMons.update(performance.now());
     if (G.busy || UI.active()) return;
     const s = G.state;
     if (G.move) {
@@ -1107,6 +1109,8 @@ const Game = {
     if (World.landmarks && World.landmarks.has(tx + ',' + ty)) { Sound.sfx('door'); Game.flow(() => Story.landmark(World.landmarks.get(tx + ',' + ty))); G.keys.clear(); return; }
     const lg = World.legendAt && World.legendAt(tx, ty);
     if (lg) { Game.flow(() => Story.legend(lg)); G.keys.clear(); return; }
+    const ow = typeof OverworldMons !== 'undefined' && OverworldMons.at(tx, ty);
+    if (ow) { OverworldMons.touch(ow); return; }
     if (!Game.walkable(tx, ty)) return;
     const run = G.keys.has('Shift');
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: s.surf ? 120 : run ? 85 : 160 };
@@ -1148,6 +1152,7 @@ const Game = {
       const lg = World.legendAt && World.legendAt(x, y);
       if (lg) people.push({ y: y * TILE, lg });
     }
+    if (typeof OverworldMons !== 'undefined') for (const w of OverworldMons.list) people.push({ y: w.y * TILE, ow: w });
     people.push({ y: py, player: true });
     people.sort((a, b) => a.y - b.y);
     const walking = G.move ? (G.move.t / G.move.dur < .5 ? G.stepAnim : 0) : 0;
@@ -1159,6 +1164,7 @@ const Game = {
         continue;
       }
       if (p.lg) { Game.drawLegend(g, p.lg, p.lg.x * TILE - ox, p.lg.y * TILE - oy); continue; }
+      if (p.ow) { OverworldMons.draw(g, p.ow, ox, oy); continue; }
       const tr = p.tr;
       const names = Gen3.on ? GEN3.trainers : [];
       const sheet = names.length ? 'npc_' + names[tr.cls % names.length] : null;
