@@ -44,9 +44,11 @@ const Game = {
     if (!Number.isFinite(s.seed)) return '缺少世界種子';
     if (!REGIONS[s.region]) return '出發地區不正確';
     if (!Number.isFinite(s.x) || !Number.isFinite(s.y)) return '位置資料不正確';
-    if (!Array.isArray(s.party) || !s.party.length) return '隊伍中沒有寶可夢';
+    if (s.x < 0 || s.y < 0 || s.x >= WW || s.y >= WH) return '位置超出世界範圍';
+    if (!Array.isArray(s.party) || !s.party.length || s.party.length > 6) return '隊伍中沒有寶可夢';
     for (const m of [...s.party, ...(Array.isArray(s.box) ? s.box : [])]) {
-      if (!m || !POKEDEX[m.sp] || !Number.isFinite(m.lv) || m.lv < 1 || m.lv > 100 || !Array.isArray(m.moves) || !Array.isArray(m.iv)) return '寶可夢資料不正確';
+      const err = Game.validateMon(m);
+      if (err) return `寶可夢資料不正確（${err}）`;
     }
     const def = { name: '主角', dir: 'down', surf: false, box: [], bag: {}, money: 0, badges: {}, champs: {}, seen: {}, caught: {},
       defeated: {}, visited: {}, flags: {}, repel: 0, steps: 0, playMs: 0, center: null, starter: s.party[0].sp };
@@ -55,6 +57,33 @@ const Game = {
       if (bad) s[k] = v;
     }
     if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    return null;
+  },
+  // 驗證單隻寶可夢；無法修正的錯誤回傳原因，可修正的直接修正
+  validateMon(m) {
+    const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+    if (!m || typeof m !== 'object') return '不是寶可夢資料';
+    if (!POKEDEX[m.sp]) return '物種不存在';
+    if (!int(m.lv, 1, 100)) return '等級';
+    if (!Array.isArray(m.iv) || m.iv.length !== 6 || !m.iv.every(v => int(v, 0, 31))) return '個體值';
+    if (!int(m.nat, 0, 24)) return '性格';
+    if (!Array.isArray(m.moves) || m.moves.length < 1 || m.moves.length > 4) return '招式數量';
+    for (const x of m.moves) {
+      if (!x || !MOVES[x.id]) return '招式不存在';
+      if (!Number.isFinite(x.pp) || x.pp < 0) return '招式 PP';
+      x.pp = Math.min(x.pp, MOVES[x.id].pp);
+    }
+    if (!Array.isArray(m.ev) || m.ev.length !== 6 || !m.ev.every(v => int(v, 0, 252))) m.ev = [0, 0, 0, 0, 0, 0];
+    if (m.ev.reduce((a, b) => a + b, 0) > 510) m.ev = [0, 0, 0, 0, 0, 0];
+    if (!Number.isFinite(m.exp) || m.exp < 0) m.exp = Mon.expFor(POKEDEX[m.sp].gr, m.lv);
+    if (!int(m.happy, 0, 255)) m.happy = POKEDEX[m.sp].hap;
+    const max = Mon.stats(m)[0];
+    if (!Number.isFinite(max)) return '能力值無法計算';
+    if (!Number.isFinite(m.hp)) m.hp = max;
+    m.hp = U.clamp(Math.floor(m.hp), 0, max);
+    if (m.st && !STATUS_ZH[m.st]) m.st = null;
+    if (m.item && !ITEMS[m.item]) m.item = null;
+    if (!m.uid) m.uid = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     return null;
   },
   parseSave(text) {

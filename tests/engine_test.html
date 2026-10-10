@@ -234,6 +234,14 @@ async function run() {
     const badMon = JSON.parse(JSON.stringify(good));
     badMon.party[0].sp = 99999;
     check('寶可夢資料錯誤時判定無效', !Game.parseSave(JSON.stringify(badMon)).ok);
+    const mut = f => { const x = JSON.parse(JSON.stringify(good)); f(x); return Game.parseSave(JSON.stringify(x)); };
+    check('空的個體值陣列判定無效', !mut(x => { x.party[0].iv = []; }).ok);
+    check('不存在的招式判定無效', !mut(x => { x.party[0].moves = [{ id: 999999, pp: 10 }]; }).ok);
+    check('座標超出世界判定無效', !mut(x => { x.x = -5; }).ok);
+    const fixed = mut(x => { x.party[0].ev = [300, 0, 0, 0, 0, 0]; x.party[0].hp = 99999; x.party[0].moves[0].pp = 999; });
+    check('努力值、HP、PP 超出範圍時自動修正', fixed.ok && fixed.state.party[0].ev[0] === 0 && fixed.state.party[0].hp === Mon.maxHp(fixed.state.party[0]) && fixed.state.party[0].moves[0].pp === MOVES[fixed.state.party[0].moves[0].id].pp);
+    const ok2 = Game.parseSave(JSON.stringify(good));
+    check('驗證後的能力值都是數字', ok2.ok && ok2.state.party.every(m => Mon.stats(m).every(Number.isFinite)));
     // 主存檔損毀時改用備份
     const keep = [localStorage.getItem(SAVE_KEY), localStorage.getItem(SAVE_KEY + '_bak')];
     localStorage.setItem(SAVE_KEY + '_bak', JSON.stringify(good));
@@ -382,7 +390,28 @@ async function run() {
     G.state.flags.q_start = 1;
     for (let i = 1; i <= 10; i++) G.state.caught[i] = 1;
     check('捕捉 10 種後任務前進', Story.questStage(G.state) === 2);
-    check('野生遇敵不會出現三聖鳥與超夢', !World.pools.tall.filter(p => p.lg && !EVENT_LEGENDS.has(p.id)).some(p => EVENT_LEGENDS.has(p.id)));
+    // 實際跑遭遇流程：強制觸發傳說判定，600 次都不能出現事件專屬的傳說寶可夢
+    const far = World.towns.find(t => World.regionBand(t.region)[0] >= 35) || World.towns[0];
+    const rollLegends = () => {
+      const realChance = U.chance;
+      U.chance = p => p < .01 ? true : realChance(p);
+      const got = new Set();
+      try {
+        for (let i = 0; i < 600; i++) {
+          const b = ['tall', 'cave', 'water', 'snow', 'desert'][i % 5];
+          got.add(World.rollWild(far.cx + (i % 7), far.cy + (i % 5), b).sp);
+        }
+      } finally { U.chance = realChance; }
+      return got;
+    };
+    const got = rollLegends();
+    check('實際遭遇流程中不會出現三聖鳥與超夢', ![...EVENT_LEGENDS].some(id => got.has(id)), `遭遇到 ${got.size} 種`);
+    // 反向驗證：拿掉排除條件時，這個測試必須能抓到事件傳說
+    const saved = [...EVENT_LEGENDS];
+    EVENT_LEGENDS.clear();
+    const got2 = rollLegends();
+    saved.forEach(id => EVENT_LEGENDS.add(id));
+    check('反向驗證：拿掉排除條件時會遭遇到事件傳說（測試有效）', saved.some(id => got2.has(id)), saved.filter(id => got2.has(id)).map(id => POKEDEX[id].n).join('、'));
   }
   // 12. 隨機對戰不出錯
   {
