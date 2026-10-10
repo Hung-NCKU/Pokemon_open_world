@@ -2,7 +2,8 @@
 // - 帳號資料：localStorage「pkmn_accounts」＝ { 名稱: { salt, hash, created } }，密碼用 PBKDF2-SHA256（12 萬次）雜湊，不存明文
 // - 存檔：訪客用原本的位置（舊存檔不受影響）；帳號用「存檔位置_帳號名稱」
 // - 登入狀態記在「pkmn_session」（下次開啟自動登入）
-// - 儲存層集中在 Account.store：之後要接雲端（自己的伺服器、Firebase、Supabase……）只要換掉 store 的四個函式
+// - 跨平台同步（優先順序）：GitHub Gist（js/gist_cloud.js，每台裝置輸入一次只有 gist 權限的金鑰）
+//   → Supabase（js/cloud.js，js/cloud_config.js 有設定時）→ 只存在這台裝置的本機帳號
 const Account = (() => {
   const ACC_KEY = 'pkmn_accounts', SES_KEY = 'pkmn_session';
   const store = {
@@ -52,15 +53,20 @@ const Account = (() => {
     store.set(SES_KEY, current);
     return { ok: true };
   }
-  function logout() { current = null; store.remove(SES_KEY); if (cloud()) Cloud.logout(); }
-  const who = () => (cloud() ? Cloud.name : current);
-  // 目前帳號的存檔位置（雲端帳號在本機的快取用另一個位置）
-  const saveKey = () => (cloud() ? (Cloud.name ? SAVE_KEY + '_cloud_' + Cloud.name : SAVE_KEY) : current ? SAVE_KEY + '_' + current : SAVE_KEY);
+  const gh = () => typeof GistCloud !== 'undefined' && GistCloud.name;
+  function logout() { current = null; store.remove(SES_KEY); if (cloud()) Cloud.logout(); if (gh()) GistCloud.disconnect(); }
+  const who = () => (gh() ? GistCloud.name : cloud() ? Cloud.name : current);
+  // 正在使用的同步服務（沒有就是 null）
+  const backend = () => (gh() ? GistCloud : cloud() && Cloud.name ? Cloud : null);
+  // 目前帳號的存檔位置（同步帳號在本機的快取用另一個位置）
+  const saveKey = () => (gh() ? SAVE_KEY + '_gh_' + GistCloud.name : cloud() ? (Cloud.name ? SAVE_KEY + '_cloud_' + Cloud.name : SAVE_KEY) : current ? SAVE_KEY + '_' + current : SAVE_KEY);
+  const upload = json => { const b = backend(); if (b) b.upload(json); };
   // 開啟標題畫面時：雲端的存檔比本機新就下載（以存檔時間 savedAt 比較）
   async function sync() {
-    if (!cloud() || !Cloud.name) return null;
+    const be = backend();
+    if (!be) return null;
     try {
-      const remote = await Cloud.download();
+      const remote = await be.download();
       if (!remote || !remote.data) return 'none';
       const localRaw = store.get(saveKey());
       let localAt = 0;
@@ -72,9 +78,48 @@ const Account = (() => {
   }
   const hasSave = name => !!store.get(name ? SAVE_KEY + '_' + name : SAVE_KEY);
 
+  // GitHub 同步：輸入金鑰、連結；如果 GitHub 上還沒有存檔，可以把這台裝置的存檔傳上去
+  async function linkGitHub() {
+    await UI.panel(`<div class="quest-panel"><h3>用 GitHub 同步存檔</h3>
+      <p>存檔會存在你 GitHub 帳號底下的一個私人 Gist。電腦本機版、線上版、手機只要連結同一個 GitHub 帳號，就共用同一份存檔。</p>
+      <p>取得金鑰（只需要做一次）：</p>
+      <p>1. 登入 GitHub，打開 github.com/settings/tokens</p>
+      <p>2. 「Generate new token」→「Generate new token (classic)」</p>
+      <p>3. Note 隨便填（例如 pokemon），Expiration 自己選，<b>只勾選「gist」</b>，按 Generate token</p>
+      <p>4. 複製產生的金鑰（ghp_ 開頭），貼到下一步</p>
+      <p><small>金鑰只存在這台裝置的瀏覽器；因為只有 gist 權限，就算外流也碰不到你的儲存庫。每台裝置都要輸入一次。</small></p></div>`);
+    const token = await UI.input('貼上 GitHub 金鑰（只有 gist 權限）', '', { cancel: true, password: true, maxLength: 255 });
+    if (token === null) return false;
+    UI.showText('正在連線到 GitHub……');
+    const r = await GistCloud.connect(token);
+    UI.hideDialog();
+    if (!r.ok) { await UI.say(r.error); return false; }
+    if (!r.found) {
+      // GitHub 上還沒有存檔：把這台裝置目前的存檔（帳號或訪客）傳上去
+      const localRaw = store.get(current ? SAVE_KEY + '_' + current : SAVE_KEY);
+      if (localRaw) {
+        const m = await UI.choose(['上傳到 GitHub', '不用（從頭開始）'], { prompt: '這台裝置上有存檔。要把它上傳到 GitHub，讓其他裝置也能玩嗎？' });
+        if (m === 0) { store.set(saveKey(), localRaw); GistCloud.upload(localRaw); await GistCloud.flush(); }
+      }
+    }
+    await UI.say(`已連結 GitHub 帳號 ${r.login}！${r.found ? '\n找到了之前的存檔，會自動下載。' : ''}`);
+    return true;
+  }
+
   // 標題畫面的帳號選單
   async function menu() {
     while (true) {
+      if (gh()) {
+        const c = await UI.choose(['解除 GitHub 連結', '返回'], { prompt: `已連結 GitHub：${GistCloud.name}\n存檔會同步到你的私人 Gist，其他裝置連結同一個 GitHub 帳號就能接著玩。` });
+        if (c === 0) { GistCloud.disconnect(); await UI.say('已解除連結。這台裝置不再同步（GitHub 上的存檔仍然保留）。'); continue; }
+        UI.hideDialog(); return;
+      }
+      // GitHub 同步是選用的（需要每個玩家都有 GitHub 帳號），cloud_config.js 的 github: true 才顯示
+      if (!who() && typeof GistCloud !== 'undefined' && window.CLOUD_CONFIG && CLOUD_CONFIG.github) {
+        const c = await UI.choose(['用 GitHub 同步存檔（跨平台）', cloud() ? '雲端帳號' : '這台裝置的帳號', '返回'], { prompt: '要怎麼保存帳號與存檔？\n用 GitHub 同步：電腦、手機、線上版共用同一份存檔。' });
+        if (c === 0) { if (await linkGitHub()) { UI.hideDialog(); return; } continue; }
+        if (c !== 1) { UI.hideDialog(); return; }
+      }
       const me = who();
       const opts = me ? ['登出', '返回'] : ['登入', '註冊新帳號', '返回'];
       const where = cloud() ? '雲端帳號：電腦、手機、線上版都能用同一個帳號與存檔' : '這台裝置的帳號（還沒有設定雲端）';
@@ -110,5 +155,5 @@ const Account = (() => {
       return;
     }
   }
-  return { sync, set fastHash(v) { fastHash = v; }, get current() { return who(); }, saveKey, register, login, logout, menu, store, accounts };
+  return { sync, upload, backend, online: () => !!backend(), linkGitHub, set fastHash(v) { fastHash = v; }, get current() { return who(); }, saveKey, register, login, logout, menu, store, accounts };
 })();

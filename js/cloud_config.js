@@ -4,4 +4,5 @@
 window.CLOUD_CONFIG = {
   url: '',      // 例：https://xxxxxxxx.supabase.co
   anonKey: '',  // 例：eyJhbGciOi...（Project Settings → API → anon public）
+  github: false, // true：帳號選單多一個「用 GitHub 同步存檔」（每個玩家要有自己的 GitHub 帳號，見 js/gist_cloud.js）
 };

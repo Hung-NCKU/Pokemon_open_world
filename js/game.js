@@ -41,8 +41,8 @@ const Game = {
       G.state.savedAt = new Date().toISOString();
       const json = Game.serialize(G.state);
       Telemetry.measure('存檔', () => localStorage.setItem(key, json));
-      // 雲端帳號：同時上傳（跨裝置共用）
-      if (typeof Cloud !== 'undefined' && Cloud.enabled() && Cloud.name) Cloud.upload(json);
+      // 同步帳號（GitHub 或雲端）：同時上傳（跨裝置共用）
+      if (typeof Account !== 'undefined') Account.upload(json);
       Telemetry.event('存檔');
       if (!silent) UI.banner('已儲存遊戲進度');
       return true;
@@ -1532,8 +1532,8 @@ const Game = {
     G.mode = 'title';
     Sound.play('title');   // 音訊在第一次按鍵或點擊後才能開始（瀏覽器限制），之後自動播放
     // 雲端帳號：先下載雲端的存檔（比本機新才覆蓋）
-    if (typeof Cloud !== 'undefined' && Cloud.enabled() && Cloud.name) {
-      UI.showText('正在和雲端同步存檔……');
+    if (typeof Account !== 'undefined' && Account.online()) {
+      UI.showText('正在同步存檔……');
       const r = await Account.sync();
       UI.hideDialog();
       if (r === 'downloaded') UI.banner('已從雲端下載最新的存檔');

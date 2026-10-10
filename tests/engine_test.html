@@ -70,6 +70,7 @@
 <script src="../js/interior.js"></script>
 <script src="../js/cloud_config.js"></script>
 <script src="../js/cloud.js"></script>
+<script src="../js/gist_cloud.js"></script>
 <script src="../js/account.js"></script>
 <script src="../js/game.js"></script>
 <script>
@@ -2043,6 +2044,44 @@ async function run() {
     localStorage.removeItem(Account.saveKey());
     Account.logout();
     window.fetch = realFetch; window.CLOUD_CONFIG = keepCfg;
+    G.state = keep;
+  }
+  // GitHub Gist 同步（用假的 fetch 模擬 GitHub API）：連結、第一次上傳建立 gist、另一台裝置連結後下載、錯誤的金鑰
+  {
+    const keep = G.state, realFetch = window.fetch, keepChoose = UI.choose, keepSay = UI.say;
+    const gists = {};
+    let n = 0;
+    const reply = (status, obj) => Promise.resolve({ ok: status < 300, status, text: () => Promise.resolve(JSON.stringify(obj)) });
+    window.fetch = (url, opt = {}) => {
+      const u = new URL(url), auth = (opt.headers || {}).Authorization || '', body = opt.body ? JSON.parse(opt.body) : null;
+      if (auth !== 'Bearer good-token') return reply(401, { message: 'Bad credentials' });
+      if (u.pathname === '/user') return reply(200, { login: 'tester' });
+      if (u.pathname === '/gists' && (opt.method || 'GET') === 'GET') return reply(200, Object.values(gists).map(g => ({ id: g.id, files: { [Object.keys(g.files)[0]]: {} } })));
+      if (u.pathname === '/gists' && opt.method === 'POST') { const id = 'g' + (++n); gists[id] = { id, files: body.files, updated_at: new Date().toISOString() }; return reply(201, { id }); }
+      const m = u.pathname.match(/^\/gists\/(\w+)$/);
+      if (m && opt.method === 'PATCH') { Object.assign(gists[m[1]].files, body.files); return reply(200, { id: m[1] }); }
+      if (m) { const g = gists[m[1]]; return reply(200, { id: g.id, updated_at: g.updated_at, files: Object.fromEntries(Object.entries(g.files).map(([k, f]) => [k, { content: f.content, truncated: false }])) }); }
+      return reply(404, {});
+    };
+    UI.say = async () => { };
+    GistCloud.disconnect();
+    const bad = await GistCloud.connect('wrong-token');
+    const ok = await GistCloud.connect('good-token');
+    check('GitHub 同步：錯誤的金鑰不能連結，正確的金鑰連結成功', !bad.ok && ok.ok && Account.current === 'tester' && Account.online());
+    G.state = Game.newState('GitHub 測試', 'kanto', 4); G.state.party = [Mon.create(4, 5)]; G.state.money = 2468;
+    Game.save(true);
+    await GistCloud.flush();
+    const created = Object.values(gists)[0];
+    check('GitHub 同步：存檔時建立私人 gist 並上傳', created && JSON.parse(Object.values(created.files)[0].content).money === 2468);
+    // 另一台裝置：清掉本機快取與連結，再用同一把金鑰連結
+    localStorage.removeItem(Account.saveKey());
+    GistCloud.disconnect();
+    const again = await GistCloud.connect('good-token');
+    const st = await Account.sync();
+    check('GitHub 同步：另一台裝置連結後找到原本的 gist 並下載存檔', again.found && st === 'downloaded' && Game.loadSave().state.money === 2468, st);
+    localStorage.removeItem(Account.saveKey());
+    GistCloud.disconnect();
+    window.fetch = realFetch; UI.choose = keepChoose; UI.say = keepSay;
     G.state = keep;
   }
   // 對戰塔（世界配置第 6 版）
