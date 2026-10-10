@@ -148,6 +148,7 @@ const Midi = (() => {
           } else if (type === 0xB0) { const c = bytes[p++], v = bytes[p++]; events.push({ tick, k: 'cc', ch, c, v }); }
           else if (type === 0xC0) { events.push({ tick, k: 'prog', ch, v: bytes[p++] }); }
           else if (type === 0xD0) p += 1;
+          else if (type === 0xE0) { const lo = bytes[p++], hi = bytes[p++]; events.push({ tick, k: 'bend', ch, v: ((hi << 7) | lo) - 8192 }); }
           else p += 2;
         }
       }
@@ -156,7 +157,7 @@ const Midi = (() => {
     events.sort((a, b) => a.tick - b.tick || (a.k === 'off' ? -1 : 1));
     // 轉成秒並配對音符
     let tempo = 500000, last = 0, sec = 0;
-    const notes = [], open = {}, prog = {}, vol = {};
+    const notes = [], open = {}, prog = {}, vol = {}, bend = {}, bendR = {};
     let loopS = null, loopE = null, endT = 0;
     for (const e of events) {
       sec += (e.tick - last) * tempo / div / 1e6; last = e.tick;
@@ -164,12 +165,18 @@ const Midi = (() => {
       if (e.k === 'tempo') tempo = e.v;
       else if (e.k === 'prog') prog[e.ch] = e.v;
       else if (e.k === 'cc' && e.c === 7) vol[e.ch] = e.v;
+      else if (e.k === 'cc' && e.c === 20) bendR[e.ch] = e.v; // m4a 的 BENDR（彎音範圍，半音）
+      else if (e.k === 'bend') {
+        // 彎音：記在這個聲道正在發聲的音符上（秒、半音）
+        bend[e.ch] = e.v / 8192 * (bendR[e.ch] ?? 2);
+        for (const o of Object.values(open)) if (o.ch === e.ch) (o.bends = o.bends || []).push([sec - o.t, bend[e.ch]]);
+      }
       else if (e.k === 'loopStart') loopS = sec;
       else if (e.k === 'loopEnd') loopE = sec;
       else if (e.k === 'on') {
         const key = e.ch + ':' + e.n;
         if (open[key]) { open[key].d = sec - open[key].t; notes.push(open[key]); }
-        open[key] = { t: sec, n: e.n, ch: e.ch, v: e.v / 127 * ((vol[e.ch] ?? 100) / 127), prog: prog[e.ch] ?? 0 };
+        open[key] = { t: sec, n: e.n, ch: e.ch, v: e.v / 127 * ((vol[e.ch] ?? 100) / 127), prog: prog[e.ch] ?? 0, b0: bend[e.ch] || 0 };
       } else if (e.k === 'off') {
         const key = e.ch + ':' + e.n;
         if (open[key]) { open[key].d = Math.max(.03, sec - open[key].t); notes.push(open[key]); delete open[key]; }
@@ -182,7 +189,7 @@ const Midi = (() => {
   const songs = {};
   function get(name) {
     if (songs[name] !== undefined) return songs[name];
-    const d = window.GEN3_MIDI && window.GEN3_MIDI[name];
+    const d = (window.GEN3_MIDI && window.GEN3_MIDI[name]) || (window.SE_MIDI && window.SE_MIDI[name]);
     try { songs[name] = d ? parse(b64(d)) : null; } catch (e) { console.warn(e); songs[name] = null; }
     return songs[name];
   }

@@ -220,9 +220,35 @@ const MOVE_ANIM = {
   dazzlinggleam: async A => { await A.flash('#fff', { alpha: .7 }); await A.burst('sparkle_3', 'target', { n: 4, spread: 40, gap: 60 }); },
 };
 
+// 招式音效（pokeemerald sound/songs/midi/se_m_*）：個別招式，其餘依屬性
+const MOVE_SE = {
+  tackle: 'comet_punch', pound: 'comet_punch', scratch: 'scratch', quickattack: 'comet_punch', bodyslam: 'mega_kick', takedown: 'take_down',
+  doubleedge: 'take_down', hyperbeam: 'hyper_beam', slash: 'cut', cut: 'cut', furyswipes: 'scratch', swordsdance: 'swords_dance',
+  growl: 'swagger', leer: 'leer', tailwhip: 'tail_whip', protect: 'detect', recover: 'moonlight', rest: 'snore', harden: 'harden', agility: 'double_team',
+  ember: 'ember', flamethrower: 'flamethrower', fireblast: 'sacred_fire', firepunch: 'fire_punch', flareblitz: 'flame_wheel', willowisp: 'ember', heatwave: 'heat_wave',
+  watergun: 'bubble', bubble: 'bubble', bubblebeam: 'bubble_beam', surf: 'surf', hydropump: 'hydro_pump', waterfall: 'waterfall', aquatail: 'waterfall', scald: 'hydro_pump',
+  thundershock: 'thunderbolt', thunderbolt: 'thunderbolt', thunder: 'thunderbolt2', thunderpunch: 'thunderbolt', thunderwave: 'thunder_wave', spark: 'charge', discharge: 'thunderbolt2',
+  vinewhip: 'double_slap', razorleaf: 'razor_wind', absorb: 'absorb', megadrain: 'absorb_2', gigadrain: 'giga_drain', solarbeam: 'solar_beam', leafblade: 'cut',
+  energyball: 'absorb_2', sleeppowder: 'poison_powder', stunspore: 'poison_powder',
+  icebeam: 'icy_wind', blizzard: 'blizzard', icepunch: 'icy_wind', powdersnow: 'icy_wind', aurorabeam: 'psybeam',
+  confusion: 'psybeam2', psychic: 'psybeam', psybeam: 'psybeam', shadowball: 'nightmare', lick: 'lick', nightshade: 'nightmare', bite: 'bite', crunch: 'bite', darkpulse: 'faint_attack',
+  earthquake: 'earthquake', dig: 'dig', mudslap: 'sand_attack', rockslide: 'rock_throw', rockthrow: 'rock_throw', stoneedge: 'rock_throw',
+  poisonsting: 'horn_attack', sludgebomb: 'toxic', toxic: 'toxic', poisonpowder: 'poison_powder',
+  gust: 'gust', wingattack: 'wing_attack', aerialace: 'wing_attack', fly: 'fly', airslash: 'razor_wind2', hurricane: 'twister',
+  karatechop: 'vital_throw', lowkick: 'mega_kick2', closecombat: 'vital_throw2', brickbreak: 'brick_break', machpunch: 'comet_punch',
+  dragonclaw: 'scratch', dragonbreath: 'dragon_rage', outrage: 'dragon_rage', dragonpulse: 'dragon_rage',
+  ironhead: 'headbutt', flashcannon: 'reflect', metalclaw: 'scratch', moonblast: 'moonlight', dazzlinggleam: 'swift',
+};
+const TYPE_SE = {
+  normal: 'comet_punch', fire: 'ember', water: 'bubble', electric: 'thunderbolt', grass: 'absorb', ice: 'icy_wind', fighting: 'vital_throw',
+  poison: 'toxic', ground: 'dig', flying: 'wing_attack', psychic: 'psybeam', bug: 'string_shot', rock: 'rock_throw', ghost: 'nightmare',
+  dragon: 'dragon_rage', dark: 'bite', steel: 'harden', fairy: 'charm',
+};
+
 // 有腳本的招式用腳本，其他沿用屬性通用動畫
 const _moveAnimGeneric = Battle.prototype.moveAnim;
 Battle.prototype.moveAnim = async function (user, target, mv) {
+  if (mv) { const se = MOVE_SE[mv.id] || TYPE_SE[mv.t]; if (se) Sound.sfx('m_' + se); }
   const script = Gen3.on && mv && mv.id && MOVE_ANIM[mv.id];
   if (!script || !this.el) return _moveAnimGeneric.call(this, user, target, mv);
   try { await script(AnimKit.make(this, user, target)); } catch (e) { console.warn('招式動畫失敗', mv.id, e); }

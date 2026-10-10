@@ -463,6 +463,8 @@ def main():
     man["anims"] = build_battle()
     print("音樂與音效...")
     man["midi"] = build_midi()
+    from build_se import main as build_se
+    man["se"] = len(build_se() or [])
     man["pic"] = build_pic_coords()
     print("背包...")
     man["itemIcons"] = build_bag()

@@ -452,8 +452,115 @@ const Sound = (() => {
       }
     }
   }
+  // ---------- 綠寶石音效（m4a 音色組：取樣、方波、雜訊；資料 assets/gen3/se_bank.js） ----------
+  const GBA_SE = {
+    run: 'se_flee', select: 'se_select', hit: 'se_effective', hit_super: 'se_super_effective', hit_weak: 'se_not_effective',
+    ball_throw: 'se_ball_throw', ball_open: 'se_ball_open', ball_shake: 'se_ball', caught: 'se_rg_ball_click', faint: 'se_faint',
+    door: 'se_door', bump: 'se_wall_hit', exp: 'se_exp', save: 'se_save', stat_up: 'se_m_stat_increase', stat_down: 'se_m_stat_decrease',
+    pc: 'se_pc_on', use_item: 'se_use_item', low_health: 'se_low_health', shiny: 'se_shiny', repel: 'se_repel', exit: 'se_exit', ledge: 'se_ledge',
+    item: 'se_use_item', encounter: 'se_ball_bounce_1',
+  };
+  const smpCache = {};
+  let noise7 = null;
+  function sampleBuf(name) {
+    if (smpCache[name]) return smpCache[name];
+    const s = window.SE_BANK && SE_BANK.samples[name];
+    if (!s) return null;
+    const bin = atob(s.pcm), n = bin.length;
+    const buf = ctx.createBuffer(1, n, s.rate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (bin.charCodeAt(i) - 128) / 128;
+    let rev = null;
+    smpCache[name] = { buf, loop: s.loop, rate: s.rate, get rev() { if (!rev) { rev = ctx.createBuffer(1, n, s.rate); const r = rev.getChannelData(0); for (let i = 0; i < n; i++) r[i] = d[n - 1 - i]; } return rev; } };
+    return smpCache[name];
+  }
+  // 7 位元雜訊（帶音高的金屬聲）
+  function noise7Buf() {
+    if (noise7) return noise7;
+    noise7 = ctx.createBuffer(1, 127 * 8, 32768);
+    const d = noise7.getChannelData(0);
+    let lfsr = 0x7f;
+    for (let i = 0; i < 127; i++) { const bit = (lfsr ^ (lfsr >> 1)) & 1; lfsr = (lfsr >> 1) | (bit << 6); for (let j = 0; j < 8; j++) d[i * 8 + j] = bit ? .8 : -.8; }
+    return noise7;
+  }
+  // 包絡：取樣音色以每幀（1/60 秒）的倍率；方波、雜訊（CGB）以 0–7 的步數
+  function envelope(g, v, t, off, peak, cgb) {
+    const frame = 1 / 60;
+    const tau = (f, max = 3) => f <= 0 ? .005 : f >= 255 ? max : Math.min(max, -frame / Math.log(f / 256));
+    let attack, decayTau, sus, relTau;
+    if (cgb) {
+      attack = v.a ? v.a * .04 : 0; decayTau = v.d ? v.d * .05 : 0; sus = v.d ? (v.su / 15) : 1; relTau = v.r ? v.r * .05 : .01;
+    } else {
+      attack = v.a >= 255 ? 0 : (255 / Math.max(1, v.a)) * frame; decayTau = v.d === 0 ? .001 : tau(v.d); sus = v.su / 255; relTau = tau(v.r, 1.5);
+    }
+    g.gain.setValueAtTime(attack ? 0 : peak, t);
+    if (attack) g.gain.linearRampToValueAtTime(peak, t + attack);
+    if (decayTau) g.gain.setTargetAtTime(Math.max(.0001, peak * sus), t + attack, decayTau);
+    g.gain.cancelScheduledValues(off);
+    g.gain.setTargetAtTime(0, off, relTau);
+    return off + Math.min(2, relTau * 5);
+  }
+  function playGbaSE(file) {
+    const meta = window.SE_BANK && SE_BANK.songs[file];
+    const song = typeof Midi !== 'undefined' && Midi.get(file);
+    if (!meta || !song) return false;
+    const group = SE_BANK.groups[meta.g] || [];
+    const t0 = ctx.currentTime + .01, songVol = meta.v / 127;
+    for (const n of song.notes) {
+      const v = group[n.prog];
+      if (!v) continue;
+      const t = t0 + n.t, off = t + Math.max(.02, Math.min(n.d, 3));
+      const peak = n.v * songVol * .9;
+      const g = ctx.createGain();
+      g.connect(sfxGain);
+      const semis = (n.b0 || 0);
+      const bendAt = (param, base, f) => { for (const [bt, b] of n.bends || []) param.setValueAtTime(f(base, b), t + bt); };
+      if (v.k.startsWith('voice_directsound')) {
+        const s = sampleBuf(v.s);
+        if (!s) continue;
+        const src = ctx.createBufferSource();
+        src.buffer = v.k.endsWith('reverse') ? s.rev : s.buf;
+        if (s.loop && !v.k.endsWith('reverse')) { src.loop = true; src.loopStart = s.loop[0] / s.rate; src.loopEnd = s.loop[1] / s.rate; }
+        const rate = st => v.k.endsWith('no_resample') ? 1 : Math.pow(2, (n.n - (v.key || 60) + st) / 12);
+        src.playbackRate.setValueAtTime(rate(semis), t);
+        bendAt(src.playbackRate, 0, (b, st) => rate(st));
+        const end = envelope(g, v, t, off, peak, false);
+        src.connect(g); src.start(t); src.stop(end);
+      } else if (v.k.startsWith('voice_square')) {
+        const o = ctx.createOscillator();
+        o.setPeriodicWave(waves[['sq12', 'sq25', 'sq50', 'sq25'][v.duty & 3]]);
+        let f = freq(n.n + semis);
+        o.frequency.setValueAtTime(f, t);
+        // 掃頻（square_1）：每 (time/128) 秒，頻率暫存器 ± 暫存器 >> shift
+        const sw = v.sweep || 0, swT = (sw >> 4) & 7, dec = (sw >> 3) & 1, shift = sw & 7;
+        if (swT && shift) {
+          let x = 2048 - 131072 / f;
+          for (let tt = t + swT / 128; tt < off && tt < t + 2; tt += swT / 128) {
+            x += (dec ? -1 : 1) * Math.floor(x / (1 << shift));
+            if (x >= 2047 || x <= 0) break;
+            o.frequency.setValueAtTime(131072 / (2048 - x), tt);
+          }
+        } else bendAt(o.frequency, 0, (b, st) => freq(n.n + st));
+        const end = envelope(g, v, t, off, peak * .45, true);
+        o.connect(g); o.start(t); o.stop(end);
+      } else if (v.k.startsWith('voice_noise')) {
+        const src = ctx.createBufferSource();
+        src.buffer = v.period ? noise7Buf() : noiseBuf;
+        src.loop = true;
+        const rate = st => Math.pow(2, (n.n - 60 + st) / 12) * (v.period ? 1 : .6);
+        src.playbackRate.setValueAtTime(rate(semis), t);
+        bendAt(src.playbackRate, 0, (b, st) => rate(st));
+        const end = envelope(g, v, t, off, peak * .5, true);
+        src.connect(g); src.start(t, Math.random() * .3); src.stop(end);
+      }
+    }
+    return true;
+  }
+
   function sfx(name) {
     if (!ctx) return;
+    // 綠寶石音效庫：別名（hit、ball_throw…）或直接的檔名（m_flamethrower → se_m_flamethrower）
+    const file = GBA_SE[name] || (window.SE_BANK && SE_BANK.songs['se_' + name] ? 'se_' + name : null);
+    if (file) { try { if (playGbaSE(file)) return; } catch (e) { console.warn('音效播放失敗', name, e); } }
     if (Assets.sfx[name]) { fileSfx(name); return; }
     const se = typeof Midi !== 'undefined' && Midi.get('se_' + name);
     if (se) { try { playSE(se); } catch (e) { console.warn('音效播放失敗', name, e); } return; }

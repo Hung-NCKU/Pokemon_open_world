@@ -165,8 +165,72 @@ def build_summary():
     return True
 
 
+def build_storage():
+    """寶可夢寄放系統（graphics/pokemon_storage）：捲動背景、左側資料欄、16 種箱子桌布、手形游標。"""
+    S = os.path.join(EM, "graphics/pokemon_storage")
+    if not os.path.isdir(S):
+        return []
+    tmp = os.path.join(OUT, "_st.pal")
+    # 捲動背景
+    _write_pal(tmp, read_pal(os.path.join(S, "scrolling_bg.pal")))
+    render_tilemap(os.path.join(S, "scrolling_bg.png"), os.path.join(S, "scrolling_bg.bin"), tmp, 32, pal_offset=3).crop((0, 0, 256, 256)).save(os.path.join(OUT, "pc_scroll.png"))
+    # 左側資料欄（menu.png ＋ interface.pal）
+    # 圖塊編號從 0x100 開始（menu.png 載入在第 256 格）
+    import struct
+    _write_pal(tmp, read_pal(os.path.join(S, "interface.pal")))
+    try:
+        raw = open(os.path.join(S, "display_menu.bin"), "rb").read()
+        fixed = b"".join(struct.pack("<H", (e & 0xFC00) | max(0, (e & 0x3FF) - 256)) for e in struct.unpack("<%dH" % (len(raw) // 2), raw))
+        tb = os.path.join(OUT, "_dm.bin")
+        open(tb, "wb").write(fixed)
+        render_tilemap(os.path.join(S, "menu.png"), tb, tmp, 32).crop((0, 0, 240, 160)).save(os.path.join(OUT, "pc_panel.png"))
+        os.remove(tb)
+    except Exception as e:  # noqa: BLE001
+        print("  資料欄失敗", e)
+    # 桌布：frame.png 的圖塊後面接 bg.png 的圖塊；調色盤第 0 列 frame、第 1 列 bg
+    names = []
+    W = os.path.join(S, "wallpapers")
+    for name in ["forest", "city", "desert", "savanna", "crag", "volcano", "snow", "cave", "beach", "seafloor", "river", "sky", "polkadot", "pokecenter", "machine", "plain"]:
+        d = os.path.join(W, name)
+        if not os.path.exists(os.path.join(d, "tilemap.bin")):
+            continue
+        fr, bg = Image.open(os.path.join(d, "frame.png")), Image.open(os.path.join(d, "bg.png"))
+        # 實際的圖塊資料會去掉 frame 後面空白的圖塊：bg 的圖塊接在「圖塊表用到的最大編號 − bg 圖塊數 + 1」
+        import struct
+        raw = open(os.path.join(d, "tilemap.bin"), "rb").read()
+        maxt = max(e & 0x3FF for e in struct.unpack("<%dH" % (len(raw) // 2), raw))
+        bgt = [bg.crop((tx * 8, ty * 8, tx * 8 + 8, ty * 8 + 8)) for ty in range(bg.size[1] // 8) for tx in range(bg.size[0] // 8)]
+        nframe = maxt + 1 - len(bgt)
+        tiles = [fr.crop((tx * 8, ty * 8, tx * 8 + 8, ty * 8 + 8)) for ty in range(fr.size[1] // 8) for tx in range(fr.size[0] // 8)][:nframe] + bgt
+        sheet = Image.new("P", (128, ((len(tiles) + 15) // 16) * 8))
+        for i, t in enumerate(tiles):
+            sheet.paste(t, ((i % 16) * 8, (i // 16) * 8))
+        pal = _png_pal(os.path.join(d, "frame.png"))[:16] + _png_pal(os.path.join(d, "bg.png"))[:16]
+        flat = [c for rgb in pal for c in rgb] + [0] * (768 - len(pal) * 3)
+        sheet.putpalette(flat)
+        sp = os.path.join(OUT, "_wp.png")
+        sheet.save(sp)
+        _write_pal(tmp, pal)
+        # 圖塊表的調色盤 1 = frame、2 = bg（0 是透明的背景色）
+        im = render_tilemap(sp, os.path.join(d, "tilemap.bin"), tmp, 20, 18, pal_offset=1)
+        # 箱子本體（第 4 列以下）的透明處填上 bg 調色盤的第 0 色（GBA 的背景色）
+        px = im.load()
+        base = pal[16] + (255,)
+        for y in range(32, im.size[1]):
+            for x in range(im.size[0]):
+                if px[x, y][3] == 0:
+                    px[x, y] = base
+        im.save(os.path.join(OUT, f"pc_wp_{name}.png"))
+        os.remove(sp)
+        names.append(name)
+    os.remove(tmp)
+    png_rgba(os.path.join(S, "hand_cursor.png")).save(os.path.join(OUT, "pc_hand.png"))
+    png_rgba(os.path.join(S, "arrow.png")).save(os.path.join(OUT, "pc_arrow.png"))
+    return names
+
+
 def build_all():
-    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary()}
+    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary(), "storage": build_storage()}
 
 
 if __name__ == "__main__":
