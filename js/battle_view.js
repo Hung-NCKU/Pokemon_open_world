@@ -93,6 +93,7 @@ Object.assign(Battle.prototype, {
         img.style.bottom = (back ? -24 : 24) - pad * scale + 'px';
       } catch { }
     };
+    if (this.isTera && this.isTera(m)) img.classList.add('tera');
     img.crossOrigin = 'anonymous';
     img.onload = () => place(s.scale);
     img.onerror = () => {
@@ -105,6 +106,19 @@ Object.assign(Battle.prototype, {
   },
 
   hpColor(r) { return r > .5 ? 'g' : r > .2 ? 'y' : 'r'; },
+  // 太晶化：白光閃爍後，寶可夢包上一層水晶光澤
+  async teraAnim(side) {
+    const img = this.el.querySelector(`.bmon.${side} img`);
+    const f = document.createElement('div');
+    f.className = 'tera-flash';
+    this.fxEl.appendChild(f);
+    Sound.sfx('shiny');
+    f.animate([{ opacity: 0 }, { opacity: .9 }, { opacity: 0 }], { duration: 700 });
+    await U.sleep(350);
+    if (img) img.classList.add('tera');
+    await U.sleep(350);
+    f.remove();
+  },
 
   draw() {
     for (const side of ['foe', 'me']) {
@@ -113,7 +127,7 @@ Object.assign(Battle.prototype, {
       const box = this.el.querySelector(`.hbox.${side}`);
       const max = Mon.maxHp(m);
       const r = Math.max(0, m.hp) / max;
-      box.querySelector('.hn').textContent = Mon.name(m);
+      box.querySelector('.hn').textContent = Mon.name(m) + (this.isTera && this.isTera(m) ? ' ✦' : '');
       box.querySelector('.hl').textContent = 'Lv' + m.lv;
       const hs = box.querySelector('.hs');
       if (m.st && Gen3.on) { hs.style.backgroundImage = `url(${Gen3.base}ui_status.png)`; hs.style.backgroundPositionY = -STATUS_ICON_ROW[m.st] * 24 + 'px'; hs.style.display = 'block'; }

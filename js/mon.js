@@ -78,6 +78,7 @@ const Mon = {
       happy: s.hap,
       st: null,
       shiny: opts.shiny ?? U.rand() < 1 / 4096,
+      tera: opts.tera || U.pick(s.t),
       moves: Mon.movesFor(id, lv).filter(x => MOVES[x]).map(x => ({ id: x, pp: MOVES[x].pp })),
     };
     if (opts.perfect) m.iv = m.iv.map(v => Math.max(v, opts.perfect));
@@ -90,6 +91,9 @@ const Mon = {
     m.st = null;
     m.moves.forEach(x => { x.pp = MOVES[x.id].pp; });
   },
+
+  // 太晶屬性：沒有設定時是第一個屬性
+  teraType(m) { return m.tera && TYPES[m.tera] ? m.tera : POKEDEX[m.sp].t[0]; },
 
   sprite(id, { back = false, shiny = false } = {}) {
     return SPR + (back ? 'back/' : '') + (shiny ? 'shiny/' : '') + id + '.png';

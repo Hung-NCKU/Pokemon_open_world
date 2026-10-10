@@ -593,6 +593,47 @@ async function run() {
     check('重播：相同種子與指令得到完全相同的紀錄', a === b2 && a.length > 50, `${a.length} 字`);
     check('重播：不同種子的紀錄不同（亂數確實有作用）', a !== c);
   }
+  // 太晶化
+  {
+    const b = setup(6, 50, 143, 50);
+    b.initEngine();
+    b.me.tera = 'water';
+    check('太晶化前保持原本屬性', b.typesOf(b.me).join() === 'fire,flying');
+    await b.terastallize(b.me);
+    check('太晶化後屬性只剩太晶屬性（水）', b.typesOf(b.me).join() === 'water');
+    check('新的太晶屬性：水 1.5 倍、原本的火仍 1.5 倍、一般 1 倍', b.stabMod(b.me, 'water') === 1.5 && b.stabMod(b.me, 'fire') === 1.5 && b.stabMod(b.me, 'normal') === 1);
+    const b2 = setup(6, 50, 143, 50); b2.initEngine(); b2.me.tera = 'fire';
+    await b2.terastallize(b2.me);
+    check('太晶屬性與原本相同：火 2 倍、飛行 1.5 倍', b2.stabMod(b2.me, 'fire') === 2 && b2.stabMod(b2.me, 'flying') === 1.5);
+    b2.me.ability = 'adaptability';
+    check('適應力＋相同太晶屬性 2.25 倍', b2.stabMod(b2.me, 'fire') === 2.25);
+    const b3 = setup(25, 50, 143, 50); b3.initEngine(); b3.me.tera = 'electric';
+    const ts = md(moveId('thundershock')), qa = md(moveId('quickattack'));
+    check('太晶化前電擊威力 40', b3.basePower(b3.me, b3.foe, ts) === 40);
+    await b3.terastallize(b3.me);
+    check('太晶化：同屬性、威力不到 60 的招式提升到 60', b3.basePower(b3.me, b3.foe, ts) === 60);
+    check('太晶化：先制招式不受影響（電光一閃仍是 40）', b3.basePower(b3.me, b3.foe, qa) === 40);
+    check('太晶爆發變成太晶屬性', b3.moveType(b3.me, md(moveId('terablast'))) === 'electric');
+    b3.me.tera = 'water';
+    await b3.terastallize(b3.me);
+    check('每場戰鬥只能太晶化一次', Mon.teraType(b3.me) === 'water' && b3.teraUsed.me === true && b3.tera.me === b3.me);
+    // 館主的王牌會太晶化
+    G.state = Game.newState('T', 'kanto', 1);
+    G.state.party = [Mon.create(25, 50)];
+    const party = [Mon.create(74, 50), Mon.create(95, 50)];
+    const gb = new Battle({ trainer: { title: '館主', name: 'X', party, kind: 'gym', money: 1 } });
+    gb.setup();
+    check('館主的第一隻不會太晶化', !gb.aiTera());
+    gb.foeIdx = gb.foeParty.length - 1;
+    check('館主的王牌會太晶化', gb.aiTera());
+    // 太晶珠：用過後要到寶可夢中心充能
+    G.state.bag['tera-orb'] = 1; G.state.teraCharged = true;
+    gb.teraUsed = { me: true };
+    await gb.finish('run');
+    check('用過太晶珠後需要充能', G.state.teraCharged === false);
+    Game.healParty();
+    check('在寶可夢中心回復後太晶珠充能完成', G.state.teraCharged === true);
+  }
   // 地點專屬生態
   {
     const keep = G.state;

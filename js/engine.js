@@ -143,7 +143,29 @@ Object.assign(Battle.prototype, {
   sideKey(m) { return m === this.me ? 'me' : 'foe'; },
   volOf(m) { return m === this.me ? this.vMe : this.vFoe; },
   otherOf(m) { return m === this.me ? this.foe : this.me; },
+  // 太晶化：屬性只剩太晶屬性（直到戰鬥結束）
+  isTera(m) { return !!(this.tera && m && (this.tera.me === m || this.tera.foe === m)); },
+  // 屬性一致加成（第九世代）：太晶屬性與原本屬性相同 2 倍（適應力 2.25）；新的太晶屬性 1.5 倍（適應力 2）；原本的屬性仍有 1.5 倍
+  stabMod(user, type) {
+    const v = this.volOf(user), orig = v && v.types ? v.types : Mon.types(user), adapt = this.ab(user) === 'adaptability';
+    if (!this.isTera(user)) return orig.includes(type) ? (adapt ? 2 : 1.5) : 1;
+    const tt = Mon.teraType(user);
+    if (type === tt) return orig.includes(tt) ? (adapt ? 2.25 : 2) : (adapt ? 2 : 1.5);
+    return orig.includes(type) ? 1.5 : 1;
+  },
+  async terastallize(m) {
+    const side = this.sideKey(m);
+    this.tera = this.tera || { me: null, foe: null };
+    if (this.tera[side] !== null || this.teraUsed && this.teraUsed[side]) return;
+    this.tera[side] = m;
+    this.teraUsed = this.teraUsed || {};
+    this.teraUsed[side] = true;
+    if (this.teraAnim) await this.teraAnim(side);
+    await this.msg(`${this.label(m)} 太晶化成了${TYPES[Mon.teraType(m)].n}屬性！`);
+    this.draw && this.draw();
+  },
   typesOf(m) {
+    if (this.isTera(m)) return [Mon.teraType(m)];
     const v = this.volOf(m);
     let t = v && v.types ? v.types : Mon.types(m);
     if (v && v.roost) t = t.filter(x => x !== 'flying');
@@ -202,6 +224,9 @@ Object.assign(Battle.prototype, {
     }
     if (foeAction.heal) { await this.aiHeal(); }
     if (foeAction.switchTo !== undefined) { await this.foeSwitch(foeAction.switchTo); }
+    // 太晶化：在所有招式之前（玩家先、對手後）
+    if (action.type === 'move' && action.tera) await this.terastallize(this.me);
+    if (!foeAction.heal && foeAction.switchTo === undefined && this.aiTera()) await this.terastallize(this.foe);
     // 2. 招式依優先度 → 速度 → 隨機排序（戲法空間時速度反轉）
     const acts = [];
     if (action.type === 'move') acts.push({ side: 'me', ...this.resolveMove(this.me, this.vMe, action.idx) });
@@ -265,6 +290,12 @@ Object.assign(Battle.prototype, {
   },
 
   // ---------- AI ----------
+  // 訓練家的王牌（最後一隻）、館主、四天王、冠軍會太晶化（每場一次）
+  aiTera() {
+    if (this.wildMon || !this.trainer || (this.teraUsed && this.teraUsed.foe)) return false;
+    const k = this.trainer.kind, ace = this.foe === this.foeParty[this.foeParty.length - 1];
+    return ace && (k === 'gym' || k === 'champion' || this.trainer.tera);
+  },
   aiChoose() {
     const foe = this.foe, me = this.me;
     if (this.aiItems > 0 && foe.hp < Mon.maxHp(foe) * .25 && U.rand() < .7) return { heal: true };
@@ -698,9 +729,12 @@ Object.assign(Battle.prototype, {
       case 'beatup': bp = 5 + Math.floor(POKEDEX[user.sp].s[1] / 10); break;
       case 'watershuriken': break;
     }
+    // 太晶化：與太晶屬性相同、威力不到 60 的招式提升到 60（連續攻擊與先制招式除外）
+    if (this.isTera(user) && bp > 0 && bp < 60 && this.moveType(user, mv) === Mon.teraType(user) && !mv.multihit && !(mv.pri > 0)) bp = 60;
     return bp;
   },
   moveType(user, mv) {
+    if (mv.id === 'terablast' && this.isTera(user)) return Mon.teraType(user);
     if (mv.id === 'weatherball') return { sunnyday: 'fire', raindance: 'water', sandstorm: 'rock', hail: 'ice', snowscape: 'ice' }[this.field.weather] || 'normal';
     if (mv.id === 'terrainpulse') return { electricterrain: 'electric', grassyterrain: 'grass', mistyterrain: 'fairy', psychicterrain: 'psychic' }[this.field.terrain] || 'normal';
     if (mv.id === 'revelationdance') return this.typesOf(user)[0];
@@ -978,7 +1012,8 @@ Object.assign(Battle.prototype, {
   // Showdown getDamage（單打）
   calcDamage(user, target, vU, vT, mv, eff, bp) {
     const st = Mon.stats(target);
-    const phys = mv.cat === 'Physical';
+    // 太晶爆發：太晶化時攻擊比特攻高就變成物理招式
+    const phys = mv.id === 'terablast' && this.isTera(user) ? Mon.stats(user)[1] > Mon.stats(user)[3] : mv.cat === 'Physical';
     const ua = this.ab(user), ta = this.ab(target), ui = this.itm(user), ti = this.itm(target);
     const w = this.wx(), t = this.field.terrain;
     const contact = mv.flags.contact && ui !== 'punching-glove' && ua !== 'long-reach';
@@ -1071,7 +1106,7 @@ Object.assign(Battle.prototype, {
     if (w === 'raindance') { if (mv.type === 'water') base = Math.floor(base * 1.5); if (mv.type === 'fire') base = Math.floor(base / 2); }
     if (crit) base = Math.floor(base * (ua === 'sniper' ? 2.25 : 1.5));
     base = Math.floor(base * (100 - U.ri(0, 15)) / 100);
-    if (this.typesOf(user).includes(mv.type)) base = Math.floor(base * (ua === 'adaptability' ? 2 : 1.5));
+    base = Math.floor(base * this.stabMod(user, mv.type));
     base = Math.floor(base * eff);
     if (phys && user.st === 'brn' && mv.id !== 'facade' && ua !== 'guts') base = Math.floor(base / 2);
     // 最終修正（穿透無視牆壁）

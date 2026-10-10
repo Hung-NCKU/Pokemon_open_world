@@ -225,3 +225,9 @@ body.in-battle #choices .choice.sel::before { color: #484848; font-size: 22px; l
 #bag .bag-row .cnt { position: absolute; right: 12px; }
 #bag .bag-row.sel::before { content: '▶'; position: absolute; left: 6px; font-size: 20px; }
 #bag .bag-money { display: none; }
+
+/* 太晶化 */
+#battle .bmon img.tera { filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 9px rgba(140, 220, 255, .95)) saturate(1.25) brightness(1.08); }
+#battle .tera-flash { position: absolute; inset: 0; background: radial-gradient(circle, #fff 0%, rgba(160, 230, 255, .8) 45%, rgba(255, 255, 255, 0) 75%); pointer-events: none; opacity: 0; z-index: 20; }
+#choice-info .tera-btn { display: inline-block; margin-top: 4px; padding: 0 8px; border-radius: 6px; background: #c8d8e8; color: #506070; cursor: pointer; font-size: 18px; }
+#choice-info .tera-btn.on { background: linear-gradient(90deg, #f8a8f8, #a8f8f8, #f8f8a8); color: #303040; box-shadow: 0 0 6px #fff; }

@@ -96,6 +96,9 @@ const Held = {
 const NATURE_INDEX = { hardy: 0, lonely: 1, brave: 2, adamant: 3, naughty: 4, bold: 5, docile: 6, relaxed: 7, impish: 8, lax: 9, timid: 10,
   hasty: 11, serious: 12, jolly: 13, naive: 14, modest: 15, mild: 16, quiet: 17, bashful: 18, rash: 19, calm: 20, gentle: 21, sassy: 22,
   careful: 23, quirky: 24 };
+// 太晶珠（重要物品）：讓寶可夢太晶化，每場戰鬥一次，用過後到寶可夢中心充能
+ITEMS['tera-orb'] = { n: '太晶珠', kind: 'key', d: '能讓寶可夢太晶化的神奇寶珠。使用後需要在寶可夢中心充能。', price: 0 };
+
 const VITAMIN = { 'hp-up': 0, protein: 1, iron: 2, calcium: 3, zinc: 4, carbos: 5 };
 const EXP_CANDY = { 'exp-candy-xs': 100, 'exp-candy-s': 800, 'exp-candy-m': 3000, 'exp-candy-l': 10000, 'exp-candy-xl': 30000 };
 const TRAIN_PRICE = { 'ability-capsule': 50000, 'ability-patch': 100000, 'bottle-cap': 30000, 'gold-bottle-cap': 100000 };

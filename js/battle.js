@@ -97,8 +97,15 @@ class Battle {
           const m = md(s.id);
           return `PP　${s.pp}/${m.pp || MOVES[s.id].pp}<br>類型/${(TYPES[m.type] || TYPES.unknown).n}`;
         };
-        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info });
-        if (i >= 0) return { type: 'move', idx: i };
+        // 太晶化：持有太晶珠且已充能、這場還沒用過時，按 R（或點選）切換
+        const canTera = G.state.bag['tera-orb'] && G.state.teraCharged !== false && !(this.teraUsed && this.teraUsed.me);
+        let teraOn = false;
+        const tt = TYPES[Mon.teraType(me)];
+        window.__teraToggle = () => { teraOn = !teraOn; const el = document.querySelector('#choice-info .tera-btn'); if (el) el.classList.toggle('on', teraOn); };
+        const info2 = i => info(i) + (canTera ? `<br><span class="tera-btn${teraOn ? ' on' : ''}" onclick="event.stopPropagation();window.__teraToggle()">R 太晶化 ${tt.n}</span>` : '');
+        const onKey = e => { if (canTera && (e.key === 'r' || e.key === 'R') && !e.repeat) { teraOn = !teraOn; } return false; };
+        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info2, onKey });
+        if (i >= 0) return { type: 'move', idx: i, tera: canTera && teraOn };
       } else if (c === 1) {
         const r = await Game.bagMenu({ battle: this });
         if (r) return { type: 'item', ...r };
@@ -266,6 +273,9 @@ class Battle {
 
   async finish(result) {
     const tr = this.trainer;
+    // 太晶珠用過後要到寶可夢中心充能
+    if (this.teraUsed && this.teraUsed.me) G.state.teraCharged = false;
+    this.tera = null;
     if (result === 'win') Sound.play(this.wildMon ? 'victory_wild' : tr.kind === 'gym' || tr.kind === 'champion' ? 'victory_gym' : 'victory_trainer');
     if (result === 'win' && tr) {
       await this.trainerReturn();

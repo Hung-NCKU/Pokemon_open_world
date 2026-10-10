@@ -806,7 +806,7 @@ const Game = {
     G.move = null;
   },
 
-  healParty() { G.party.forEach(Mon.heal); },
+  healParty() { G.party.forEach(Mon.heal); G.state.teraCharged = true; },
 
   async enterBuilding(b) {
     const t = b.town;
@@ -890,6 +890,12 @@ const Game = {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
       Sound.jingle('badge');
       await UI.say(`獲得了${t.name}道館的徽章！（${REGIONS[t.region].n}徽章 ${Game.badgeCount(t.region)}／8）`);
+      if (!G.state.bag['tera-orb']) {
+        Game.giveItem('tera-orb', 1); G.state.teraCharged = true;
+        await UI.say(`${name}：「你也該有這個了。」
+獲得了太晶珠！
+（戰鬥中選招式時按 R 讓寶可夢太晶化；用過後到寶可夢中心充能）`);
+      }
       if (typeof TM !== 'undefined') {
         const tm = TM.give(TM.forType(type).mv);
         if (tm) { Sound.sfx('item'); await UI.say(`${name}：「這個也送給你吧！」

@@ -22,7 +22,7 @@ const SummaryUI = (() => {
         if (page === 0) {
           const next = m.lv >= 100 ? 0 : Mon.expFor(s.gr, m.lv + 1) - m.exp;
           html += `<div class="sm-r1">${U.esc(s.n)}${m.shiny ? '　✨' : ''}<span class="sm-ot">親密度 ${m.happy}</span></div>
-            <div class="sm-r2">${Mon.types(m).map(typeTag).join('')}${m.st ? ' ' + UI.statusTag(m.st) : ''}</div>
+            <div class="sm-r2">${Mon.types(m).map(typeTag).join('')}${m.st ? ' ' + UI.statusTag(m.st) : ''}<span class="sm-tera">太晶 ${typeTag(Mon.teraType(m))}</span></div>
             <div class="sm-r3">${U.esc(Abil.name(m.ability))}${Abil.supported(m.ability) ? '' : '<small>（效果未實作）</small>'}</div>
             <div class="sm-r4">${U.esc(Abil.desc(m.ability))}</div>
             <div class="sm-memo"><b>${NATURES[nat]}</b>性格${m.mint !== undefined && m.mint !== m.nat ? `（原本是${NATURES[m.nat]}，薄荷改變了成長）` : '。'}<br>

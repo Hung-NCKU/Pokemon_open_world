@@ -16,7 +16,8 @@
 /* 資料頁 */
 #summary .sm-r1 { left: 258px; top: 96px; width: 450px; }
 #summary .sm-ot { position: absolute; right: 0; font-size: 18px; color: #508050; }
-#summary .sm-r2 { left: 258px; top: 147px; }
+#summary .sm-r2 { left: 258px; top: 147px; width: 450px; }
+#summary .sm-tera { position: absolute; right: 0; font-size: 18px; color: #508050; }
 #summary .sm-r3 { left: 258px; top: 216px; }
 #summary .sm-r3 small { font-size: 15px; color: #a05050; }
 #summary .sm-r4 { left: 258px; top: 267px; width: 450px; font-size: 17px; overflow: hidden; text-overflow: ellipsis; }
