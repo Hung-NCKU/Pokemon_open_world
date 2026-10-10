@@ -736,11 +736,9 @@ const World = {
         const kind = this.pathLook(x, y);
         return kind ? Gen3.recolor(im, kind) : im;
       }
-      case T.MOUNT: {
-        let d = 0;
-        while (d < 3 && at(x, y + d + 1) === T.MOUNT) d++;
-        return Gen3.auto('rock', (a, b) => at(a, b) === T.MOUNT || !this.inside(a, b), x, y, d);
-      }
+      // 岩山：綠寶石的岩壁圖塊是為方正的山設計的，程序生成的不規則形狀會拼出不搭的碎塊；
+      // 改成一律用岩山內部的圖樣，邊緣交給 drawFringes（鋸齒邊）與南側的崖壁陰影
+      case T.MOUNT: return Gen3.auto('rock', () => true, 0, 0, 0);
       case T.TREE: {
         const snowy = [[0, -2], [0, 2], [-2, 0], [2, 0], [0, -1], [0, 1], [-1, 0], [1, 0]].some(([a, b]) => {
           const v = at(x + a, y + b); return v === T.SNOW || v === T.SNOWTALL;
@@ -798,6 +796,7 @@ const World = {
     if (t === T.SNOW || t === T.SNOWTALL) return 3;
     if (t === T.GRASS || t === T.FLOWER || t === T.TOWN) return this.snowyArea(x, y) ? 3 : 0;
     if (t === T.DESERT) return 2;
+    if (t === T.MOUNT || t === T.LANDMARK) return 1.5;
     if (t === T.CAVE) return 1;
     if (t === T.TALL) return 0;
     if (t === T.SAND) return -1;   // 沙灘：旁邊的草地長到沙上（綠寶石的海邊）
@@ -807,7 +806,8 @@ const World = {
     this._fringe = this._fringe || new Map();
     const key = rank + side + v;
     if (this._fringe.has(key)) return this._fringe.get(key);
-    const src = rank === 3 ? Gen3.single('snow') : rank === 2 ? Gen3.auto('desert', () => true, 0, 0) : rank === 1 ? Gen3.single('cave') : rank === 0 ? Gen3.single('grass') : null;
+    const src = rank === 3 ? Gen3.single('snow') : rank === 2 ? Gen3.auto('desert', () => true, 0, 0) : rank === 1.5 ? Gen3.auto('rock', () => true, 0, 0, 0)
+      : rank === 1 ? Gen3.single('cave') : rank === 0 ? Gen3.single('grass') : null;
     if (!src) return null;
     const S = src.width, c = document.createElement('canvas');
     c.width = c.height = S;
@@ -866,6 +866,13 @@ const World = {
     }
     const r = this.groundRank(t, x, y);
     if (r === null) return;
+    // 岩山的南側是崖壁：下方不是岩山時，在底部畫深色的崖壁與陰影
+    if (t === T.MOUNT && this.groundRank(this.tile(x, y + 1), x, y + 1) !== 1.5) {
+      const S = TILE;
+      g.fillStyle = 'rgba(70,46,40,.55)'; g.fillRect(px, py + S * .62, S, S * .38);
+      g.fillStyle = 'rgba(40,26,24,.6)'; g.fillRect(px, py + S - S / 8, S, S / 8);
+      g.fillStyle = 'rgba(255,236,220,.18)'; g.fillRect(px, py + S * .62, S, S / 16);
+    }
     for (const [side, dx, dy] of SIDES) {
       const nr = this.groundRank(this.tile(x + dx, y + dy), x + dx, y + dy);
       if (nr === null || nr <= r) continue;
