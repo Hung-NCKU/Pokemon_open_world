@@ -7,16 +7,16 @@
 const Telemetry = (() => {
   const KEY = 'pkmn_openworld_log';
   const MAX_ERR = 30, MAX_EV = 60;
-  let errors = [], events = [];
+  let errors = [], events = [], battles = {};
   const timings = {};
   const fps = { frames: 0, acc: 0, cur: 0, min: Infinity, samples: 0, sum: 0, long: 0, worst: 0 };
   const started = Date.now();
-  try { const s = JSON.parse(localStorage.getItem(KEY) || '{}'); errors = Array.isArray(s.errors) ? s.errors.slice(-MAX_ERR) : []; } catch { }
+  try { const s = JSON.parse(localStorage.getItem(KEY) || '{}'); errors = Array.isArray(s.errors) ? s.errors.slice(-MAX_ERR) : []; battles = s.battles && typeof s.battles === 'object' ? s.battles : {}; } catch { }
 
   let saveT = 0;
   function persist() {
     clearTimeout(saveT);
-    saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify({ errors })); } catch { } }, 200);
+    saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify({ errors, battles })); } catch { } }, 200);
   }
   const mode = () => (typeof G !== 'undefined' && G.mode) || '';
   function error(msg, where = '') {
@@ -56,6 +56,16 @@ const Telemetry = (() => {
       if (overlay) draw();
     }
   }
+  // 對戰統計（依遊玩數據調整平衡用）：每種對戰的場數、勝負、平均回合、我方與對手的等級差
+  function battle(kind, result, lvDiff, turns) {
+    const b = battles[kind] || (battles[kind] = { n: 0, win: 0, lose: 0, other: 0, turns: 0, lvDiff: 0 });
+    b.n++; b.turns += turns || 0; b.lvDiff += lvDiff || 0;
+    if (result === 'win') b.win++; else if (result === 'lose') b.lose++; else b.other++;
+    persist();
+  }
+  function battleStats() {
+    return Object.entries(battles).map(([k, b]) => ({ kind: k, n: b.n, winRate: b.n ? Math.round(b.win / b.n * 100) : 0, lose: b.lose, avgTurns: b.n ? +(b.turns / b.n).toFixed(1) : 0, avgLvDiff: b.n ? +(b.lvDiff / b.n).toFixed(1) : 0 }));
+  }
   function report() {
     const t = {};
     for (const [k, r] of Object.entries(timings)) t[k] = { last: Math.round(r.last), avg: Math.round(r.total / r.n), max: Math.round(r.max), n: r.n };
@@ -63,7 +73,7 @@ const Telemetry = (() => {
       at: new Date().toISOString(), sessionMin: Math.round((Date.now() - started) / 60000),
       ua: navigator.userAgent,
       fps: { now: fps.cur, avg: fps.samples ? Math.round(fps.sum / fps.samples) : 0, min: fps.samples ? fps.min : 0, longFrames: fps.long, worstMs: Math.round(fps.worst) },
-      timings: t, errors, events: events.slice(-30),
+      timings: t, errors, events: events.slice(-30), battles: battleStats(),
       save: typeof G !== 'undefined' && G.state ? { v: G.state.v, worldVer: G.state.worldVer, region: G.state.region, seed: G.state.seed } : null,
     };
   }
@@ -99,5 +109,5 @@ const Telemetry = (() => {
   console.error = (...a) => { error(a.map(x => (x && x.stack) ? x.stack.split('\n').slice(0, 3).join(' | ') : String(x)).join(' '), 'console'); realErr.apply(console, a); };
   window.addEventListener('keydown', e => { if (e.key === 'F3') { e.preventDefault(); toggleOverlay(); } });
 
-  return { error, event, time, measure, frame, report, download, clearErrors, toggleOverlay, get errors() { return errors; } };
+  return { battle, battleStats, error, event, time, measure, frame, report, download, clearErrors, toggleOverlay, get errors() { return errors; } };
 })();

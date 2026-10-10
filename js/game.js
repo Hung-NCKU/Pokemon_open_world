@@ -929,6 +929,7 @@ const Game = {
       await UI.panel(`<div class="quest-panel log-panel"><h3>遊玩紀錄</h3>
         <p>畫面更新率：${r.fps.avg ? `目前 ${r.fps.now}、平均 ${r.fps.avg}、最低 ${r.fps.min} FPS` : '測量中'}；卡頓（超過 50ms 的畫格）${r.fps.longFrames} 次，最長 ${r.fps.worstMs}ms</p>
         ${tm.map(l => `<p>${U.esc(l)}</p>`).join('') || '<p>還沒有耗時紀錄</p>'}
+        <h3>對戰統計</h3>${r.battles.map(b => `<p>${U.esc({ wild: '野生', trainer: '訓練家', gym: '道館／四天王', champion: '冠軍', raid: '團體戰' }[b.kind] || b.kind)}：${b.n} 場，勝率 ${b.winRate}%，平均 ${b.avgTurns} 回合，我方平均高 ${b.avgLvDiff} 級</p>`).join('') || '<p>還沒有對戰紀錄</p>'}
         <h3>最近的錯誤（共 ${r.errors.length} 筆）</h3>${er.map(l => `<p class="err">${U.esc(l)}</p>`).join('') || '<p>沒有錯誤</p>'}
         <p><small>F3：在畫面左上角顯示 FPS 與錯誤數</small></p></div>`);
       const c = await UI.choose(['下載紀錄檔', '清除錯誤紀錄', '返回'], { prompt: '遊玩紀錄' });
@@ -1174,6 +1175,9 @@ const Game = {
     const t0 = performance.now();
     const r = await b.run();
     Telemetry.time(kind === 'wild' ? '野生戰鬥' : '訓練家戰鬥', performance.now() - t0);
+    // 對戰統計：我方最高等級 − 對手最高等級
+    const myTop = Math.max(...G.party.map(m => m.lv)), foeTop = Math.max(...(opts.trainer ? opts.trainer.party : [opts.wild]).filter(Boolean).map(m => m.lv));
+    if (!G.tower) Telemetry.battle(kind, r, Number.isFinite(foeTop) ? myTop - foeTop : 0, b.turn || 0);
     Telemetry.event('戰鬥結束', { kind, who, r });
     // noBlackout：劇情戰輸了也不會被送回寶可夢中心（例如第一場勁敵戰）
     if (r === 'lose' && opts.noBlackout) { Game.healParty(); await UI.say('寶可夢都恢復了精神。'); }

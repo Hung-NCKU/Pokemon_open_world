@@ -1967,6 +1967,13 @@ async function run() {
     if (keepStore.ses) localStorage.setItem('pkmn_session', keepStore.ses);
     G.state = keep;
   }
+  // 遊玩數據：對戰統計
+  {
+    const before = (Telemetry.battleStats().find(b => b.kind === 'testkind') || { n: 0 }).n;
+    Telemetry.battle('testkind', 'win', 5, 4); Telemetry.battle('testkind', 'lose', -3, 8);
+    const st = Telemetry.battleStats().find(b => b.kind === 'testkind');
+    check('遊玩數據：記錄每種對戰的場數、勝率、平均回合與等級差', st.n === before + 2 && Telemetry.report().battles.some(b => b.kind === 'testkind'));
+  }
   // 對戰塔（世界配置第 6 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;
