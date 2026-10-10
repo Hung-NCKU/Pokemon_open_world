@@ -57,6 +57,8 @@
 <script src="../js/picnic.js"></script>
 <script src="../js/doubles.js"></script>
 <script src="../js/late.js"></script>
+<script src="../assets/gen3/interiors.js"></script>
+<script src="../js/interior.js"></script>
 <script src="../js/game.js"></script>
 <script>
 // 不顯示任何畫面、不等待
@@ -1265,6 +1267,62 @@ async function run() {
     for (let i = 0; i < 40; i++) Telemetry.error('大量錯誤 ' + i);
     check('遊玩紀錄：錯誤最多保留 30 筆', Telemetry.errors.length === 30);
     Telemetry.clearErrors();
+  }
+  // 室內地圖（需要本機的 assets/gen3 素材）
+  if (window.INTERIORS) {
+    window.INTERIORS_FORCE = true;
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(4, 20)];
+    World.generate(20261010, 'kanto');
+    const D = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    const bad = [];
+    const kanto = World.buildings.filter(b => b.town.region === 'kanto' && Interior.can(b));
+    const kinds = new Set();
+    for (const b of kanto) {
+      const key = Interior.keyFor(b);
+      if (kinds.has(key)) continue;
+      kinds.add(key);
+      G.state.x = b.door.x; G.state.y = b.door.y + 1;
+      Interior.enter(b);
+      const r = Interior.room, d = r.d;
+      // 從入口走得到的格子
+      const seen = new Set([r.x + ',' + r.y]), q = [[r.x, r.y]];
+      while (q.length) { const [x, y] = q.shift(); for (const [dx, dy] of Object.values(D)) { const k = (x + dx) + ',' + (y + dy); if (!seen.has(k) && Interior.walkable(x + dx, y + dy)) { seen.add(k); q.push([x + dx, y + dy]); } } }
+      // 每個有功能的人物都要能說到話（相鄰，或隔著一格櫃台）
+      for (const n of r.npcs) {
+        const ok = Object.values(D).some(([dx, dy]) => seen.has((n.x + dx) + ',' + (n.y + dy))
+          || (d.counter.some(([a, c]) => a === n.x + dx && c === n.y + dy) && seen.has((n.x + 2 * dx) + ',' + (n.y + 2 * dy))));
+        if (!ok) bad.push(`${key}:${n.role}@${n.x},${n.y}`);
+      }
+      for (const [x, y] of d.pc) if (!Object.values(D).some(([dx, dy]) => seen.has((x + dx) + ',' + (y + dy)))) bad.push(`${key}:pc`);
+      Interior.exit();
+    }
+    check('室內：每種建築的人物與電腦都走得到、說得到話', !bad.length && kinds.size >= 5, [...kinds].join(' ') + ' ' + bad.join(' '));
+    // 進門、在室內存檔、出門
+    const c = World.buildings.find(b => b.kind === 'center' && b.town.region === 'kanto');
+    G.state.x = c.door.x; G.state.y = c.door.y + 1;
+    Interior.enter(c);
+    const sv = Game.parseSave(Game.serialize(G.state));
+    check('室內：在建築裡存檔，讀檔時位置在門口', G.room && sv.ok && sv.state.x === c.door.x && sv.state.y === c.door.y + 1);
+    G.keys.add('ArrowDown'); Interior.update(16); G.keys.clear();
+    check('室內：站在出口往下走就離開建築，回到門口', !G.room && G.state.x === c.door.x && G.state.y === c.door.y + 1 && G.state.dir === 'down');
+    Interior.enter(c); Game.warp(c.door.x, c.door.y + 3);
+    check('室內：傳送（例如輸掉對戰）會離開室內', !G.room);
+    // 道館訓練家：贏了之後不再對戰
+    const gb = World.buildings.find(b => b.kind === 'gym' && b.town.region === 'kanto' && b.town.gym === 0);
+    G.state.x = gb.door.x; G.state.y = gb.door.y + 1;
+    Interior.enter(gb);
+    const trn = Interior.room.npcs.find(n => n.role === 'gymTrainer');
+    const realBattle = Game.battle; let fights = 0, foeType = null;
+    Game.battle = async o => { fights++; foeType = o.trainer.party.every(m => (Forms.data(m).t || POKEDEX[m.sp].t).includes(LEADERS.kanto[0][1])); return 'win'; };
+    G.state.dir = 'up';
+    Interior.room.x = trn.x; Interior.room.y = trn.y + 1; Interior.room.dir = 'up';
+    await Interior.interact(); await Interior.interact();
+    Game.battle = realBattle;
+    check('室內：道館訓練家使用館主屬性的寶可夢，只對戰一次', fights === 1 && foeType, `${fights} ${foeType}`);
+    Interior.exit();
+    window.INTERIORS_FORCE = false;
+    G.state = keep;
   }
   // 寄放系統（箱子）
   {

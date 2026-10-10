@@ -929,6 +929,7 @@ const Game = {
   // ---------- 世界互動 ----------
   warp(x, y, dir) {
     Telemetry.event('傳送', { x, y });
+    if (G.room) Interior.leave();
     G.state.x = x; G.state.y = y; G.state.dir = dir || G.state.dir; G.state.surf = false;
     G.move = null;
   },
@@ -937,6 +938,8 @@ const Game = {
 
   async enterBuilding(b) {
     const t = b.town;
+    // 有室內地圖的建築：走進去，和裡面的人說話
+    if (typeof Interior !== 'undefined' && Interior.can(b)) return Interior.enter(b);
     if (b.kind === 'center') {
       await UI.say('歡迎來到寶可夢中心。');
       const c0 = await UI.choose(['治療寶可夢', '使用電腦', '招式機器', '離開'], { prompt: '這裡可以讓你的寶可夢恢復健康。' });
@@ -947,22 +950,13 @@ const Game = {
         return;
       }
       const c = c0 === 3 ? 2 : c0;
-      if (c === 0) {
-        await UI.say('那麼，請把你的寶可夢交給我一會兒。');
-        Game.healParty();
-        G.state.center = { x: b.door.x, y: b.door.y + 1 };
-        await Sound.jingle('heal');
-        await UI.say('讓你久等了！你的寶可夢都已經恢復健康了。');
-        Game.save(true);
-        await UI.say('期待你再次光臨！');
-      } else if (c === 1) await Game.pcMenu();
+      if (c === 0) await Game.centerHeal(b, true);
+      else if (c === 1) await Game.pcMenu();
     } else if (b.kind === 'mart') {
       await Game.shopMenu();
     } else if (b.kind === 'house') {
-      if (t.region === G.state.region) {
-        Game.healParty();
-        await UI.say('媽媽：「歡迎回家！好好休息一下吧。」\n（寶可夢都恢復了精神！）');
-      } else await UI.say('這裡沒有人在家。');
+      if (t.region === G.state.region) await Game.momTalk();
+      else await UI.say('這裡沒有人在家。');
     } else if (b.kind === 'lab') {
       await Game.labTalk(t);
     } else if (b.kind === 'gym') {
@@ -970,6 +964,26 @@ const Game = {
     } else if (b.kind === 'league') {
       await Game.leagueChallenge(t);
     }
+  },
+
+  // 寶可夢中心的護士：治療並記錄為輸掉對戰時回來的地點
+  async centerHeal(b, asked = false) {
+    if (!asked) {
+      await UI.say('歡迎來到寶可夢中心。\n這裡可以讓你的寶可夢恢復健康。');
+      const c = await UI.choose(['治療', '不用了'], { prompt: '要治療你的寶可夢嗎？' });
+      if (c !== 0) { await UI.say('期待你再次光臨！'); return; }
+    }
+    await UI.say('那麼，請把你的寶可夢交給我一會兒。');
+    Game.healParty();
+    G.state.center = { x: b.door.x, y: b.door.y + 1 };
+    await Sound.jingle('heal');
+    await UI.say('讓你久等了！你的寶可夢都已經恢復健康了。');
+    Game.save(true);
+    await UI.say('期待你再次光臨！');
+  },
+  async momTalk() {
+    Game.healParty();
+    await UI.say('媽媽：「歡迎回家！好好休息一下吧。」\n（寶可夢都恢復了精神！）');
   },
 
   async labTalk(t) {
@@ -1206,6 +1220,7 @@ const Game = {
   },
 
   async interact() {
+    if (G.room) return Interior.interact();
     const s = G.state;
     const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[s.dir];
     const fx = s.x + d[0], fy = s.y + d[1];
@@ -1248,12 +1263,13 @@ const Game = {
   update(dt) {
     if (G.mode !== 'world') return;
     G.state.playMs += dt;
-    if (typeof OverworldMons !== 'undefined') OverworldMons.update(performance.now());
+    if (typeof OverworldMons !== 'undefined' && !G.room) OverworldMons.update(performance.now());
     if (G.busy || UI.active()) return;
     // 保險：沒有任何流程或選單在等待時，殘留在畫面上的對話框、選項一律收起
     const dlg = document.getElementById('dialog'), ch = document.getElementById('choices');
     if (dlg && !dlg.classList.contains('hidden')) UI.hideDialog();
     if (ch && !ch.classList.contains('hidden')) { ch.classList.add('hidden'); ch.innerHTML = ''; }
+    if (G.room) return Interior.update(dt);
     const s = G.state;
     if (G.move) {
       G.move.t += G.fast ? dt * 2 : dt;
@@ -1298,6 +1314,7 @@ const Game = {
     const cv = document.getElementById('world');
     const g = cv.getContext('2d');
     if (G.mode === 'title' || !G.state) return;
+    if (G.room) return Interior.render(g, cv);
     const s = G.state;
     let px = s.x * TILE, py = s.y * TILE;
     if (G.move) {
@@ -1360,6 +1377,7 @@ const Game = {
 
   // 從遊戲中返回標題畫面（在目前的流程結束後才切換）
   toTitle() {
+    G.room = null;
     G.mode = 'title';
     G.move = null;
     G.keys.clear();
@@ -1488,6 +1506,7 @@ const Game = {
   },
 
   start(state, fresh = false) {
+    G.room = null;
     G.state = state;
     G.state.flags = G.state.flags || {};
     // 舊存檔的寶可夢補上性別

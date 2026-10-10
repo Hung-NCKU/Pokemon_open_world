@@ -475,6 +475,9 @@ def main():
     man["ui"] = build_all()
     from build_icons import build_icons
     man["ui"]["icons"] = build_icons()
+    print("室內地圖...")
+    from build_interiors import main as build_interiors
+    build_interiors()
     with open(os.path.join(OUT, "manifest.js"), "w", encoding="utf-8") as f:
         f.write("window.GEN3=" + json.dumps(man, ensure_ascii=False) + ";\n")
     print("完成 →", OUT)

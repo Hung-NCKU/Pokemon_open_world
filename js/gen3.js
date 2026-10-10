@@ -23,6 +23,11 @@ const Gen3 = (() => {
     for (const t of GEN3.trainers) load('npc_' + t, `npc_${t}.png`);
   }
   const ready = () => !on || loaded >= total;
+  // 需要時才載入的圖（室內地圖、室內人物）：回傳圖片物件，載入完成前 naturalWidth 為 0
+  function ensure(name, file) {
+    if (!img[name]) { const i = new Image(); i.onerror = () => console.warn('缺少素材', file); i.src = base + file; img[name] = i; }
+    return img[name];
+  }
 
   function canvas(w, h) {
     const c = document.createElement('canvas');
@@ -99,7 +104,7 @@ const Gen3 = (() => {
   const anims = on ? new Set(GEN3.anims) : new Set();
   function animUrl(name) { return anims.has(name) ? `${base}anim/${name}.png` : null; }
 
-  return { on, ready, tile, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
+  return { on, ready, ensure, tile, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
     hasTrainer: n => on && GEN3.trainers.includes(n), bld: k => on && GEN3.buildings[k] };
 })();
 
