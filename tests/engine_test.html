@@ -1143,6 +1143,22 @@ async function run() {
       check('太晶碎塊：10 個可以改變太晶屬性', ITEMS['fire-tera-shard'].tera === 'fire');
     }
   }
+  // 難度曲線：出發地區的野外、道館、四天王、冠軍銜接順暢（避免最後幾場等級斷層）
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4);
+    const home = World.towns.find(t => t.region === 'kanto' && t.kind === 'home'), league = World.towns.find(t => t.region === 'kanto' && t.kind === 'league');
+    const wild = [0, .25, .5, .75, 1].map(k => Math.round(World.levelAt(Math.round(home.cx + (league.cx - home.cx) * k), Math.round(home.cy + (league.cy - home.cy) * k))));
+    const gyms = [];
+    for (let b = 0; b <= 7; b++) { G.state.badges = { kanto: [...Array(b).keys()] }; gyms.push(World.gymLevel(World.towns.find(t => t.region === 'kanto' && t.gym === b))); }
+    G.state.badges = { kanto: [0, 1, 2, 3, 4, 5, 6, 7] };
+    const champ = Math.max(...World.championParty(league).map(m => m.lv));
+    check('難度：出發地區的野外等級由家鄉往聯盟遞增', wild.every((v, i) => !i || v >= wild[i - 1]), wild.join(' '));
+    check('難度：聯盟附近的野外等級與第 8 座道館相差不到 6 級', gyms[7] - wild[4] <= 5, `${wild[4]} / ${gyms[7]}`);
+    check('難度：冠軍比聯盟附近的野外高不到 10 級', champ - wild[4] < 10, `${wild[4]} / ${champ}`);
+    check('難度：第一座道館不超過 Lv.14（火紅葉綠的小剛）', gyms[0] <= 14, String(gyms[0]));
+    G.state = keep;
+  }
   // 寄放系統（箱子）
   {
     const keep = G.state;

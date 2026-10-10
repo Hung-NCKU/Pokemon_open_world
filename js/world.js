@@ -402,8 +402,10 @@ const World = {
   },
   // 地區的等級帶：出發地區 Lv.3 起，每隔一個地區提高一階；地區內從家鄉往聯盟逐漸變強
   regionBand(region) {
-    const base = [3, 20, 35, 50, 60][Math.min(4, this.regionRing(region))];
-    return [base, base + 30];
+    // 出發地區到聯盟附近約 Lv.45（像原作的冠軍之路）；其他地區維持 30 級的寬度
+    const ring = Math.min(4, this.regionRing(region));
+    const base = [3, 20, 35, 50, 60][ring];
+    return [base, base + (ring === 0 ? 42 : 30)];
   },
   // 野生寶可夢與訓練家的等級（固定的區域等級帶；山地、岩地、外海是危險地帶）
   levelAt(x, y) {
@@ -481,7 +483,8 @@ const World = {
     const badges = typeof Game !== 'undefined' && G.state ? Game.badgeCount() : 0;
     const rematch = G.state && G.state.champs && G.state.champs[town.region];
     if (rematch) return Math.min(100, 70 + Math.floor(badges / 4));
-    return Math.min(85, 10 + badges * 6);
+    // 依徽章數：Lv.12 起每枚 +5（出發地區第 8 座約 Lv.47，接近火紅葉綠的節奏）
+    return Math.min(85, 12 + badges * 5);
   },
   gymParty(town) {
     const L = this.gymLevel(town);
@@ -533,7 +536,7 @@ const World = {
     // 冠軍：不低於該地區等級帶上限，也隨徽章數變強；重賽時更強
     const badges = G.state ? Game.badgeCount() : 0;
     const rematch = G.state && G.state.champs && G.state.champs[town.region];
-    const L = Math.min(100, Math.max(this.regionBand(town.region)[1] + 8, 20 + badges * 5) + (rematch ? 10 : 0));
+    const L = Math.min(100, Math.max(this.regionBand(town.region)[1] + 8, Math.round(16 + badges * 4.5)) + (rematch ? 10 : 0));
     const reg = REGIONS[town.region];
     const party = [];
     const used = new Set();
