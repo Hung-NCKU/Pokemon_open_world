@@ -1618,6 +1618,58 @@ async function run() {
     }
     G.state = keep;
   }
+  // 野生寶可夢的習性
+  {
+    const keep = G.state;
+    const kinds = ['passive', 'curious', 'timid', 'aggressive', 'pack', 'nocturnal', 'stationary'];
+    const all = Object.keys(POKEDEX).map(Number).filter(id => id <= 1025);
+    const counts = Object.fromEntries(kinds.map(k => [k, 0]));
+    all.forEach(id => counts[Wild.of(id)]++);
+    check('習性：每個物種都有習性，七種都有一定數量', all.every(id => kinds.includes(Wild.of(id))) && kinds.every(k => counts[k] >= 15), JSON.stringify(counts));
+    check('習性：卡比獸定點、鬼斯夜行、暴鯉龍兇猛、凱西膽小、烈雀成群', Wild.of(143) === 'stationary' && Wild.of(92) === 'nocturnal' && Wild.of(130) === 'aggressive' && Wild.of(63) === 'timid' && Wild.of(21) === 'pack');
+    // 在一片空地上測試移動
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(4, 20)];
+    World.generate(20261010, 'kanto');
+    let spot = null;
+    for (let y = 20; y < WH - 20 && !spot; y++) for (let x = 20; x < WW - 20 && !spot; x++) {
+      let ok = true;
+      for (let dy = -6; dy <= 6 && ok; dy++) for (let dx = -8; dx <= 8 && ok; dx++) { const t = World.tile(x + dx, y + dy); if (t !== T.TALL && t !== T.GRASS) ok = false; if (World.trainers.has((x + dx) + ',' + (y + dy))) ok = false; }
+      if (ok) spot = [x, y];
+    }
+    const run = (mood, dx, sp, n = 12) => {
+      OverworldMons.clear();
+      G.state.x = spot[0]; G.state.y = spot[1];
+      const w = OverworldMons._spawnAt(spot[0] + dx, spot[1], Mon.create(sp, 10), mood);
+      let t = 1e6;
+      for (let i = 0; i < n; i++) { t += 1000; OverworldMons._step(t); }
+      return { w, d: Math.abs(w.x - spot[0]) + Math.abs(w.y - spot[1]), gone: !OverworldMons.list.includes(w) };
+    };
+    U.seed(7);
+    const st = run('stationary', 3, 143), ag = run('aggressive', 5, 130, 3), ti = run('timid', 3, 63, 4);
+    check('習性：定點的不會移動', st.d === 3 && !st.gone);
+    check('習性：兇猛的會衝向主角', ag.gone || ag.d < 5, `${ag.d}`);
+    check('習性：膽小的會逃離主角（或消失）', ti.gone || ti.d > 3, `${ti.d}`);
+    // 成群：同伴跟著帶頭的
+    OverworldMons.clear();
+    G.state.x = spot[0]; G.state.y = spot[1];
+    const lead = OverworldMons._spawnAt(spot[0] + 6, spot[1], Mon.create(21, 10), 'pack');
+    const f = OverworldMons._spawnAt(spot[0] + 6, spot[1] + 3, Mon.create(21, 10), 'pack'); f.leader = lead;
+    let t = 2e6; for (let i = 0; i < 6; i++) { t += 1000; OverworldMons._step(t); }
+    check('習性：成群的同伴會跟著帶頭的移動', Math.abs(f.x - lead.x) + Math.abs(f.y - lead.y) <= 2, `${f.x},${f.y} / ${lead.x},${lead.y}`);
+    // 夜行：白天不會出現
+    const realNight = U.isNight, realRoll = World.rollWild;
+    U.isNight = () => false; World.rollWild = () => Mon.create(92, 10);
+    OverworldMons.clear(); G.state.repel = 0;
+    for (let i = 0; i < 20; i++) OverworldMons.spawn(1e7 + i * 2000);
+    const dayN = OverworldMons.list.length;
+    U.isNight = () => true; OverworldMons.clear();
+    for (let i = 0; i < 20; i++) OverworldMons.spawn(2e7 + i * 2000);
+    const nightN = OverworldMons.list.length;
+    U.isNight = realNight; World.rollWild = realRoll;
+    check('習性：夜行性的白天不出現、晚上會出現', dayN === 0 && nightN > 0, `${dayN} / ${nightN}`);
+    OverworldMons.clear();
+    G.state = keep;
+  }
   // 寄放系統（箱子）
   {
     const keep = G.state;
