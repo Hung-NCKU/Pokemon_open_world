@@ -68,6 +68,7 @@
 <script src="../assets/gen3/interiors.js"></script>
 <script src="../js/fieldmove.js"></script>
 <script src="../js/interior.js"></script>
+<script src="../js/account.js"></script>
 <script src="../js/game.js"></script>
 <script>
 // 不顯示任何畫面、不等待
@@ -1938,6 +1939,32 @@ async function run() {
     await Game.interact();
     check('隱藏道具：撿之前先確認，選「不要」就不撿', skipped && !Hidden.at(h.x, h.y));
     UI.choose = keepChoose; UI.say = keepSay;
+    G.state = keep;
+  }
+  // 帳號：註冊、登入、各帳號的存檔分開
+  {
+    const keep = G.state;
+    const keepStore = { acc: localStorage.getItem('pkmn_accounts'), ses: localStorage.getItem('pkmn_session') };
+    localStorage.removeItem('pkmn_accounts'); Account.logout(); Account.fastHash = true;
+    const r1 = await Account.register('小智', 'pika1234');
+    const dup = await Account.register('小智', 'other');
+    const bad = await Account.register('x', 'pika1234');
+    check('帳號：註冊成功、名稱重複或太短會被拒絕', r1.ok && !dup.ok && !bad.ok);
+    const raw = localStorage.getItem('pkmn_accounts');
+    check('帳號：密碼不會以明文儲存', !raw.includes('pika1234') && /pbkdf2:|fnv:/.test(raw));
+    check('帳號：密碼錯誤不能登入', !(await Account.login('小智', 'wrong')).ok && !Account.current);
+    check('帳號：正確密碼可以登入', (await Account.login('小智', 'pika1234')).ok && Account.current === '小智');
+    // 各帳號的存檔分開
+    G.state = Game.newState('帳號測試', 'kanto', 4); G.state.party = [Mon.create(4, 5)];
+    Game.save(true);
+    const inAcc = !!localStorage.getItem(SAVE_KEY + '_小智');
+    const loadedA = Game.loadSave();
+    Account.logout();
+    const loadedGuest = Game.loadSave();
+    check('帳號：存檔存在帳號裡，登出後看不到', inAcc && loadedA && loadedA.state.name === '帳號測試' && !(loadedGuest && loadedGuest.state && loadedGuest.state.name === '帳號測試'));
+    localStorage.removeItem(SAVE_KEY + '_小智'); localStorage.removeItem(SAVE_KEY + '_小智_bak');
+    if (keepStore.acc) localStorage.setItem('pkmn_accounts', keepStore.acc); else localStorage.removeItem('pkmn_accounts');
+    if (keepStore.ses) localStorage.setItem('pkmn_session', keepStore.ses);
     G.state = keep;
   }
   // 對戰塔（世界配置第 6 版）

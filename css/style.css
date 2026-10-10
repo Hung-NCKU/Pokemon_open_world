@@ -290,3 +290,6 @@ body.touch.portrait #touch .pad { grid-template-columns: repeat(3, min(58px, 14v
 body.touch.portrait #touch .ab { grid-template-columns: min(66px, 16vw) min(66px, 16vw); grid-template-rows: 40px min(66px, 16vw); gap: 8px 12px; margin-right: 4px; }
 body.touch.portrait #touch .ab .a, body.touch.portrait #touch .ab .b { width: min(66px, 16vw); height: min(66px, 16vw); }
 body.touch.portrait #touch .mid { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); flex-direction: row; gap: 12px; margin: 0; }
+
+/* 標題畫面的帳號 */
+#title .account { position: absolute; right: 14px; top: 10px; font-size: 13px; color: #35508f; background: rgba(255,255,255,.7); padding: 3px 10px; border-radius: 10px; }

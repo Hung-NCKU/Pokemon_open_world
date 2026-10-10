@@ -207,11 +207,11 @@ const UI = (() => {
   }
 
   // cancel: true 時可按 Esc 或「返回」取消，回傳 null
-  function input(prompt, def = '', { cancel = false } = {}) {
+  function input(prompt, def = '', { cancel = false, password = false } = {}) {
     return new Promise(res => {
       const m = document.createElement('div');
       m.className = 'modal input-modal';
-      m.innerHTML = `<div class="body"><p>${U.esc(prompt)}</p><input maxlength="10" value="${U.esc(def)}"><button class="ok">確定</button>${cancel ? '<button class="back">返回</button>' : ''}</div>`;
+      m.innerHTML = `<div class="body"><p>${U.esc(prompt)}</p><input maxlength="${password ? 32 : 12}" ${password ? 'type="password" autocomplete="current-password"' : ''} value="${U.esc(def)}"><button class="ok">確定</button>${cancel ? '<button class="back">返回</button>' : ''}</div>`;
       $('game').appendChild(m);
       const inp = m.querySelector('input');
       const done = () => { pop(); const v = inp.value.trim() || def; m.remove(); res(v); };

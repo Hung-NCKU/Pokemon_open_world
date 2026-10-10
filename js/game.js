@@ -34,9 +34,11 @@ const Game = {
     // 對戰塔進行中：隊伍是 Lv.50 的複本，不能存檔
     if (G.tower) return true;
     try {
-      const prev = localStorage.getItem(SAVE_KEY);
-      if (prev && Game.parseSave(prev).ok) localStorage.setItem(SAVE_KEY + '_bak', prev);
-      Telemetry.measure('存檔', () => localStorage.setItem(SAVE_KEY, Game.serialize(G.state)));
+      // 存檔位置依登入的帳號（訪客用原本的位置）
+      const key = typeof Account !== 'undefined' ? Account.saveKey() : SAVE_KEY;
+      const prev = localStorage.getItem(key);
+      if (prev && Game.parseSave(prev).ok) localStorage.setItem(key + '_bak', prev);
+      Telemetry.measure('存檔', () => localStorage.setItem(key, Game.serialize(G.state)));
       Telemetry.event('存檔');
       if (!silent) UI.banner('已儲存遊戲進度');
       return true;
@@ -158,7 +160,8 @@ const Game = {
   // 讀取存檔：主存檔無效時改用備份，並回報原因
   loadSave() {
     let main = null, bak = null;
-    try { main = localStorage.getItem(SAVE_KEY); bak = localStorage.getItem(SAVE_KEY + '_bak'); } catch { }
+    const key = typeof Account !== 'undefined' ? Account.saveKey() : SAVE_KEY;
+    try { main = localStorage.getItem(key); bak = localStorage.getItem(key + '_bak'); } catch { }
     const m = Game.parseSave(main);
     if (m.ok) return { state: m.state };
     const b = Game.parseSave(bak);
@@ -1510,21 +1513,27 @@ const Game = {
     const loaded = Game.loadSave();
     const scr = document.getElementById('title');
     scr.classList.remove('hidden');
+    // 標題畫面顯示目前的帳號
+    let acc = scr.querySelector('.account');
+    if (!acc) { acc = document.createElement('div'); acc.className = 'account'; scr.appendChild(acc); }
+    acc.textContent = `帳號：${Account.current || '訪客'}`;
     let save = loaded && loaded.state;
     if (loaded && loaded.error) {
       if (loaded.fromBackup) {
         const c = await UI.choose(['恢復備份', '不要'], { prompt: `主存檔無法使用（${loaded.error}）。\n要恢復上一份有效的備份嗎？`, cancel: false });
         if (c !== 0) save = null;
-        else { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { } }
+        else { try { localStorage.setItem(Account.saveKey(), JSON.stringify(save)); } catch { } }
       } else {
         await UI.say(`存檔無法使用（${loaded.error}），也沒有可用的備份。\n可以匯入之前匯出的存檔，或開始新遊戲。`);
       }
       UI.hideDialog();
     }
     while (true) {
-      const opts = save ? ['繼續遊戲', '新遊戲', '匯入存檔'] : ['新遊戲', '匯入存檔'];
+      const opts = save ? ['繼續遊戲', '新遊戲', '匯入存檔', '帳號'] : ['新遊戲', '匯入存檔', '帳號'];
       const c = await UI.choose(opts, { cancel: false, cls: 'title-menu' });
       if (opts[c] === '繼續遊戲') { scr.classList.add('hidden'); return Game.start(save); }
+      // 帳號：登入、註冊、登出之後重新讀取該帳號的存檔
+      if (opts[c] === '帳號') { await Account.menu(); return Game.title(); }
       if (opts[c] === '匯入存檔') {
         const r = await Game.importSave();
         if (!r.ok) { await UI.say(`匯入失敗：${r.error}`); UI.hideDialog(); continue; }
