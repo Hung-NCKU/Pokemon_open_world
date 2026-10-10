@@ -88,6 +88,12 @@ HELD_ITEMS = [
     "binding-band", "grip-claw", "shed-shell", "metronome", "throat-spray",
 ]
 
+# 培育道具（最新世代）：營養飲料、經驗糖果、性格薄荷、特性膠囊、王冠
+NATURE_EN = ["lonely", "adamant", "naughty", "brave", "bold", "impish", "lax", "relaxed", "modest", "mild", "rash", "quiet",
+             "calm", "gentle", "careful", "sassy", "timid", "hasty", "jolly", "naive", "serious"]
+TRAIN_ITEMS = ["hp-up", "protein", "iron", "calcium", "zinc", "carbos", "exp-candy-xs", "exp-candy-s", "exp-candy-m",
+               "exp-candy-l", "exp-candy-xl", "ability-capsule", "ability-patch", "bottle-cap", "gold-bottle-cap"] + [n + "-mint" for n in NATURE_EN]
+
 TOWER_ITEM = {"tower-of-darkness": "scroll-of-darkness", "tower-of-waters": "scroll-of-waters"}
 
 
@@ -308,11 +314,18 @@ def main():
         if not it:
             continue
         held[name] = {"n": zh_name(it["names"], name), "d": zh_text(it["flavor_text_entries"], "text"), "cost": it.get("cost") or 0}
+    print(f"下載培育道具 ({len(TRAIN_ITEMS)})...")
+    train = {}
+    for name, it in zip(TRAIN_ITEMS, pmap(lambda n: safe_get(f"item/{n}"), TRAIN_ITEMS)):
+        if it:
+            train[name] = {"n": zh_name(it["names"], name), "d": zh_text(it["flavor_text_entries"], "text"), "cost": it.get("cost") or 0}
     with open(os.path.join(ROOT, "data", "abilities.js"), "w", encoding="utf-8") as f:
         f.write("window.ABILITIES=")
         json.dump(abilities, f, ensure_ascii=False, separators=(",", ":"))
         f.write(";\nwindow.HELDITEMS=")
         json.dump(held, f, ensure_ascii=False, separators=(",", ":"))
+        f.write(";\nwindow.TRAINITEMS=")
+        json.dump(train, f, ensure_ascii=False, separators=(",", ":"))
         f.write(";\n")
 
     print(f"下載招式 ({len(all_moves)})...")

@@ -220,6 +220,50 @@ async function run() {
     const want = st[1] > st[2] ? 106 : st[1] < st[2] ? 107 : 237;
     check('無畏小子依攻擊與防禦的大小進化', Mon.pickEvo(ty, Mon.evoCandidates(ty)) === want);
   }
+  // 20. 關都完整體驗：四天王、勁敵、培育、當地任務、後期道館
+  {
+    G.state = Game.newState('T', 'kanto', 4);
+    World.generate(20261010, 'kanto');
+    const league = World.towns.find(t => t.region === 'kanto' && t.kind === 'league');
+    const e1 = World.eliteParty(league, 0), e4 = World.eliteParty(league, 3);
+    const champTop = World.championParty(league).reduce((a, m) => Math.max(a, m.lv), 0);
+    check('四天王科拿的王牌是拉普拉斯', e1[e1.length - 1].sp === 131, e1.map(m => POKEDEX[m.sp].n + m.lv).join(' '));
+    check('四天王阿渡的王牌是快龍，等級低於冠軍', e4[e4.length - 1].sp === 149 && e4[e4.length - 1].lv < champTop);
+    const r1 = RIVAL.team(1, 4, 5), r2 = RIVAL.team(2, 4, 20), r3 = RIVAL.team(3, 4, 50);
+    check('選小火龍時勁敵依序使用傑尼龜、卡咪龜、水箭龜', r1[0].sp === 7 && r2[r2.length - 1].sp === 8 && r3[r3.length - 1].sp === 9);
+    // 培育道具
+    const m = Mon.create(25, 55);
+    m.ev = [0, 0, 0, 0, 0, 0];
+    await Game.applyItem(m, 'carbos');
+    check('速度增強劑讓速度努力值 +10', m.ev[5] === 10);
+    const exp0 = m.exp;
+    await Game.applyItem(m, 'exp-candy-s');
+    check('經驗糖果Ｓ給予 800 經驗值', m.exp === exp0 + 800 || m.lv > 55);
+    m.nat = 0; delete m.mint;
+    const before = Mon.stats(m);
+    await Game.applyItem(m, 'timid-mint');
+    const after = Mon.stats(m);
+    check('膽小薄荷：速度提高、攻擊降低，原本的性格不變', after[5] > before[5] && after[1] < before[1] && m.nat === 0);
+    m.iv = [0, 0, 0, 0, 0, 0];
+    await Game.applyItem(m, 'gold-bottle-cap');
+    check('金色王冠：所有能力視為個體值 31', Mon.stats(m)[5] > after[5]);
+    const forgot = Mon.create(1, 30);
+    const lost = forgot.moves[0].id;
+    forgot.moves = forgot.moves.slice(1);
+    const remind = POKEDEX[1].l.filter(([lv, id]) => lv <= 30 && !forgot.moves.some(x => x.id === id)).map(([, id]) => id);
+    check('想起招式列出忘記的招式', remind.includes(lost));
+    // 非關都地區的當地任務
+    const s = Game.newState('T', 'hoenn', 252);
+    check('豐緣開局的任務是找小田卷博士，不是大木博士', Story.questText(s, 'hoenn').includes('小田卷博士') && !Story.questSummary(s).includes('大木'));
+    s.flags.q_hoenn = 1;
+    for (const id of [252, 255, 258, 261, 263]) s.caught[id] = 1;
+    check('捕捉 5 種豐緣寶可夢後當地任務前進', Story.questStage(s, 'hoenn') === 2);
+    // 後期道館：攜帶道具、努力值
+    G.state = Game.newState('T', 'kanto', 4);
+    G.state.badges = { kanto: [0, 1, 2, 3, 4, 5, 6, 7] };
+    const lateGym = World.gymParty(World.towns.find(t => t.region === 'johto' && t.gym === 0));
+    check('徽章 8 枚以上的道館全隊攜帶道具', lateGym.every(x => x.item), lateGym.map(x => POKEDEX[x.sp].n + ':' + x.item).join(' '));
+  }
   // 19. 存檔驗證與備份
   {
     check('讀入 {} 判定為無效存檔', !Game.parseSave('{}').ok);

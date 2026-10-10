@@ -277,6 +277,44 @@ const Game = {
     } else if (it.kind === 'evo') {
       const c = Mon.evoCandidates(m, id);
       await Game.evolve(m, Mon.pickEvo(m, c));
+    } else if (it.kind === 'vitamin') {
+      // 營養飲料：努力值 +10（第八世代起可提升到單項上限 252）
+      const k = VITAMIN[id];
+      m.ev = m.ev || [0, 0, 0, 0, 0, 0];
+      const add = Math.min(10, 252 - m.ev[k], 510 - m.ev.reduce((a, b) => a + b, 0));
+      const before = Mon.maxHp(m);
+      m.ev[k] += add;
+      if (k === 0) m.hp += Mon.maxHp(m) - before;
+      await UI.say(`${name} 的${STAT_ZH[k]}努力值提高了！（${m.ev[k]}／252）`);
+    } else if (it.kind === 'expcandy') {
+      await UI.say(`${name} 獲得了 ${EXP_CANDY[id]} 點經驗值！`);
+      await Game.giveExp(m, EXP_CANDY[id]);
+      const c = Mon.evoCandidates(m);
+      if (m._lvUp && c.length && m.item !== 'everstone') { delete m._lvUp; await Game.evolve(m, Mon.pickEvo(m, c)); }
+      delete m._lvUp;
+    } else if (it.kind === 'mint') {
+      m.mint = NATURE_INDEX[id.replace('-mint', '')];
+      const hp = Mon.maxHp(m);
+      m.hp = Math.min(m.hp, hp);
+      await UI.say(`${name} 聞了${it.n}，能力的成長方式變成了「${NATURES[m.mint]}」！`);
+    } else if (it.kind === 'abilcap') {
+      const normal = POKEDEX[m.sp].ab.filter(a => !a[1]).map(a => a[0]);
+      m.ability = normal.find(a => a !== m.ability) || m.ability;
+      await UI.say(`${name} 的特性變成了${Abil.name(m.ability)}！`);
+    } else if (it.kind === 'abilpatch') {
+      m.ability = POKEDEX[m.sp].ab.find(a => a[1])[0];
+      await UI.say(`${name} 的特性變成了${Abil.name(m.ability)}！`);
+    } else if (it.kind === 'bottlecap') {
+      // 極限特訓（第九世代需 Lv.50 以上）：銀色王冠選一項個體值變為最高，金色王冠全部
+      if (id === 'gold-bottle-cap') { m.ivHT = [1, 1, 1, 1, 1, 1]; await UI.say(`${name} 的所有能力都經過了極限特訓！`); }
+      else {
+        const c = await UI.choose(STAT_ZH.map((s, i) => ({ label: `${s}（個體值 ${m.iv[i]}）`, disabled: (m.ivHT || [])[i] || m.iv[i] === 31 })), { prompt: '要特訓哪一項能力？', cancel: false });
+        m.ivHT = m.ivHT || [0, 0, 0, 0, 0, 0];
+        m.ivHT[c] = 1;
+        await UI.say(`${name} 的${STAT_ZH[c]}經過了極限特訓！`);
+      }
+      const before = Mon.maxHp(m);
+      m.hp += Mon.maxHp(m) - before;
     }
   },
   itemUsable(m, id, inBattle) {
@@ -288,6 +326,12 @@ const Game = {
       case 'pp': return m.moves.some(x => x.pp < MOVES[x.id].pp);
       case 'candy': return !inBattle && m.lv < 100;
       case 'evo': return !inBattle && Mon.evoCandidates(m, id).length > 0;
+      case 'vitamin': { const ev = m.ev || [0, 0, 0, 0, 0, 0]; return !inBattle && ev[VITAMIN[id]] < 252 && ev.reduce((a, b) => a + b, 0) < 510; }
+      case 'expcandy': return !inBattle && m.lv < 100;
+      case 'mint': return !inBattle && (m.mint ?? m.nat) !== NATURE_INDEX[id.replace('-mint', '')];
+      case 'abilcap': return !inBattle && POKEDEX[m.sp].ab.filter(a => !a[1]).length > 1;
+      case 'abilpatch': return !inBattle && POKEDEX[m.sp].ab.some(a => a[1]) && !POKEDEX[m.sp].ab.some(a => a[1] && a[0] === m.ability);
+      case 'bottlecap': return !inBattle && m.lv >= 50 && m.iv.some((v, i) => v < 31 && !(m.ivHT || [])[i]);
       default: return false;
     }
   },
@@ -321,13 +365,27 @@ const Game = {
         if (c === 1) await Game.summary(m);
         continue;
       }
-      const c = await UI.choose(['查看能力', '持有道具', '換到首位', '取名', '取消'], { prompt: `要對 ${Mon.name(m)} 做什麼？` });
+      const c = await UI.choose(['查看能力', '持有道具', '想起招式', '換到首位', '取名', '取消'], { prompt: `要對 ${Mon.name(m)} 做什麼？` });
       if (c === 0) await Game.summary(m);
       else if (c === 1) await Game.heldMenu(m);
-      else if (c === 2 && i > 0) { G.party.splice(i, 1); G.party.unshift(m); start = 0; }
-      else if (c === 3) { const n = await UI.input('要幫牠取什麼名字？（留空恢復原名）', ''); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
+      else if (c === 2) await Game.moveReminder(m);
+      else if (c === 3 && i > 0) { G.party.splice(i, 1); G.party.unshift(m); start = 0; }
+      else if (c === 4) { const n = await UI.input('要幫牠取什麼名字？（留空恢復原名）', ''); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
       UI.hideDialog();
     }
+  },
+
+  // 想起招式（第九世代可以隨時想起曾經能學會的升級招式）
+  async moveReminder(m) {
+    const known = new Set(m.moves.map(x => x.id));
+    const ids = [...new Set(POKEDEX[m.sp].l.filter(([lv, mid]) => lv <= m.lv && MOVES[mid] && !known.has(mid)).map(([, mid]) => mid))];
+    if (!ids.length) { await UI.say(`${Mon.name(m)} 沒有可以想起的招式。`); return; }
+    const rows = ids.map(mid => {
+      const d = MOVES[mid];
+      return `${typeTag(d.t)}<div class="grow"><b>${U.esc(d.n)}</b>${SUPPORT_ZH[md(mid).support]}<div class="dim small">${d.c === 'ph' ? '物理' : d.c === 'sp' ? '特殊' : '變化'}｜威力 ${d.p || '—'}｜命中 ${d.a || '—'}｜PP ${d.pp}　${U.esc(d.d || '')}</div></div>`;
+    });
+    const i = await UI.list({ title: `${Mon.name(m)} 要想起哪個招式？`, rows });
+    if (i >= 0) await Game.learnMove(m, ids[i]);
   },
 
   // 持有道具：交給寶可夢、取下
@@ -357,10 +415,10 @@ const Game = {
   async summary(m) {
     const s = POKEDEX[m.sp];
     const st = Mon.stats(m);
-    const up = NAT_STAT[Math.floor(m.nat / 5)], down = NAT_STAT[m.nat % 5];
+    const nat = m.mint ?? m.nat, up = NAT_STAT[Math.floor(nat / 5)], down = NAT_STAT[nat % 5];
     const next = m.lv >= 100 ? 0 : Mon.expFor(s.gr, m.lv + 1) - m.exp;
     const statRows = st.map((v, i) => `<tr><td class="${i === up && up !== down ? 'nup' : i === down && up !== down ? 'ndown' : ''}">${STAT_ZH[i]}</td><td>${i === 0 ? `${Math.max(0, m.hp)}/${v}` : v}</td>
-      <td><div class="sbar"><div style="width:${Math.min(100, s.s[i] / 1.6)}%"></div></div></td><td class="dim">種族 ${s.s[i]}／個體 ${m.iv[i]}／努力 ${m.ev?.[i] || 0}</td></tr>`).join('');
+      <td><div class="sbar"><div style="width:${Math.min(100, s.s[i] / 1.6)}%"></div></div></td><td class="dim">種族 ${s.s[i]}／個體 ${m.ivHT?.[i] ? "★31" : m.iv[i]}／努力 ${m.ev?.[i] || 0}</td></tr>`).join('');
     const moves = m.moves.map(x => {
       const d = MOVES[x.id];
       return `<div class="mv">${typeTag(d.t)} <b>${U.esc(d.n)}</b> <span class="dim">${d.c === 'ph' ? '物理' : d.c === 'sp' ? '特殊' : '變化'}｜威力 ${d.p || '—'}｜命中 ${d.a || '—'}｜PP ${x.pp}/${d.pp}</span><b class="small">${SUPPORT_ZH[md(x.id).support]}</b><div class="dim small">${U.esc(d.d || '')}</div></div>`;
@@ -369,7 +427,7 @@ const Game = {
       <div class="left"><img class="big" src="${Mon.sprite(m.sp, { shiny: m.shiny })}">
         <div class="nm">No.${U.pad3(s.id)} ${U.esc(Mon.name(m))}${m.shiny ? ' ✨' : ''}</div>
         <div>${s.t.map(typeTag).join('')}</div>
-        <div class="dim">Lv.${m.lv} ${Mon.genderMark(m)}　性格：${NATURES[m.nat]}</div>
+        <div class="dim">Lv.${m.lv} ${Mon.genderMark(m)}　性格：${NATURES[m.nat]}${m.mint !== undefined && m.mint !== m.nat ? `（薄荷：${NATURES[m.mint]}）` : ""}</div>
         <div class="dim">努力值合計 ${(m.ev || []).reduce((a, b) => a + b, 0)}／510</div>
         <div class="dim">距離升級還需 ${next} 經驗值</div>
         <div class="dim">親密度 ${m.happy}</div>
@@ -583,7 +641,7 @@ const Game = {
       if (c === '寶可夢') await Game.partyMenu();
       if (c === '圖鑑') await Game.dexMenu();
       if (c === '背包') await Game.bagMenu();
-      if (c === '任務') await UI.say(`【關都・大木博士的請託】\n${Story.questText(G.state)}`);
+      if (c === '任務') await UI.say(Story.questSummary(G.state));
       if (c === '地圖') { await Game.mapMenu(); return; }
       if (c === '訓練家卡片') await Game.trainerCard();
       if (c === '存檔') {
@@ -728,8 +786,9 @@ const Game = {
     else if (caught >= 150) comment = '很不錯！試著到其他地區看看吧，那裡有不同的寶可夢。';
     else if (caught >= 50) comment = '進展很順利！草叢、水面、岩地、雪原、沙漠都住著不同的寶可夢。';
     await UI.say(`${reg.prof}：「你已經發現了 ${seen} 種，捕捉了 ${caught} 種寶可夢。${comment}」`);
-    // 關都：大木博士的任務線
+    // 關都：大木博士的任務線；其他地區：當地博士的任務
     if (t.region === 'kanto') await Story.oak();
+    else await Story.prof(t.region);
   },
 
   async gymChallenge(t) {
@@ -744,7 +803,12 @@ const Game = {
     if (c !== 0) return;
     if (!rematch) await UI.say(`${name}：「歡迎你，挑戰者！就讓我用${TYPES[type].n}屬性寶可夢來試試你的實力吧！」`);
     const party = World.gymParty(t);
-    const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: rematch ? 150 : 100, sprite: LEADER_SPRITES[t.region][t.gym], lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
+    // 後期（徽章 8 枚以上）：館主展開屬性對應的場地，並可使用 3 個回復道具
+    const late = Game.badgeCount() >= 8;
+    const FIELD = { water: 'raindance', fire: 'sunnyday', rock: 'sandstorm', ground: 'sandstorm', ice: 'snowscape', electric: 'electricterrain',
+      grass: 'grassyterrain', psychic: 'psychicterrain', fairy: 'mistyterrain' };
+    const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: rematch ? 150 : 100, sprite: LEADER_SPRITES[t.region][t.gym],
+      field: late ? FIELD[type] : null, items: late ? 3 : 2, lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
     if (r === 'win' && rematch) { Game.save(true); return; }
     if (r === 'win') {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
@@ -762,9 +826,27 @@ const Game = {
       return;
     }
     const champLv = World.championParty(t).reduce((a, m) => Math.max(a, m.lv), 0);
-    const c = await UI.choose(['挑戰', '離開'], { prompt: `要挑戰${reg.n}冠軍 ${reg.champ} 嗎？（對手最高 Lv.${champLv}${G.state.champs[t.region] ? '，重賽' : ''}）` });
+    const e4 = typeof ELITE_FOUR !== 'undefined' && ELITE_FOUR[t.region];
+    const c = await UI.choose(['挑戰', '離開'], { prompt: `要挑戰${reg.n}寶可夢聯盟嗎？${e4 ? '要連續打敗四天王與冠軍。' : ''}（冠軍最高 Lv.${champLv}${G.state.champs[t.region] ? '，重賽' : ''}）` });
     if (c !== 0) return;
-    await UI.say(`${reg.champ}：「歡迎來到${reg.n}寶可夢聯盟。讓我看看你和寶可夢之間的羈絆吧！」`);
+    // 四天王連戰：中間可以整理隊伍、使用道具，但不能回寶可夢中心
+    if (e4) {
+      for (let i = 0; i < e4.length; i++) {
+        const e = e4[i];
+        await UI.say(`四天王 ${e.name}：「我是四天王的${e.name}，擅長${TYPES[e.type].n}屬性。來吧！」`);
+        const r = await Game.battle({ trainer: { title: '四天王', name: e.name, party: World.eliteParty(t, i), kind: 'gym', money: 150, sprite: e.sprite, lose: '……你通過了。前進吧。' }, biome: 'gym' });
+        if (r !== 'win') return;
+        if (i < e4.length - 1) {
+          while (true) {
+            const n = await UI.choose(['前往下一個房間', '寶可夢', '背包'], { prompt: `打敗了四天王 ${e.name}！（${i + 1}／4）`, cancel: false });
+            if (n === 0) break;
+            if (n === 1) await Game.partyMenu();
+            if (n === 2) await Game.bagMenu();
+          }
+        }
+      }
+    }
+    await UI.say(`${reg.champ}：「歡迎來到${reg.n}寶可夢聯盟的頂點。讓我看看你和寶可夢之間的羈絆吧！」`);
     const party = World.championParty(t);
     const r = await Game.battle({ trainer: { title: '冠軍', name: reg.champ, party, kind: 'champion', money: 200, sprite: CHAMP_SPRITES[t.region], lose: '恭喜你！你就是新的冠軍！' }, biome: 'gym' });
     if (r === 'win') {
@@ -779,7 +861,9 @@ const Game = {
   async battle(opts) {
     const b = new Battle(opts);
     const r = await b.run();
-    if (r === 'lose') await Game.blackout();
+    // noBlackout：劇情戰輸了也不會被送回寶可夢中心（例如第一場勁敵戰）
+    if (r === 'lose' && opts.noBlackout) { Game.healParty(); await UI.say('寶可夢都恢復了精神。'); }
+    else if (r === 'lose') await Game.blackout();
     return r;
   },
 
@@ -817,6 +901,7 @@ const Game = {
       if (town) {
         s.visited[town.id] = 1;
         UI.banner(`${REGIONS[town.region].n}地區・${town.name}`);
+        await Story.onEnterTown(town);
       } else {
         UI.banner(`${REGIONS[World.regionAt(s.x, s.y)].n}地區・野外（約 Lv.${World.levelAt(s.x, s.y)}）`);
       }

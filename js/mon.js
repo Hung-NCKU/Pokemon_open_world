@@ -37,11 +37,15 @@ const Mon = {
 
   stats(m) {
     const b = POKEDEX[m.sp].s, L = m.lv, out = [];
-    out[0] = b[0] === 1 ? 1 : Math.floor((2 * b[0] + m.iv[0] + Math.floor((m.ev?.[0] || 0) / 4)) * L / 100) + L + 10;
+    // 極限特訓過的能力視為個體值 31
+    const iv = i => (m.ivHT && m.ivHT[i] ? 31 : m.iv[i]);
+    out[0] = b[0] === 1 ? 1 : Math.floor((2 * b[0] + iv(0) + Math.floor((m.ev?.[0] || 0) / 4)) * L / 100) + L + 10;
     for (let i = 1; i < 6; i++) {
-      out[i] = Math.floor((2 * b[i] + m.iv[i] + Math.floor((m.ev?.[i] || 0) / 4)) * L / 100) + 5;
+      out[i] = Math.floor((2 * b[i] + iv(i) + Math.floor((m.ev?.[i] || 0) / 4)) * L / 100) + 5;
     }
-    const up = NAT_STAT[Math.floor(m.nat / 5)], down = NAT_STAT[m.nat % 5];
+    // 性格薄荷：只改變能力修正（m.mint），性格本身不變
+    const nat = m.mint ?? m.nat;
+    const up = NAT_STAT[Math.floor(nat / 5)], down = NAT_STAT[nat % 5];
     if (up !== down) {
       out[up] = Math.floor(out[up] * 1.1);
       out[down] = Math.floor(out[down] * 0.9);

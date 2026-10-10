@@ -479,10 +479,30 @@ const World = {
       if (sigIdx >= 0) id = sigList[sigIdx];
       else do { id = this.pickForLevel(rnd, lv, { types: [type], gen, strong: i === n - 1 }); } while ((used.has(id) || (sigList && sigList.includes(id))) && ++tries < 30);
       used.add(id);
-      // 王牌寶可夢攜帶文柚果
-      party.push(Mon.create(id, lv, { shiny: false, perfect: 20, hidden: .1, item: i === n - 1 ? 'sitrus-berry' : null }));
+      // 王牌寶可夢攜帶文柚果；徽章 8 枚以上時全隊攜帶對戰道具並有努力值
+      const late = G.state && Game.badgeCount() >= 8;
+      const pool = ['leftovers', 'life-orb', 'focus-sash', 'expert-belt', 'assault-vest', 'lum-berry', 'choice-scarf', 'rocky-helmet'];
+      const item = i === n - 1 ? 'sitrus-berry' : late ? pool[Math.floor(rnd() * pool.length)] : null;
+      const mon = Mon.create(id, lv, { shiny: false, perfect: late ? 31 : 20, hidden: late ? .3 : .1, item });
+      if (late) {
+        const s = Mon.stats(mon);
+        const atk = s[1] >= s[3] ? 1 : 3;
+        mon.ev = [4, 0, 0, 0, 0, 252]; mon.ev[atk] = 252;
+        mon.hp = Mon.maxHp(mon);
+      }
+      party.push(mon);
     }
     return party;
+  },
+
+  // 四天王：第 i 位的王牌等級為冠軍等級 − 8 + 2i
+  eliteParty(town, i) {
+    const e = ELITE_FOUR[town.region][i];
+    const champ = this.championParty(town);
+    const top = champ.reduce((a, m) => Math.max(a, m.lv), 0);
+    const ace = Math.min(100, top - 8 + 2 * i);
+    return e.team.map((sp, k) => Mon.create(sp, U.clamp(ace - (e.team.length - 1 - k), 2, 100),
+      { shiny: false, perfect: 25, hidden: .2, item: k === e.team.length - 1 ? 'sitrus-berry' : null }));
   },
 
   championParty(town) {

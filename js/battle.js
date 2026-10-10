@@ -15,7 +15,8 @@ class Battle {
     this.runTries = 0;
     this.turn = 0;
     this.fled = false;
-    this.aiItems = this.trainer && this.trainer.kind !== 'trainer' ? 2 : 0;
+    this.noBlackout = !!opts.noBlackout;
+    this.aiItems = this.trainer && this.trainer.kind !== 'trainer' ? (this.trainer.items ?? 2) : 0;
     this.initEngine();
   }
   musicName() {
@@ -58,6 +59,15 @@ class Battle {
     // 登場時的特性（速度快的先發動）
     const first = this.speedOf(this.me, this.vMe) >= this.speedOf(this.foe, this.vFoe) ? [this.me, this.foe] : [this.foe, this.me];
     for (const m of first) await this.abilityStart(m);
+    // 館主展開的場地（後期道館）
+    const fld = this.trainer && this.trainer.field;
+    if (fld) {
+      const isTerrain = fld.endsWith('terrain');
+      if (isTerrain) { this.field.terrain = fld; this.field.terrainT = 8; } else { this.field.weather = fld; this.field.weatherT = 8; }
+      const zh = { raindance: '下起了雨', sunnyday: '日照變強了', sandstorm: '颳起了沙暴', snowscape: '下起了雪', electricterrain: '腳下電流飛竄',
+        grassyterrain: '腳下青草如茵', psychicterrain: '腳下傳來奇妙的感覺', mistyterrain: '腳下霧氣繚繞' }[fld];
+      await this.msg(`${this.trainer.name} 展開了道館的場地！${zh}！`);
+    }
 
     let result = null;
     while (!result) {
@@ -272,7 +282,9 @@ class Battle {
       G.party.forEach((m, i) => { if (this.participants.has(i) && m.hp > 0) m.happy = Math.min(255, m.happy + 1); });
     }
     if (result === 'catch') await Game.addCaught(this.foe);
-    if (result === 'lose') {
+    if (result === 'lose' && this.noBlackout) {
+      await this.msg(`${tr ? tr.name : ''}：「哈哈，我贏了！」`);
+    } else if (result === 'lose') {
       await this.msg(`${G.state.name} 已經沒有可以戰鬥的寶可夢了……`);
       // 第四世代起：掉落金額 = 隊伍最高等級 × 依徽章數的倍率
       const base = [8, 16, 24, 36, 48, 64, 80, 100, 120][Math.min(8, Game.badgeCount())];

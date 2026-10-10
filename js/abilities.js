@@ -92,6 +92,27 @@ const Held = {
   name(id) { return (window.HELDITEMS && HELDITEMS[id] && HELDITEMS[id].n) || (ITEMS[id] && ITEMS[id].n) || id; },
   desc(id) { return (window.HELDITEMS && HELDITEMS[id] && HELDITEMS[id].d) || ''; },
 };
+// 培育道具（最新世代）；價格為參考原作的估計值
+const NATURE_INDEX = { hardy: 0, lonely: 1, brave: 2, adamant: 3, naughty: 4, bold: 5, docile: 6, relaxed: 7, impish: 8, lax: 9, timid: 10,
+  hasty: 11, serious: 12, jolly: 13, naive: 14, modest: 15, mild: 16, quiet: 17, bashful: 18, rash: 19, calm: 20, gentle: 21, sassy: 22,
+  careful: 23, quirky: 24 };
+const VITAMIN = { 'hp-up': 0, protein: 1, iron: 2, calcium: 3, zinc: 4, carbos: 5 };
+const EXP_CANDY = { 'exp-candy-xs': 100, 'exp-candy-s': 800, 'exp-candy-m': 3000, 'exp-candy-l': 10000, 'exp-candy-xl': 30000 };
+const TRAIN_PRICE = { 'ability-capsule': 50000, 'ability-patch': 100000, 'bottle-cap': 30000, 'gold-bottle-cap': 100000 };
+if (window.TRAINITEMS) {
+  for (const [id, it] of Object.entries(TRAINITEMS)) {
+    let kind = 'train', price = TRAIN_PRICE[id] || 20000;
+    if (VITAMIN[id] !== undefined) { kind = 'vitamin'; price = 10000; }
+    else if (EXP_CANDY[id]) { kind = 'expcandy'; price = Math.round(EXP_CANDY[id] / 10) * 3; }
+    else if (id.endsWith('-mint')) { kind = 'mint'; price = 20000; }
+    else if (id === 'ability-capsule') kind = 'abilcap';
+    else if (id === 'ability-patch') kind = 'abilpatch';
+    else if (id.endsWith('bottle-cap')) kind = 'bottlecap';
+    ITEMS[id] = { n: it.n, price, kind, d: it.d };
+    if (!SHOP_LIST.includes(id)) SHOP_LIST.push(id);
+  }
+}
+
 // 把持有道具加進道具清單與商店
 if (window.HELDITEMS) {
   for (const [id, it] of Object.entries(HELDITEMS)) {
