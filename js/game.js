@@ -434,7 +434,12 @@ const Game = {
     await UI.say(`讓 ${Mon.name(m)} 攜帶了${Held.name(id)}。`);
   },
 
-  async summary(m) {
+  // list：可用 ↑↓ 切換的寶可夢（隊伍）
+  async summary(m, list = null) {
+    if (Game.emeraldUI('summary')) {
+      const l = list || (G.party.includes(m) ? G.party : [m]);
+      return SummaryUI.show(l, Math.max(0, l.indexOf(m)));
+    }
     const s = POKEDEX[m.sp];
     const st = Mon.stats(m);
     const nat = m.mint ?? m.nat, up = NAT_STAT[Math.floor(nat / 5)], down = NAT_STAT[nat % 5];

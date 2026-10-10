@@ -1,0 +1,52 @@
+/* 綠寶石版能力頁（graphics/summary_screen，js/summaryui.js）；座標為 GBA 座標 ×3 */
+#summary { position: absolute; inset: 0; z-index: 46; color: #404040; text-shadow: 2px 2px 0 rgba(0, 0, 0, .1); font-size: 22px; }
+#summary .sm-bg { position: absolute; inset: 0; background-size: 720px 480px; image-rendering: pixelated; }
+#summary > div, #summary > i { position: absolute; white-space: nowrap; }
+#summary .sm-title { left: 12px; top: 6px; color: #f8f8f8; text-shadow: 2px 2px 0 #705098; }
+#summary .sm-dot { top: 12px; width: 18px; height: 18px; margin-left: -9px; background: #503858; border-radius: 50%; box-shadow: 0 0 0 3px #503858; }
+#summary .sm-dot.on { background: #f8f8f8; box-shadow: 0 0 0 3px #f8f8f8; }
+#summary .sm-pic { left: 24px; top: 96px; width: 192px; height: 192px; }
+#summary .sm-pic img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+#summary .sm-lv { left: 24px; top: 294px; }
+#summary .sm-nm { left: 24px; top: 336px; font-size: 24px; }
+#summary .sm-nm i { font-style: normal; margin-left: 10px; }
+#summary .sm-nm .gm { color: #3070d0; }
+#summary .sm-nm .gf { color: #e04848; }
+#summary .sm-ball { left: 150px; top: 438px; font-size: 18px; }
+/* 資料頁 */
+#summary .sm-r1 { left: 258px; top: 96px; width: 450px; }
+#summary .sm-ot { position: absolute; right: 0; font-size: 18px; color: #508050; }
+#summary .sm-r2 { left: 258px; top: 147px; }
+#summary .sm-r3 { left: 258px; top: 216px; }
+#summary .sm-r3 small { font-size: 15px; color: #a05050; }
+#summary .sm-r4 { left: 258px; top: 267px; width: 450px; font-size: 17px; overflow: hidden; text-overflow: ellipsis; }
+#summary .sm-memo { left: 258px; top: 342px; width: 444px; font-size: 19px; line-height: 32px; white-space: normal; }
+#summary .sm-memo b { color: #d04848; font-weight: normal; }
+/* 能力頁 */
+#summary .sm-item { left: 264px; top: 96px; width: 210px; font-size: 20px; overflow: hidden; }
+#summary .sm-ribbon { left: 504px; top: 96px; width: 200px; font-size: 20px; text-align: center; color: #3858a0; }
+#summary .sm-sl, #summary .sm-sl2 { width: 132px; font-size: 20px; padding-left: 8px; box-sizing: border-box; }
+#summary .sm-sl { left: 252px; }
+#summary .sm-sl2 { left: 528px; width: 120px; }
+#summary .up { color: #d04848; }
+#summary .down { color: #3070d0; }
+#summary .sm-sv { left: 390px; width: 126px; text-align: right; }
+#summary .sm-sv2 { left: 648px; width: 60px; text-align: right; }
+#summary .sm-el { left: 264px; font-size: 20px; }
+#summary .sm-ev { left: 504px; width: 200px; text-align: right; }
+#summary .sm-exp { left: 513px; top: 441px; width: 180px; height: 6px; }
+#summary .sm-exp div { height: 100%; background: #40c8f8; }
+#summary .sm-ribbon small { font-size: 15px; color: #8080a0; }
+/* 招式頁 */
+#summary .sm-mv { left: 252px; width: 456px; height: 48px; display: flex; align-items: center; cursor: pointer; }
+#summary .sm-mv .t { width: 102px; text-align: center; }
+#summary .sm-mv .n { width: 228px; padding-left: 12px; box-sizing: border-box; overflow: hidden; }
+#summary .sm-mv .pp { width: 126px; text-align: right; font-size: 19px; padding-right: 6px; box-sizing: border-box; }
+#summary .sm-mv.sel { outline: 6px solid #f86868; outline-offset: -3px; border-radius: 6px; }
+#summary .sm-mv.swap { outline-color: #f8c838; }
+#summary .sm-pw, #summary .sm-ac { left: 21px; width: 216px; font-size: 19px; display: flex; justify-content: space-between; }
+#summary .sm-pw { top: 366px; }
+#summary .sm-ac { top: 414px; }
+#summary .sm-pw b, #summary .sm-ac b { font-weight: normal; width: 60px; text-align: right; }
+#summary .sm-desc { left: 258px; top: 363px; width: 444px; font-size: 18px; line-height: 27px; white-space: normal; }
+#summary .sm-desc b { font-weight: normal; color: #7048c0; }

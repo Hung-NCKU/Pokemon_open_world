@@ -147,8 +147,26 @@ def build_map():
     return True
 
 
+def build_summary():
+    """能力頁（graphics/summary_screen）：資料頁為底，能力、招式頁疊在右側。"""
+    S = os.path.join(EM, "graphics/summary_screen")
+    if not os.path.isdir(S):
+        return False
+    tiles = os.path.join(S, "tiles.png")
+    pal = _png_pal(tiles)
+    tmp = os.path.join(OUT, "_sum.pal")
+    _write_pal(tmp, pal)
+    tm = lambda n: render_tilemap(tiles, os.path.join(S, n + ".bin"), tmp, 32)
+    info = tm("page_info")
+    _stack(240, 160, pal[0], info).save(os.path.join(OUT, "sum_info.png"))
+    _stack(240, 160, pal[0], info, tm("page_skills")).save(os.path.join(OUT, "sum_skills.png"))
+    _stack(240, 160, pal[0], info, tm("page_battle_moves")).save(os.path.join(OUT, "sum_moves.png"))
+    os.remove(tmp)
+    return True
+
+
 def build_all():
-    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map()}
+    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary()}
 
 
 if __name__ == "__main__":
