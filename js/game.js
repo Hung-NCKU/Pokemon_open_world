@@ -1081,7 +1081,7 @@ const Game = {
       for (let i = 0; i < e4.length; i++) {
         const e = e4[i];
         await UI.say(`四天王 ${e.name}：「我是四天王的${e.name}，擅長${TYPES[e.type].n}屬性。來吧！」`);
-        const r = await Game.battle({ trainer: { title: '四天王', name: e.name, party: World.eliteParty(t, i), kind: 'gym', money: 150, sprite: e.sprite, lose: '……你通過了。前進吧。' }, biome: 'gym' });
+        const r = await Game.battle({ trainer: { title: '四天王', name: e.name, party: World.eliteParty(t, i), kind: 'gym', ai: 3, money: 150, sprite: e.sprite, lose: '……你通過了。前進吧。' }, biome: 'gym' });
         if (r !== 'win') return;
         {
           const last = i === e4.length - 1;

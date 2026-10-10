@@ -45,6 +45,7 @@
       if (s.pp <= 0 || this.moveBlocked(me, this.vMe, s.id)) return;
       const m = md(s.id);
       let score = m.cat === 'Status' ? 1 : (m.bp || 40) * this.effectiveness(m, foe, me) * (this.typesOf(me).includes(m.type) ? 1.5 : 1);
+      if (m.selfdestruct) score = 0; // 自爆、大爆炸會讓自己倒下，拿不到經驗值
       if (score > best) { best = score; bi = i; }
     });
     return { type: 'move', idx: bi };

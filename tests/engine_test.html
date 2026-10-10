@@ -62,6 +62,7 @@
 <script src="../js/picnic.js"></script>
 <script src="../js/doubles.js"></script>
 <script src="../js/late.js"></script>
+<script src="../js/ai.js"></script>
 <script src="../assets/gen3/interiors.js"></script>
 <script src="../js/interior.js"></script>
 <script src="../js/game.js"></script>
@@ -1565,6 +1566,57 @@ async function run() {
     check('遊玩節奏：關都每 30 格道路至少有 1 位訓練家（道路寬 2 格）', trainers * 30 >= roads, `${trainers} 位／${roads} 格`);
     G.state = keep;
     World.generate(20261010, 'kanto');
+  }
+  // 訓練家 AI（三層）
+  {
+    const keep = G.state;
+    const tb = (kind, me, foes, extra = {}) => {
+      G.state = Game.newState('T', 'kanto', 1); G.state.party = [me];
+      const b = new Battle({ trainer: { title: 'T', name: 'T', kind, party: foes, money: 0, ...extra } });
+      b.setup(); b.turn = 1;
+      return b;
+    };
+    const mv = (m, ids) => { m.moves = ids.map(sd => ({ id: moveId(sd), pp: 20 })); return m; };
+    const count = (b, n, f) => { let k = 0; for (let i = 0; i < n; i++) if (f(b.aiChoose())) k++; return k; };
+    // 層級
+    const tiers = [new Battle({ wild: Mon.create(16, 5) }), tb('trainer', Mon.create(1, 5), [Mon.create(16, 5)]), tb('gym', Mon.create(1, 5), [Mon.create(16, 5)]),
+      tb('champion', Mon.create(1, 5), [Mon.create(16, 5)]), tb('gym', Mon.create(1, 5), [Mon.create(16, 5)], { ai: 3 })].map(b => AI.tier(b));
+    check('AI：野生 0、一般訓練家 1、館主 2、冠軍與四天王 3', tiers.join() === '0,1,2,3,3', tiers.join());
+    // 選效果絕佳的招式
+    {
+      const b = tb('trainer', mv(Mon.create(4, 20), ['scratch']), [mv(Mon.create(7, 20), ['tackle', 'watergun'])]);
+      const k = count(b, 30, a => b.foe.moves[a.idx].id === moveId('watergun'));
+      check('AI 第 1 層：大多選效果絕佳的招式', k >= 26, `${k}/30`);
+    }
+    // 第 2 層：快被打倒又被剋制時，換成抵抗的寶可夢；第 1 層不換
+    {
+      const me = mv(Mon.create(9, 55), ['surf']);
+      const mk = () => [mv(Mon.create(59, 40), ['flamethrower']), mv(Mon.create(3, 40), ['razorleaf'])];
+      const b2 = tb('gym', me, mk()); b2.foe.hp = Math.floor(Mon.maxHp(b2.foe) * .5);
+      const a2 = b2.aiChoose();
+      const b1 = tb('trainer', mv(Mon.create(9, 55), ['surf']), mk()); b1.foe.hp = Math.floor(Mon.maxHp(b1.foe) * .5);
+      const k1 = count(b1, 20, a => a.switchTo !== undefined);
+      check('AI 第 2 層：被剋制又撐不住時換成抵抗的寶可夢（妙蛙花），第 1 層不換', a2.switchTo === 1 && k1 === 0, JSON.stringify(a2) + ' ' + k1);
+    }
+    // 第 2 層：不對免疫的對手用異常狀態
+    {
+      const b = tb('gym', mv(Mon.create(28, 30), ['scratch']), [mv(Mon.create(25, 30), ['thunderwave', 'quickattack'])]);
+      const k = count(b, 30, a => b.foe.moves[a.idx].id === moveId('thunderwave'));
+      check('AI 第 2 層：不對地面屬性用電磁波', k === 0, `${k}/30`);
+    }
+    // 第 3 層：安全時先強化
+    {
+      const b = tb('champion', mv(Mon.create(143, 40), ['tackle']), [mv(Mon.create(149, 60), ['dragondance', 'tackle'])]);
+      const k = count(b, 30, a => b.foe.moves[a.idx].id === moveId('dragondance'));
+      check('AI 第 3 層：對方威脅小、又打不倒時先用龍之舞', k >= 27, `${k}/30`);
+    }
+    // 回復道具：第 2 層在撐得住的時候才用
+    {
+      const b = tb('gym', mv(Mon.create(19, 5), ['tackle']), [mv(Mon.create(16, 30), ['tackle'])], { items: 2 });
+      b.aiItems = 2; b.foe.hp = Math.floor(Mon.maxHp(b.foe) * .3);
+      check('AI 第 2 層：體力低又撐得住時使用回復道具', b.aiChoose().heal === true);
+    }
+    G.state = keep;
   }
   // 寄放系統（箱子）
   {
