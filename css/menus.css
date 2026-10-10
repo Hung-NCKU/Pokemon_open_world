@@ -110,7 +110,23 @@
 #card .cd-brow { position: absolute; left: 66px; width: 606px; display: flex; justify-content: space-between; font-size: 22px; }
 #card .cd-brow b { font-weight: normal; color: #2858a0; }
 #card .cd-party { position: absolute; left: 60px; top: 330px; display: flex; }
-#card .cd-party .micon { position: relative; }
+#card .cd-party .micon { position: relative; display: block; }
 
 /* 箱子的標記 */
 .modal .row .marks { color: #d04848; margin: 0 8px; letter-spacing: 2px; }
+
+/* ---------- 野餐（js/picnic.js） ---------- */
+#picnic { position: absolute; inset: 0 0 144px 0; z-index: 30; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 120%, #9ce070 0%, #78c858 45%, #58a848 100%); }
+#picnic::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 90px; background: linear-gradient(#a8d8f8, #d8f0f8); }
+#picnic .pc-table { position: absolute; left: 150px; top: 170px; width: 240px; height: 110px; border-radius: 50%;
+  background: repeating-conic-gradient(#f86868 0 25%, #f8f8f8 0 50%) 0 0 / 40px 40px; box-shadow: 0 8px 0 rgba(0,0,0,.15); }
+#picnic .pc-mons { position: absolute; inset: 0; }
+#picnic .pc-mon { position: absolute; width: 96px; height: 96px; animation: pcbob 1.2s ease-in-out infinite; animation-delay: var(--d); }
+#picnic .pc-mon:nth-child(1) { left: 110px; top: 110px; } #picnic .pc-mon:nth-child(2) { left: 340px; top: 100px; }
+#picnic .pc-mon:nth-child(3) { left: 40px; top: 200px; } #picnic .pc-mon:nth-child(4) { left: 380px; top: 200px; }
+#picnic .pc-mon:nth-child(5) { left: 160px; top: 240px; } #picnic .pc-mon:nth-child(6) { left: 280px; top: 240px; }
+#picnic .pc-mon .micon { position: relative; display: block; left: 0; top: 0; }
+#picnic .pc-mon.happy { animation: pcjump .5s ease-in-out 4; }
+@keyframes pcbob { 50% { transform: translateY(-6px); } }
+@keyframes pcjump { 50% { transform: translateY(-24px); } }

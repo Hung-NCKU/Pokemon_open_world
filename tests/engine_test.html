@@ -23,6 +23,7 @@
 <script src="../data/tms.js"></script>
 <script src="../data/forms.js"></script>
 <script src="../data/zmoves.js"></script>
+<script src="../data/breeding.js"></script>
 <script src="../js/util.js"></script>
 <script src="../js/data.js"></script>
 <script src="../js/abilities.js"></script>
@@ -47,6 +48,7 @@
 <script src="../js/engine.js"></script>
 <script src="../js/mega.js"></script>
 <script src="../js/zmove.js"></script>
+<script src="../js/picnic.js"></script>
 <script src="../js/battle_view.js"></script>
 <script src="../js/game.js"></script>
 <script>
@@ -56,6 +58,8 @@ U.sleep = () => Promise.resolve();
 UI.say = async () => { };
 UI.choose = async () => 0;
 UI.list = async () => 0;
+UI.panel = async () => { };
+Game.dexEntry = async () => { };
 Battle.prototype.moveAnim = async () => { };
 Battle.prototype.anim = async () => { };
 
@@ -258,9 +262,10 @@ async function run() {
     await Game.applyItem(m, 'timid-mint');
     const after = Mon.stats(m);
     check('膽小薄荷：速度提高、攻擊降低，原本的性格不變', after[5] > before[5] && after[1] < before[1] && m.nat === 0);
-    m.iv = [0, 0, 0, 0, 0, 0];
+    m.iv = [0, 0, 0, 0, 0, 0]; delete m.ivHT;
+    const lo = Mon.stats(m);
     await Game.applyItem(m, 'gold-bottle-cap');
-    check('金色王冠：所有能力視為個體值 31', Mon.stats(m)[5] > after[5]);
+    check('金色王冠：所有能力視為個體值 31', Mon.stats(m).every((v, i) => v > lo[i]));
     // 王冠的 HP 補差額：滿血仍是滿血、受傷補上增加量、瀕死不會復活
     for (const [hp0, name] of [['full', '滿血'], [10, '受傷'], [0, '瀕死']]) {
       const t = Mon.create(25, 60); t.iv = [0, 0, 0, 0, 0, 0]; delete t.ivHT;
@@ -814,6 +819,40 @@ async function run() {
     check('Z 招式穿過守住，造成少量傷害', b3.foe.hp < hp0 && hp0 - b3.foe.hp < hp0 / 3, `${hp0 - b3.foe.hp}/${hp0}`);
     const zc = [...World.events.values()].filter(e => e.id && e.id.startsWith('zc_'));
     check('阿羅拉散落著道館沒有的 Z 純晶', zc.length >= 8 && zc.every(e => World.regionAt(e.x, e.y) === 'alola'), String(zc.length));
+  }
+  // 野餐與繁殖
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4);
+    const m = Mon.create(134, 30), f = Mon.create(4, 30), d = Mon.create(132, 30), leg = Mon.create(144, 50);
+    m.gender = 'm'; f.gender = 'f';
+    check('蛋群資料：1025 種，妙蛙種子是怪獸＋植物', Object.keys(BREEDING).length === 1025 && BREEDING[1][0].join() === 'monster,plant');
+    const m2 = Mon.create(5, 30); m2.gender = 'm';
+    check('同蛋群異性可以生蛋（火恐龍♂＋小火龍♀）', Picnic.compatible(m2, f));
+    check('百變怪可以和大部分寶可夢生蛋，但不能和未發現群', Picnic.compatible(d, f) && !Picnic.compatible(d, leg));
+    const fm = Mon.create(5, 30); fm.gender = 'f';
+    check('同性別不能生蛋', !Picnic.compatible(fm, f));
+    const ch = Mon.create(6, 40); ch.gender = 'f'; ch.nat = 7; ch.item = 'everstone';
+    const egg = Picnic.makeEgg(ch, d);
+    check('蛋是母方的最初形態（噴火龍 → 小火龍），孵化時 Lv.1', egg.mon.sp === 4 && egg.mon.lv === 1 && egg.steps === 20 * 128);
+    check('攜帶不變之石的一方遺傳性格', egg.mon.nat === 7);
+    const av = Mon.create(38, 40, { form: 'ninetales-alola' }); av.gender = 'f';
+    check('地區形態會遺傳（阿羅拉九尾 → 阿羅拉六尾）', Picnic.makeEgg(av, d).mon.form === 'vulpix-alola');
+    ch.iv = [31, 31, 31, 31, 31, 31]; d.iv = [31, 31, 31, 31, 31, 31]; ch.item = 'destiny-knot';
+    let ok = true;
+    for (let i = 0; i < 20; i++) if (Picnic.makeEgg(ch, d).mon.iv.filter(v => v === 31).length < 5) ok = false;
+    check('紅線：從雙親遺傳 5 項個體值', ok);
+    // 野餐籃與孵化
+    G.state.party = [ch, d];
+    G.state.picnic = { start: 0, taken: 0 };
+    check('野餐籃：剛開始沒有蛋，2 分鐘後 2 顆', Picnic.basket(0) === 0 && Picnic.basket(2 * 60000) === 2);
+    G.state.meal = { type: 'fire', until: 1e9 };
+    check('吃過三明治後蛋出現得比較快', Picnic.basket(2 * 60000) === 3);
+    G.state.eggs = [{ egg: true, mon: Mon.create(4, 1), steps: 2 }];
+    await Picnic.step(); await Picnic.step();
+    check('蛋籃裡的蛋走路就會孵化並加入隊伍', !G.state.eggs.length && G.party.length === 3 && G.party[2].sp === 4);
+    check('三明治：遭遇力的屬性', Picnic.mealType() === 'fire');
+    G.state = keep;
   }
   // 地點專屬生態
   {

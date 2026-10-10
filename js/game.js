@@ -57,6 +57,11 @@ const Game = {
       if (bad) s[k] = v;
     }
     if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
+    // 蛋籃與野餐
+    if (!Array.isArray(s.eggs)) s.eggs = [];
+    s.eggs = s.eggs.filter(e => e && e.mon && Number.isFinite(e.steps) && !Game.validateMon(e.mon)).slice(0, 6);
+    s.picnic = null;
+    if (s.meal && !(s.meal.type in TYPES && Number.isFinite(s.meal.until))) s.meal = null;
     // 巢狀資料：徽章是各地區 0–7 的不重複整數陣列；冠軍、旗標等是物件
     for (const k of Object.keys(s.badges)) {
       const b = s.badges[k];
@@ -747,13 +752,14 @@ const Game = {
   },
 
   async mainMenu() {
-    const items = ['寶可夢', '圖鑑', '背包', '任務', '地圖', '訓練家卡片', '存檔', '設定', '返回標題', '關閉'];
+    const items = ['寶可夢', '圖鑑', '背包', '野餐', '任務', '地圖', '訓練家卡片', '存檔', '設定', '返回標題', '關閉'];
     while (true) {
       const c = items[await UI.choose(items, { cls: 'side-menu' })];
       if (!c || c === '關閉') return;
       if (c === '寶可夢') await Game.partyMenu();
       if (c === '圖鑑') await Game.dexMenu();
       if (c === '背包') await Game.bagMenu();
+      if (c === '野餐') { await Picnic.open(); return; }
       if (c === '任務') await UI.say(Story.questSummary(G.state));
       if (c === '地圖') { await Game.mapMenu(); return; }
       if (c === '訓練家卡片') await Game.trainerCard();
@@ -1047,6 +1053,7 @@ const Game = {
   async onStep() {
     const s = G.state;
     s.steps++;
+    if (typeof Picnic !== 'undefined') await Picnic.step();
     if (s.steps % 128 === 0) G.party.forEach(m => { if (m.hp > 0) m.happy = Math.min(255, m.happy + 1); });
     if (s.repel > 0) { s.repel--; if (s.repel === 0) await UI.say('除蟲噴霧的效果消失了。'); }
     const town = World.townAt(s.x, s.y);
