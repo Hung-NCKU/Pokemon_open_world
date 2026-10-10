@@ -107,6 +107,7 @@ window.addEventListener('load', () => setTimeout(() => {
       st.bag[id] = ITEMS[id].kind === 'key' ? 1 : 99;
     }
     st.money = 9999999;
+    st.bp = 999; // 對戰塔的兌換點數
     for (const r of REGION_KEYS) { st.badges[r] = [0, 1, 2, 3, 4, 5, 6, 7]; st.champs[r] = 1; }
     st.hofTime = '0:00';
     st.teraCharged = true;
