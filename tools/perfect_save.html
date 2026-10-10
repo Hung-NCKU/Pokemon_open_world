@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>完美存檔產生器</title>
+<style>body { font: 16px sans-serif; margin: 24px; } pre { white-space: pre-wrap; word-break: break-all; max-height: 40vh; overflow: auto; background: #f4f4f4; }</style>
+</head>
+<body>
+<h2>測試用完美存檔</h2>
+<p>全部 1025 種寶可夢（隊伍 6 隻 Lv.100、其餘在箱子裡 Lv.50，個體值全 31）、所有道具、九個地區的徽章與冠軍、所有招式學習器配方。<br>
+傳說與幻之寶可夢仍會留在地圖上，可以繼續測試遭遇。用法：標題畫面選「匯入存檔」，選擇下載的檔案。</p>
+<p id="msg">產生中……</p>
+<button id="dl" disabled>下載 perfect_save.json</button>
+<pre id="out"></pre>
+<script src="../data/pokedex.js"></script>
+<script src="../data/moves.js"></script>
+<script src="../data/showdown.js"></script>
+<script src="../data/items.js"></script>
+<script src="../data/abilities.js"></script>
+<script src="../data/tms.js"></script>
+<script src="../js/util.js"></script>
+<script src="../js/data.js"></script>
+<script src="../js/abilities.js"></script>
+<script src="../js/mon.js"></script>
+<script src="../js/tm.js"></script>
+<script src="../js/gen3.js"></script>
+<script src="../js/sprites.js"></script>
+<script src="../js/audio.js"></script>
+<script src="../js/world.js"></script>
+<script src="../js/ecology.js"></script>
+<script src="../js/overworld_mons.js"></script>
+<script src="../js/story.js"></script>
+<script src="../js/events.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/bagui.js"></script>
+<script src="../js/menus.js"></script>
+<script src="../js/mapui.js"></script>
+<script src="../js/summaryui.js"></script>
+<script src="../js/battle.js"></script>
+<script src="../js/engine.js"></script>
+<script src="../js/battle_view.js"></script>
+<script src="../js/game.js"></script>
+<script>
+Game.title = async () => { };
+window.addEventListener('load', () => setTimeout(() => {
+  try {
+    U.seed(20261010);
+    const st = Game.newState('測試員', 'kanto', 6);
+    st.seed = 20261010;
+    // 寶可夢：全部個體值 31，攻擊型努力值
+    const make = (sp, lv) => {
+      const m = Mon.create(sp, lv, { perfect: 31 });
+      const s = POKEDEX[sp].s;
+      m.ev = s[1] >= s[3] ? [4, 252, 0, 0, 0, 252] : [4, 0, 0, 252, 0, 252];
+      m.happy = 255;
+      m.hp = Mon.maxHp(m);
+      return m;
+    };
+    const team = [[6, 'life-orb'], [9, 'leftovers'], [3, 'sitrus-berry'], [149, 'choice-band'], [445, 'focus-sash'], [25, 'light-ball']];
+    st.party = team.map(([sp, it]) => { const m = make(sp, 100); m.item = ITEMS[it] ? it : null; return m; });
+    const inParty = new Set(team.map(t => t[0]));
+    const ids = Object.keys(POKEDEX).map(Number).sort((a, b) => a - b);
+    st.box = ids.filter(id => !inParty.has(id)).map(id => make(id, 50));
+    for (const id of ids) { st.seen[id] = 1; st.caught[id] = 1; }
+    // 道具：一般道具各 99 個，重要物品 1 個（古代石板不給，保留尋寶支線）
+    for (const id of Object.keys(ITEMS)) {
+      if (id === 'ancient-tablet') continue;
+      st.bag[id] = ITEMS[id].kind === 'key' ? 1 : 99;
+    }
+    st.money = 9999999;
+    for (const r of REGION_KEYS) { st.badges[r] = [0, 1, 2, 3, 4, 5, 6, 7]; st.champs[r] = 1; }
+    st.hofTime = '0:00';
+    st.teraCharged = true;
+    st.tmRecipes = Object.fromEntries(TM.LIST.map(t => [t.mv, 1]));
+    st.mats = {};
+    for (const id of ids) { const b = TM.base(id); st.mats[b] = 30; }
+    st.legendsCaught = {};
+    // 位置：關都真新鎮自家門前（和新遊戲相同）
+    World.generate(st.seed, st.region);
+    const h = World.homeTown;
+    const house = World.buildings.find(b => b.town === h && b.kind === 'house');
+    st.x = house.door.x; st.y = house.door.y + 1;
+    st.center = { x: st.x, y: st.y };
+    for (const t of World.towns) st.visited[t.id] = 1;
+    st.flags.q_start = 1; st.flags.rival1 = 1;
+    U.unseed();
+    const json = JSON.stringify(st);
+    const check = Game.parseSave(json);
+    if (!check.ok) throw new Error('存檔驗證失敗：' + check.error);
+    document.getElementById('out').textContent = json;
+    document.getElementById('msg').textContent = `完成：隊伍 ${st.party.length} 隻、箱子 ${st.box.length} 隻、道具 ${Object.keys(st.bag).length} 種，大小 ${Math.round(json.length / 1024)} KB（已通過遊戲的存檔驗證）`;
+    const btn = document.getElementById('dl');
+    btn.disabled = false;
+    btn.onclick = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      a.download = 'perfect_save.json';
+      a.click();
+    };
+    document.title = 'OK';
+  } catch (e) {
+    document.getElementById('msg').textContent = '錯誤：' + e.message;
+    document.title = 'FAIL';
+  }
+}, 50));
+</script>
+</body>
+</html>

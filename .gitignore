@@ -5,3 +5,6 @@ assets/bgm/
 assets/sfx/
 assets/player.png
 __pycache__/
+
+# 測試用存檔（tools/perfect_save.html 產生）
+saves/
