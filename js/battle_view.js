@@ -80,7 +80,7 @@ Object.assign(Battle.prototype, {
         img.style.bottom = 'auto';
         return;
       }
-      // 其他圖片：依實際內容的下緣定位（對手腳底在 GBA y=72；我方下緣略低於文字框上緣）
+      // 其他圖片：依實際內容的下緣定位（對手腳底在 GBA y=72；我方下緣對齊文字框上緣）
       try {
         const c = document.createElement('canvas');
         c.width = img.naturalWidth; c.height = img.naturalHeight;
@@ -92,7 +92,7 @@ Object.assign(Battle.prototype, {
           for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 16) break outer;
           pad++;
         }
-        img.style.bottom = (back ? -24 : 24) - pad * scale + 'px';
+        img.style.bottom = (back ? 0 : 24) - pad * scale + 'px';
       } catch { }
     };
     if (this.isTera && this.isTera(m)) img.classList.add('tera');
