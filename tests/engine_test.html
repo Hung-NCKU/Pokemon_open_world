@@ -113,6 +113,8 @@ async function use(b, user, sd, slotPP = 10) {
 async function run() {
   // 天氣依現實時間變化；測試時固定為晴朗，天氣的測試再個別指定
   Weather.force('clear');
+  // 測試不連到真的雲端資料庫（雲端的測試用假的 fetch 另外設定）
+  window.CLOUD_CONFIG = { url: '', anonKey: '', github: false };
   // 1. 近身戰：降低自己的防禦、特防，對手不變
   {
     const b = setup(68, 50, 143, 50);
