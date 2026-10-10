@@ -34,7 +34,8 @@ const Game = {
     try {
       const prev = localStorage.getItem(SAVE_KEY);
       if (prev && Game.parseSave(prev).ok) localStorage.setItem(SAVE_KEY + '_bak', prev);
-      localStorage.setItem(SAVE_KEY, Game.serialize(G.state));
+      Telemetry.measure('存檔', () => localStorage.setItem(SAVE_KEY, Game.serialize(G.state)));
+      Telemetry.event('存檔');
       if (!silent) UI.banner('已儲存遊戲進度');
       return true;
     } catch (e) { console.error(e); UI.banner('存檔失敗！'); return false; }
@@ -853,7 +854,7 @@ const Game = {
     let idx = 0;
     while (true) {
       const opts = [`音樂　${bar(st.musicVol)} ${st.musicVol}`, `音效　${bar(st.sfxVol)} ${st.sfxVol}`,
-        `文字速度：${speedName[st.textSpeed] || '普通'}`, `戰鬥訊息：${st.battleAuto ? '自動前進' : '手動按鍵'}`, '完成'];
+        `文字速度：${speedName[st.textSpeed] || '普通'}`, `戰鬥訊息：${st.battleAuto ? '自動前進' : '手動按鍵'}`, `遊玩紀錄（錯誤 ${Telemetry.errors.length}）`, '完成'];
       const adjust = d => {
         if (idx === 0) st.musicVol = U.clamp(st.musicVol + d, 0, 10);
         if (idx === 1) { st.sfxVol = U.clamp(st.sfxVol + d, 0, 10); Sound.sfx('select'); }
@@ -868,7 +869,8 @@ const Game = {
         return true;
       };
       const c = await UI.choose(opts, { prompt: '設定（音量用 ←→ 調整）', start: idx, onKey });
-      if (c < 0 || c === 4) break;
+      if (c < 0 || c === 5) break;
+      if (c === 4) { await Game.logMenu(); idx = c; continue; }
       idx = c;
       if (c === 0) { st.musicVol = st.musicVol >= 10 ? 0 : st.musicVol + 1; Sound.applyVolume(); }
       if (c === 1) { st.sfxVol = st.sfxVol >= 10 ? 0 : st.sfxVol + 1; Sound.applyVolume(); Sound.sfx('select'); }
@@ -877,6 +879,24 @@ const Game = {
     }
     try { localStorage.setItem(SAVE_KEY + '_settings', JSON.stringify(st)); } catch { }
     UI.hideDialog();
+  },
+
+  // 遊玩紀錄：畫面更新率、耗時、最近的錯誤；可以下載成檔案回報問題
+  async logMenu() {
+    while (true) {
+      const r = Telemetry.report();
+      const tm = Object.entries(r.timings).map(([k, v]) => `${k}：最近 ${v.last}ms、平均 ${v.avg}ms、最大 ${v.max}ms（${v.n} 次）`);
+      const er = r.errors.slice(-8).reverse().map(e => `${new Date(e.t).toLocaleString()}［${e.mode || '-'}］${e.msg}${e.n > 1 ? `（×${e.n}）` : ''}${e.where ? ' @' + e.where : ''}`);
+      await UI.panel(`<div class="quest-panel log-panel"><h3>遊玩紀錄</h3>
+        <p>畫面更新率：${r.fps.avg ? `目前 ${r.fps.now}、平均 ${r.fps.avg}、最低 ${r.fps.min} FPS` : '測量中'}；卡頓（超過 50ms 的畫格）${r.fps.longFrames} 次，最長 ${r.fps.worstMs}ms</p>
+        ${tm.map(l => `<p>${U.esc(l)}</p>`).join('') || '<p>還沒有耗時紀錄</p>'}
+        <h3>最近的錯誤（共 ${r.errors.length} 筆）</h3>${er.map(l => `<p class="err">${U.esc(l)}</p>`).join('') || '<p>沒有錯誤</p>'}
+        <p><small>F3：在畫面左上角顯示 FPS 與錯誤數</small></p></div>`);
+      const c = await UI.choose(['下載紀錄檔', '清除錯誤紀錄', '返回'], { prompt: '遊玩紀錄' });
+      if (c === 0) Telemetry.download();
+      else if (c === 1) Telemetry.clearErrors();
+      else break;
+    }
   },
 
   // ---------- 背景音樂 ----------
@@ -908,6 +928,7 @@ const Game = {
 
   // ---------- 世界互動 ----------
   warp(x, y, dir) {
+    Telemetry.event('傳送', { x, y });
     G.state.x = x; G.state.y = y; G.state.dir = dir || G.state.dir; G.state.surf = false;
     G.move = null;
   },
@@ -1070,7 +1091,13 @@ const Game = {
     const dbl = opts.double && typeof DoubleBattle !== 'undefined' && opts.trainer && opts.trainer.party.length >= 2 && G.party.filter(m => m.hp > 0).length >= 2;
     const b = dbl ? new DoubleBattle(opts) : new Battle(opts);
     b.raid = opts.raid ? { ...opts.raid } : null;
+    const kind = opts.trainer ? (opts.trainer.kind || 'trainer') : opts.raid ? 'raid' : 'wild';
+    const who = opts.trainer ? opts.trainer.name : opts.wild ? POKEDEX[opts.wild.sp].n + opts.wild.lv : '';
+    Telemetry.event('戰鬥開始', { kind, who, dbl });
+    const t0 = performance.now();
     const r = await b.run();
+    Telemetry.time(kind === 'wild' ? '野生戰鬥' : '訓練家戰鬥', performance.now() - t0);
+    Telemetry.event('戰鬥結束', { kind, who, r });
     // noBlackout：劇情戰輸了也不會被送回寶可夢中心（例如第一場勁敵戰）
     if (r === 'lose' && opts.noBlackout) { Game.healParty(); await UI.say('寶可夢都恢復了精神。'); }
     else if (r === 'lose') await Game.blackout();
@@ -1470,8 +1497,9 @@ const Game = {
       if (!('item' in m)) m.item = null;
     }
     UI.showText('正在生成世界……');
-    World.generate(state.seed, state.region, state.worldVer || 1);
-    World.renderMap();
+    Telemetry.measure('世界生成', () => World.generate(state.seed, state.region, state.worldVer || 1));
+    Telemetry.measure('地圖繪製', () => World.renderMap());
+    Telemetry.event('開始遊戲', { region: state.region, worldVer: state.worldVer || 1 });
     if (fresh) {
       const h = World.homeTown;
       const house = World.buildings.find(b => b.town === h && b.kind === 'house');
@@ -1551,8 +1579,9 @@ window.addEventListener('load', () => {
     const dt = Math.min(100, now - last); last = now;
     G.frame++;
     if (G.fast) Game.speedAnims();
-    Game.update(dt);
-    Game.render();
+    Telemetry.frame(dt);
+    // 一個畫格出錯時記錄下來並繼續執行，不讓整個遊戲停住
+    try { Game.update(dt); Game.render(); } catch (e) { Telemetry.error(e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : String(e), 'loop'); }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

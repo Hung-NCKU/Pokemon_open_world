@@ -249,3 +249,5 @@ body.fast #game::after { content: '▶▶ ×2'; position: absolute; right: 10px;
 #gimmick-bar .gb.dis { background: #c8c8c8; color: #707070; border-color: #909090; }
 #gimmick-bar .gb.on { background: linear-gradient(90deg, #f8a8f8, #a8f8f8, #f8f8a8); border-color: #f86838; box-shadow: 0 0 8px #fff; }
 #choice-info .mv-why { color: #c04040; font-size: 15px; }
+/* F3 遊玩紀錄的即時顯示 */
+#telemetry { position: absolute; left: 4px; top: 4px; z-index: 50; margin: 0; padding: 3px 6px; font: 12px/16px monospace; color: #fff; background: rgba(0, 0, 0, .6); border-radius: 3px; pointer-events: none; white-space: pre; }

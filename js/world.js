@@ -27,19 +27,20 @@ const World = {
   },
 
   // 依世界地圖位置的「最近地區」與混合氣候
-  landInfo(x, y) {
-    let best = 9, bi = 0;
-    const out = { temp: 0, wet: 0, water: 0 };
-    let wsum = 0;
-    REGION_KEYS.forEach((k, i) => {
-      const [rx, ry, r] = REGION_POS[k];
-      const d = Math.hypot(x - rx, y - ry) / r;
+  // 每格的氣候：各地區中心依距離加權（每次生成世界要算 57 萬次，所以先把地區資料攤平成陣列）
+  // 計算順序與運算和原本完全相同，結果逐位元一致（世界不會因此改變）
+  landInfo(x, y, out = { temp: 0, wet: 0, water: 0, s: 0, ri: 0 }) {
+    const L = this._landTab || (this._landTab = REGION_KEYS.map(k => [...REGION_POS[k], CLIMATE[k].temp, CLIMATE[k].wet, CLIMATE[k].water]));
+    let best = 9, bi = 0, wsum = 0, temp = 0, wet = 0, water = 0;
+    for (let i = 0; i < L.length; i++) {
+      const R = L[i];
+      const d = Math.hypot(x - R[0], y - R[1]) / R[2];
       if (d < best) { best = d; bi = i; }
       const w = 1 / Math.pow(Math.max(d, .05), 4);
       wsum += w;
-      for (const c of ['temp', 'wet', 'water']) out[c] += CLIMATE[k][c] * w;
-    });
-    for (const c of ['temp', 'wet', 'water']) out[c] /= wsum;
+      temp += R[3] * w; wet += R[4] * w; water += R[5] * w;
+    }
+    out.temp = temp / wsum; out.wet = wet / wsum; out.water = water / wsum;
     out.s = best; out.ri = bi;
     return out;
   },
@@ -55,9 +56,10 @@ const World = {
     const tiles = this.tiles = new Uint8Array(WW * WH);
     const regionMap = this.regionMap = new Uint8Array(WW * WH);
     this.landVal = new Float32Array(WW * WH);
+    const c = { temp: 0, wet: 0, water: 0, s: 0, ri: 0 };
     for (let y = 0; y < WH; y++) {
       for (let x = 0; x < WW; x++) {
-        const c = this.landInfo(x, y);
+        this.landInfo(x, y, c);
         regionMap[y * WW + x] = c.ri;
         const rough = REGION_KEYS[c.ri] === 'alola' ? 1.5 : .9;
         const land = c.s + (fbm(x / 34, y / 34, seed + 5, 4) - .5) * rough;
@@ -370,23 +372,28 @@ const World = {
   },
 
   // 綠寶石的樹是 2×2 格；把樹對齊到偶數座標的 2×2 區塊
+  // 樹木對齊 2×2：每塊有兩棵以上的樹而且沒有障礙（道路、建築、訓練家）就整塊種樹，否則移除樹
   alignTrees() {
-    const soft = new Set([T.GRASS, T.TALL, T.FLOWER, T.SNOW, T.SNOWTALL, T.TREE]);
+    const tiles = this.tiles;
+    const soft = new Uint8Array(256);
+    for (const t of [T.GRASS, T.TALL, T.FLOWER, T.SNOW, T.SNOWTALL, T.TREE]) soft[t] = 1;
+    const off = [0, 1, WW, WW + 1];
     for (let y = 0; y < WH - 1; y += 2) for (let x = 0; x < WW - 1; x += 2) {
-      const cells = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]];
+      const i0 = y * WW + x;
       let trees = 0, hard = false, snowy = false;
-      for (const [cx, cy] of cells) {
-        const t = this.tiles[cy * WW + cx];
+      for (let k = 0; k < 4; k++) {
+        const t = tiles[i0 + off[k]];
         if (t === T.TREE) trees++;
-        else if (!soft.has(t)) hard = true;
+        else if (!soft[t]) hard = true;
         if (t === T.SNOW || t === T.SNOWTALL) snowy = true;
-        if (this.trainers.has(cx + ',' + cy)) hard = true;
       }
       if (!trees) continue;
+      // 訓練家站的格子不能種樹（只在有樹的區塊才需要檢查）
+      if (!hard && this.trainers.size) for (let k = 0; k < 4 && !hard; k++) if (this.trainers.has((x + (k & 1)) + ',' + (y + (k >> 1)))) hard = true;
       const fill = trees >= 2 && !hard ? T.TREE : (snowy ? T.SNOW : T.GRASS);
-      for (const [cx, cy] of cells) {
-        const t = this.tiles[cy * WW + cx];
-        if (fill === T.TREE || t === T.TREE) this.tiles[cy * WW + cx] = fill;
+      for (let k = 0; k < 4; k++) {
+        const i = i0 + off[k];
+        if (fill === T.TREE || tiles[i] === T.TREE) tiles[i] = fill;
       }
     }
   },

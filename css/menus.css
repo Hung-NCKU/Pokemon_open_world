@@ -136,3 +136,5 @@
 .quest-panel { font-size: 18px; line-height: 28px; max-height: 400px; overflow-y: auto; }
 .quest-panel h3 { margin: 0 0 6px; }
 .quest-panel p { margin: 0 0 6px; }
+.log-panel { font-size: 15px; line-height: 22px; }
+.log-panel .err { color: #c03028; word-break: break-all; }

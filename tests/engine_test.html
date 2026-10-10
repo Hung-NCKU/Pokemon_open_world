@@ -26,6 +26,7 @@
 <script src="../data/zmoves.js"></script>
 <script src="../data/breeding.js"></script>
 <script src="../js/util.js"></script>
+<script src="../js/telemetry.js"></script>
 <script src="../js/data.js"></script>
 <script src="../js/abilities.js"></script>
 <script src="../js/mon.js"></script>
@@ -1240,6 +1241,30 @@ async function run() {
     check('舊存檔遷移後仍生成舊的道館配置', World.towns.map(t => t.gym).join() !== order2);
     World.generate(20261010, 'kanto');
     G.state = keep;
+  }
+  // 世界生成的結果固定：同一個種子永遠生成同一個世界（舊存檔的世界不會因為改程式而改變）
+  // 若是刻意改變地形生成，要提高 WORLD_VER 並讓舊存檔沿用舊算法，再更新這裡的雜湊
+  {
+    const h = a => { let x = 2166136261 >>> 0; for (let i = 0; i < a.length; i++) { x ^= a[i]; x = Math.imul(x, 16777619) >>> 0; } return x.toString(16); };
+    const got = [[20261010, 'kanto'], [7, 'johto'], [99, 'hoenn']].map(([sd, r]) => { World.generate(sd, r, 2); return h(World.tiles) + '/' + h(World.regionMap); });
+    check('世界生成：固定種子的地形與舊版完全相同', got.join() === '8069a4f1/73b17e1f,c7f84d59/73b17e1f,80b347c6/73b17e1f', got.join());
+    World.generate(20261010, 'kanto');
+  }
+  // 遊玩紀錄：錯誤、耗時、事件
+  {
+    const n0 = Telemetry.errors.length;
+    Telemetry.error('測試錯誤 A', 'x.js:1'); Telemetry.error('測試錯誤 A', 'x.js:1'); Telemetry.error('測試錯誤 B', 'y.js:2');
+    const es = Telemetry.errors.slice(n0);
+    check('遊玩紀錄：連續相同的錯誤合併計數', es.length === 2 && es[0].n === 2, JSON.stringify(es));
+    Telemetry.measure('測試耗時', () => { for (let i = 0; i < 1e5; i++); });
+    await Telemetry.measure('測試耗時', async () => 1);
+    const r = Telemetry.report();
+    check('遊玩紀錄：同步與非同步的耗時都會記錄', r.timings['測試耗時'] && r.timings['測試耗時'].n === 2);
+    Telemetry.event('測試事件', { a: 1 });
+    check('遊玩紀錄：事件與報告格式', r.fps && Array.isArray(r.errors) && Telemetry.report().events.some(e => e.e === '測試事件'));
+    for (let i = 0; i < 40; i++) Telemetry.error('大量錯誤 ' + i);
+    check('遊玩紀錄：錯誤最多保留 30 筆', Telemetry.errors.length === 30);
+    Telemetry.clearErrors();
   }
   // 寄放系統（箱子）
   {
