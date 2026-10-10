@@ -38,6 +38,7 @@
 <script src="../js/overworld_mons.js"></script>
 <script src="../js/story.js"></script>
 <script src="../js/events.js"></script>
+<script src="../js/regions.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/search.js"></script>
 <script src="../js/bagui.js"></script>
@@ -455,7 +456,28 @@ async function run() {
     const brockTown = kt.find(t => t.gym === 0);
     check('關都城鎮使用原作名稱', brockTown.name === '深灰市' && kt.find(t => t.kind === 'league').name === '石英高原');
     const lms = [...World.landmarks.values()];
-    check('關都的地標全部都有放置', lms.length === LANDMARKS.kanto.length, lms.map(l => l.n).join('、'));
+    check('關都的地標全部都有放置', lms.filter(l => l.region === 'kanto').length === LANDMARKS.kanto.length, lms.map(l => l.n).join('、'));
+    for (const r of ['johto', 'hoenn', 'sinnoh']) {
+      const got = lms.filter(l => l.region === r);
+      check(`${REGIONS[r].n}的傳說地標全部都有放置`, got.length === LANDMARKS[r].length, got.map(l => l.n).join('、'));
+    }
+    {
+      const keepS = G.state;
+      G.state = Game.newState('T', 'johto', 155);
+      const jt = World.towns.filter(t => t.region === 'johto');
+      const whit = World.gymParty(jt.find(t => t.gym === 2));
+      check('城都：小茜的王牌是大奶罐', whit[whit.length - 1].sp === 241, whit.map(m => POKEDEX[m.sp].n).join(' '));
+      const lance = World.championParty(jt.find(t => t.kind === 'league'));
+      check('城都冠軍阿渡的隊伍以快龍結尾', lance[5].sp === 149);
+      const cy = World.championParty(World.towns.find(t => t.region === 'sinnoh' && t.kind === 'league'));
+      check('神奧冠軍竹蘭的王牌是烈咬陸鯊', cy[5].sp === 445);
+      check('豐緣、神奧、城都都有四天王', ['johto', 'hoenn', 'sinnoh'].every(r => ELITE_FOUR[r].length === 4));
+      const ho = [...World.legends.values()].find(l => l.sp === 250);
+      check('鳳王站在鈴鐺塔前，需要城都冠軍', ho && ho.lm && ho.lm.id === 'belltower' && !LegendGate.ok(ho.lm));
+      G.state.champs.johto = 1;
+      check('成為城都冠軍後可以接近鳳王', LegendGate.ok(ho.lm));
+      G.state = keepS;
+    }
     // 從真新鎮出發，地標入口（陸上：入口下方；海上：可衝浪）都要能到達
     const h = World.homeTown, sx = h.x + 1, sy = h.y + 5;
     const seen = new Uint8Array(WW * WH), q = [[sx, sy]];
