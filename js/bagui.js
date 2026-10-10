@@ -15,13 +15,33 @@ const BagUI = (() => {
   let pocket = 0;
   const cursor = [0, 0, 0, 0, 0];
 
+  // 綠寶石圖示（item_icons.png）；沒有的用 PokéAPI 圖，再失敗時依種類換成相近的綠寶石圖示
+  function atlas(name) {
+    const i = Gen3.on && GEN3.itemIcons ? GEN3.itemIcons[name] : undefined;
+    if (i === undefined) return null;
+    const x = (i % 16) * 24, y = Math.floor(i / 16) * 24;
+    return `<div class="bag-ic" style="background-image:url(${Gen3.base}item_icons.png);background-position:${-x * 3}px ${-y * 3}px;background-size:${16 * 24 * 3}px auto"></div>`;
+  }
+  function fallbackName(id) {
+    const it = ITEMS[id] || {};
+    if (it.mega) return 'orb';
+    if (it.kind === 'tm') return 'tm';
+    if (it.kind === 'shard') return 'red-shard';
+    if (/-z$/.test(id)) return 'gem';
+    if (it.kind === 'ball') return 'poke-ball';
+    if (it.kind === 'expcandy' || id.includes('candy')) return 'rare-candy';
+    if (it.kind === 'vitamin') return 'protein';
+    if (it.kind === 'mint') return 'big-mushroom';
+    if (it.kind === 'evo') return 'moon-stone';
+    if (id.endsWith('-berry')) return 'oran-berry';
+    if (it.kind === 'key') return 'question-mark';
+    return 'question-mark';
+  }
   function icon(id) {
-    const i = Gen3.on && GEN3.itemIcons ? GEN3.itemIcons[isTM(id) ? 'tm' : id] : undefined;
-    if (i !== undefined) {
-      const x = (i % 16) * 24, y = Math.floor(i / 16) * 24;
-      return `<div class="bag-ic" style="background-image:url(${Gen3.base}item_icons.png);background-position:${-x * 3}px ${-y * 3}px;background-size:${16 * 24 * 3}px auto"></div>`;
-    }
-    return `<img class="bag-ic" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${id}.png">`;
+    const a = atlas(isTM(id) ? 'tm' : id);
+    if (a) return a;
+    const fb = (atlas(fallbackName(id)) || '').replace(/"/g, '&quot;');
+    return `<img class="bag-ic" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${id}.png" onerror="this.onerror=null;this.outerHTML='${fb.replace(/'/g, "\'")}'">`;
   }
 
   function pick() {

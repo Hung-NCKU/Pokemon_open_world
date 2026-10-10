@@ -1184,6 +1184,10 @@ const Game = {
     G.state.playMs += dt;
     if (typeof OverworldMons !== 'undefined') OverworldMons.update(performance.now());
     if (G.busy || UI.active()) return;
+    // 保險：沒有任何流程或選單在等待時，殘留在畫面上的對話框、選項一律收起
+    const dlg = document.getElementById('dialog'), ch = document.getElementById('choices');
+    if (dlg && !dlg.classList.contains('hidden')) UI.hideDialog();
+    if (ch && !ch.classList.contains('hidden')) { ch.classList.add('hidden'); ch.innerHTML = ''; }
     const s = G.state;
     if (G.move) {
       G.move.t += dt;
