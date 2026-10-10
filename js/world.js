@@ -800,19 +800,20 @@ const World = {
     if (t === T.DESERT) return 2;
     if (t === T.CAVE) return 1;
     if (t === T.TALL) return 0;
-    return -1; // 水、道路、建築、樹、岩山……不參與
+    if (t === T.SAND) return -1;   // 沙灘：旁邊的草地長到沙上（綠寶石的海邊）
+    return null;                    // 水、道路、建築、樹、岩山……不參與
   },
   fringeImg(rank, side, v) {
     this._fringe = this._fringe || new Map();
     const key = rank + side + v;
     if (this._fringe.has(key)) return this._fringe.get(key);
-    const src = rank === 3 ? Gen3.single('snow') : rank === 2 ? Gen3.auto('desert', () => true, 0, 0) : rank === 1 ? Gen3.single('cave') : null;
+    const src = rank === 3 ? Gen3.single('snow') : rank === 2 ? Gen3.auto('desert', () => true, 0, 0) : rank === 1 ? Gen3.single('cave') : rank === 0 ? Gen3.single('grass') : null;
     if (!src) return null;
     const S = src.width, c = document.createElement('canvas');
     c.width = c.height = S;
     const g = c.getContext('2d');
     g.drawImage(src, 0, 0);
-    // 遮罩：離邊緣 depth 以內保留；depth 隨位置起伏（每 3 像素一段，像原作的鋸齒邊）
+    // 遮罩：離邊緣 depth 以內保留；depth 隨位置起伏（每 2 個原始像素一段，像原作的鋸齒邊）
     const d = g.getImageData(0, 0, S, S), p = d.data, u = S / 16;
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       const along = side === 'n' || side === 's' ? x : y;
@@ -825,16 +826,48 @@ const World = {
     this._fringe.set(key, c);
     return c;
   },
+  // 水邊：靠岸的一側畫淺色的浪花線與較深的內側（鋸齒狀），轉角也接起來
+  shoreImg(side, v) {
+    this._shore = this._shore || new Map();
+    const key = side + v;
+    if (this._shore.has(key)) return this._shore.get(key);
+    const S = TILE, u = S / 16, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    for (let a = 0; a < 16; a++) {
+      const w = 1 + Math.floor(hash2(a >> 1, v, 77 + side.charCodeAt(0)) * 2); // 浪花寬 1～2 像素
+      for (let k = 0; k < w + 2; k++) {
+        g.fillStyle = k < w ? 'rgba(232,244,252,.95)' : 'rgba(40,64,140,.45)';
+        const along = a * u, depth = k * u;
+        if (side === 'n') g.fillRect(along, depth, u, u);
+        if (side === 's') g.fillRect(along, S - u - depth, u, u);
+        if (side === 'w') g.fillRect(depth, along, u, u);
+        if (side === 'e') g.fillRect(S - u - depth, along, u, u);
+      }
+    }
+    this._shore.set(key, c);
+    return c;
+  },
   drawFringes(g, t, x, y, px, py) {
+    const SIDES = [['n', 0, -1], ['s', 0, 1], ['w', -1, 0], ['e', 1, 0]];
+    if (t === T.WATER || t === T.DEEP) {
+      const land = (a, b) => { const n = this.tile(a, b); return this.inside(a, b) && n !== T.WATER && n !== T.DEEP && n !== T.BRIDGE; };
+      for (const [side, dx, dy] of SIDES) if (land(x + dx, y + dy)) {
+        const im = this.shoreImg(side, (side === 'n' || side === 's' ? x : y) & 3);
+        if (im) g.drawImage(im, px, py);
+      }
+      return;
+    }
     const r = this.groundRank(t, x, y);
-    if (r < 0) return;
-    for (const [side, dx, dy] of [['n', 0, -1], ['s', 0, 1], ['w', -1, 0], ['e', 1, 0]]) {
+    if (r === null) return;
+    for (const [side, dx, dy] of SIDES) {
       const nr = this.groundRank(this.tile(x + dx, y + dy), x + dx, y + dy);
-      if (nr <= r) continue;
+      if (nr === null || nr <= r) continue;
       const im = this.fringeImg(nr, side, (side === 'n' || side === 's' ? x : y) & 3);
       if (im) g.drawImage(im, px, py);
     }
   },
+
 
   drawTile(g, t, x, y, px, py, frame) {
     // 地標：岩壁上的洞窟入口

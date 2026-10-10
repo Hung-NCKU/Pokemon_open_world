@@ -1974,6 +1974,22 @@ async function run() {
     const st = Telemetry.battleStats().find(b => b.kind === 'testkind');
     check('遊玩數據：記錄每種對戰的場數、勝率、平均回合與等級差', st.n === before + 2 && Telemetry.report().battles.some(b => b.kind === 'testkind'));
   }
+  // 地上的道具（古代石板、超級石、Z 純晶）：碰到時先問要不要撿
+  {
+    const keep = G.state, keepChoose = UI.choose, keepSay = UI.say;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party = [Mon.create(4, 20)];
+    World.generate(20261010, 'kanto');
+    const ev = [...World.events.values()].find(e => e.kind === 'tablet');
+    UI.say = async () => { };
+    UI.choose = async () => 1;
+    await Game.touchEvent(ev);
+    const skipped = !G.state.bag['ancient-tablet'] && !!World.eventAt(ev.x, ev.y);
+    UI.choose = async () => 0;
+    await Game.touchEvent(ev);
+    check('地上的道具：碰到時先問，選「不要」就不撿、選「撿起來」才撿', skipped && G.state.bag['ancient-tablet'] === 1 && !World.eventAt(ev.x, ev.y));
+    UI.choose = keepChoose; UI.say = keepSay;
+    G.state = keep;
+  }
   // 對戰塔（世界配置第 6 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;

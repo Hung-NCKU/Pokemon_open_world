@@ -1302,6 +1302,15 @@ const Game = {
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: 160 };
   },
 
+  // 地圖上的事件：掉在地上的道具（古代石板、超級石、Z 純晶）先問要不要撿，其他（卡比獸、雙胞胎、團體戰）照原本的流程
+  async touchEvent(ev) {
+    if (ev.kind === 'tablet' || ev.kind === 'megastone') {
+      const c = await UI.choose(['撿起來', '不要'], { prompt: '地上有東西在發光……\n要撿起來嗎？' });
+      UI.hideDialog();
+      if (c !== 0) return;
+    }
+    return Story.eventEntity(ev);
+  },
   async interact() {
     if (G.room) return Interior.interact();
     const s = G.state;
@@ -1323,7 +1332,7 @@ const Game = {
     const lg = World.legendAt && World.legendAt(fx, fy);
     if (lg) return Story.legend(lg);
     const ev = World.eventAt && World.eventAt(fx, fy);
-    if (ev) return Story.eventEntity(ev);
+    if (ev) return Game.touchEvent(ev);
     const tr = World.trainers.get(fx + ',' + fy);
     if (tr) {
       if (s.defeated[tr.x + ',' + tr.y]) {
@@ -1388,7 +1397,7 @@ const Game = {
     const lg = World.legendAt && World.legendAt(tx, ty);
     if (lg) { Game.flow(() => Story.legend(lg)); G.keys.clear(); return; }
     const ev = World.eventAt && World.eventAt(tx, ty);
-    if (ev) { Game.flow(() => Story.eventEntity(ev)); G.keys.clear(); return; }
+    if (ev) { Game.flow(() => Game.touchEvent(ev)); G.keys.clear(); return; }
     const ow = typeof OverworldMons !== 'undefined' && OverworldMons.at(tx, ty);
     if (ow) { OverworldMons.touch(ow); return; }
     // 走向水面：停在岸邊（要衝浪時面向水面按確認）
