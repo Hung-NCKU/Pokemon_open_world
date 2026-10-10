@@ -113,14 +113,21 @@ class Battle {
         let zOn = false;
         window.__zToggle = () => { zOn = !zOn; if (zOn) { teraOn = false; megaOn = false; } const el = document.querySelector('#choice-info .z-btn'); if (el) el.classList.toggle('on', zOn); };
         const info4 = i => info3(i) + (canZ ? `<br><span class="tera-btn z-btn${zOn ? ' on' : ''}" onclick="event.stopPropagation();window.__zToggle()">E Z招式${me.moves[i] && ZMove.eligible(this, me, md(me.moves[i].id)) ? '：' + ZMOVES[ZMove.typeOf(me)].n : '（屬性不符）'}</span>` : '');
+        // 極巨化：持有極巨腕帶時按 G（四種特殊能力擇一）
+        const canDmax = this.canDmax && !me._dmax && this.canDmax(me);
+        let dOn = false;
+        window.__dToggle = () => { dOn = !dOn; if (dOn) { teraOn = false; megaOn = false; zOn = false; } const el = document.querySelector('#choice-info .d-btn'); if (el) el.classList.toggle('on', dOn); };
+        const info5 = i => (me._dmax && me.moves[i] ? `${info(i)}<br>${md(me.moves[i].id).cat === 'Status' ? (MAX_MOVES.guard || {}).n : (MAX_MOVES[md(me.moves[i].id).type] || {}).n || ''}` : info4(i))
+          + (canDmax ? `<br><span class="tera-btn d-btn${dOn ? ' on' : ''}" onclick="event.stopPropagation();window.__dToggle()">G 極巨化</span>` : '');
         const onKey = e => {
+          if (canDmax && (e.key === 'g' || e.key === 'G') && !e.repeat) { dOn = !dOn; if (dOn) { teraOn = false; megaOn = false; zOn = false; } }
           if (canTera && (e.key === 'r' || e.key === 'R') && !e.repeat) { teraOn = !teraOn; if (teraOn) { megaOn = false; zOn = false; } }
           if (canMega && (e.key === 'm' || e.key === 'M') && !e.repeat) { megaOn = !megaOn; if (megaOn) { teraOn = false; zOn = false; } }
           if (canZ && (e.key === 'e' || e.key === 'E') && !e.repeat) { zOn = !zOn; if (zOn) { teraOn = false; megaOn = false; } }
           return false;
         };
-        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info4, onKey });
-        if (i >= 0) return { type: 'move', idx: i, tera: canTera && teraOn && !megaOn && !zOn, mega: canMega && megaOn && !zOn, z: canZ && zOn };
+        const i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: info5, onKey });
+        if (i >= 0) return { type: 'move', idx: i, tera: canTera && teraOn && !megaOn && !zOn && !dOn, mega: canMega && megaOn && !zOn && !dOn, z: canZ && zOn && !dOn, dmax: canDmax && dOn };
       } else if (c === 1) {
         const r = await Game.bagMenu({ battle: this });
         if (r) return { type: 'item', ...r };

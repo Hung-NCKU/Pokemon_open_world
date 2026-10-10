@@ -100,7 +100,12 @@ const Game = {
     // 培育欄位：薄荷（0–24 的性格）、極限特訓（6 項旗標）
     if (m.mint !== undefined && !int(m.mint, 0, 24)) delete m.mint;
     if (m._megaFrom !== undefined && typeof Mega !== 'undefined') Mega.revert(m);
-    if (m.form !== undefined && (!Forms.get(m) || FORMS[m.form].mega)) delete m.form;
+    if (m._bfFrom !== undefined) { if (m._bfFrom) m.form = m._bfFrom; else delete m.form; delete m._bfFrom; }
+    delete m._dmax; delete m._raid; delete m._heroReady;
+    // 合體：夥伴的資料要正確，否則解除合體
+    if (m.fused !== undefined && (typeof m.fused !== 'object' || Game.validateMon(m.fused))) { delete m.fused; delete m.form; }
+    if (m.form !== undefined && (!Forms.get(m) || FORMS[m.form].mega || FORMS[m.form].battle || FORMS[m.form].gmax || FORMS[m.form].ultra || FORMS[m.form].primal)) delete m.form;
+    if (m.form && FORMS[m.form] && FORMS[m.form].fusion && !m.fused) delete m.form;
     if (m.marks !== undefined && !(Array.isArray(m.marks) && m.marks.every(x => MARKS.includes(x)))) delete m.marks;
     if (m.ivHT !== undefined && !(Array.isArray(m.ivHT) && m.ivHT.length === 6)) delete m.ivHT;
     else if (m.ivHT) m.ivHT = m.ivHT.map(v => (v ? 1 : 0));
@@ -172,6 +177,7 @@ const Game = {
     Game.markCaught(m.sp);
     // 第一次捕捉：和原作一樣顯示圖鑑頁
     if (first) { await UI.say(`${Mon.name(m)} 的資料已登錄到寶可夢圖鑑！`); await Game.dexEntry(m.sp); }
+    if (typeof Fusion !== 'undefined') await Fusion.onCaught();
     if (m.sp === 479 && !G.state.bag['rotom-catalog']) {
       Game.giveItem('rotom-catalog', 1);
       await UI.say('洛托姆身上掉下了一本型錄！\n獲得了洛托姆型錄！（可以在背包裡使用，改變洛托姆的形態）');
@@ -512,6 +518,20 @@ const Game = {
         Game.takeItem(id);
         G.state.repel = it.steps;
         await UI.say(`使用了${it.n}！接下來 ${it.steps} 步不會遇到野生寶可夢。`);
+        UI.hideDialog();
+        continue;
+      }
+      if (it.kind === 'shard') {
+        if (battle) { await UI.say('現在不能使用這個道具。'); continue; }
+        if ((G.state.bag[id] || 0) < 10) { await UI.say(`需要 10 個${it.n}才能改變太晶屬性。`); continue; }
+        const t = await Game.partyMenu({ pick: m => Mon.teraType(m) !== it.tera });
+        if (t >= 0) { Game.takeItem(id, 10); G.party[t].tera = it.tera; await UI.say(`${Mon.name(G.party[t])} 的太晶屬性變成了${TYPES[it.tera].n}屬性！`); }
+        UI.hideDialog();
+        continue;
+      }
+      if (typeof FUSION !== 'undefined' && FUSION.some(f => f.item === id)) {
+        if (battle) { await UI.say('現在不能使用這個道具。'); continue; }
+        await Fusion.use(id);
         UI.hideDialog();
         continue;
       }
@@ -944,7 +964,7 @@ const Game = {
     const FIELD = { water: 'raindance', fire: 'sunnyday', rock: 'sandstorm', ground: 'sandstorm', ice: 'snowscape', electric: 'electricterrain',
       grass: 'grassyterrain', psychic: 'psychicterrain', fairy: 'mistyterrain' };
     const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: rematch ? 150 : 100, sprite: LEADER_SPRITES[t.region][t.gym],
-      field: late ? FIELD[type] : null, items: late ? 3 : 2, lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
+      field: late ? FIELD[type] : null, items: late ? 3 : 2, dmax: t.region === 'galar', lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
     if (r === 'win' && rematch) { Game.save(true); return; }
     if (r === 'win') {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
@@ -1001,7 +1021,7 @@ const Game = {
     }
     await UI.say(`${reg.champ}：「歡迎來到${reg.n}寶可夢聯盟的頂點。讓我看看你和寶可夢之間的羈絆吧！」`);
     const party = World.championParty(t);
-    const r = await Game.battle({ trainer: { title: '冠軍', name: reg.champ, party, kind: 'champion', money: 200, sprite: CHAMP_SPRITES[t.region], lose: '恭喜你！你就是新的冠軍！' }, biome: 'gym' });
+    const r = await Game.battle({ trainer: { title: '冠軍', name: reg.champ, party, kind: 'champion', dmax: t.region === 'galar', money: 200, sprite: CHAMP_SPRITES[t.region], lose: '恭喜你！你就是新的冠軍！' }, biome: 'gym' });
     if (r === 'win') {
       const first = !Object.keys(G.state.champs).length;
       G.state.champs[t.region] = 1;
@@ -1023,6 +1043,7 @@ const Game = {
     // 雙打：雙方都有兩隻以上能戰鬥的寶可夢時
     const dbl = opts.double && typeof DoubleBattle !== 'undefined' && opts.trainer && opts.trainer.party.length >= 2 && G.party.filter(m => m.hp > 0).length >= 2;
     const b = dbl ? new DoubleBattle(opts) : new Battle(opts);
+    b.raid = opts.raid ? { ...opts.raid } : null;
     const r = await b.run();
     // noBlackout：劇情戰輸了也不會被送回寶可夢中心（例如第一場勁敵戰）
     if (r === 'lose' && opts.noBlackout) { Game.healParty(); await UI.say('寶可夢都恢復了精神。'); }
@@ -1281,6 +1302,7 @@ const Game = {
 
   // 事件實體：卡比獸（正面圖，睡著的 Z）、古代石板（靠近 6 格內才會閃光）
   drawEvent(g, e, x, y) {
+    if (e.kind === 'raid' && typeof drawRaidCrystal !== 'undefined') return drawRaidCrystal(g, e, x, y);
     if (e.kind === 'twins') {
       const sheet = Gen3.on ? 'npc_lass' : null;
       World.drawPerson(g, x - 10, y, 'down', { pal: Spr.trainerPal(1, 0), sheet }, 0);

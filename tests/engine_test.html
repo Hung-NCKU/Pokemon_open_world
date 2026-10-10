@@ -22,6 +22,7 @@
 <script src="../data/abilities.js"></script>
 <script src="../data/tms.js"></script>
 <script src="../data/forms.js"></script>
+<script src="../data/late.js"></script>
 <script src="../data/zmoves.js"></script>
 <script src="../data/breeding.js"></script>
 <script src="../js/util.js"></script>
@@ -47,12 +48,13 @@
 <script src="../js/summaryui.js"></script>
 <script src="../js/battle.js"></script>
 <script src="../js/engine.js"></script>
+<script src="../js/battle_view.js"></script>
+<script src="../js/move_anims.js"></script>
 <script src="../js/mega.js"></script>
 <script src="../js/zmove.js"></script>
 <script src="../js/picnic.js"></script>
 <script src="../js/doubles.js"></script>
-<script src="../js/battle_view.js"></script>
-<script src="../js/move_anims.js"></script>
+<script src="../js/late.js"></script>
 <script src="../js/game.js"></script>
 <script>
 // 不顯示任何畫面、不等待
@@ -1056,6 +1058,88 @@ async function run() {
       b.me.moves = [s];
       await b.runMove(b.me, b.foe, { mv: md(s.id), slot: s });
       check('壓迫感：對它使用的招式多扣 1 PP', s.pp === 8, String(s.pp));
+    }
+  }
+  // 後期機制：極巨化、團體戰、合體、究極爆發、戰鬥中變形
+  {
+    const slot = (sd, pp = 10) => ({ id: moveId(sd), pp });
+    check('極巨招式資料：18 屬性＋極巨防壁', Object.keys(MAX_MOVES).length >= 19 && MAX_MOVES.fire.n === '極巨火爆');
+    check('極巨招式威力表（第八世代）', Dmax.power(40, 'normal') === 90 && Dmax.power(90, 'fire') === 130 && Dmax.power(120, 'fighting') === 95 && Dmax.power(150, 'water') === 150);
+    // 極巨化：HP 2 倍、招式變成極巨招式、3 回合後恢復
+    {
+      const b = setup(6, 50, 242, 100); b.initEngine();
+      G.state.bag['dynamax-band'] = 1;
+      b.me.moves = [slot('flamethrower')]; b.foe.moves = [slot('splash')]; b.aiChoose = () => ({ idx: 0 });
+      const max0 = Mon.maxHp(b.me), hp0 = b.me.hp;
+      check('可以極巨化', b.canDmax(b.me));
+      await b.dynamax(b.me);
+      check('極巨化：HP 與最大 HP 變成 2 倍', Mon.maxHp(b.me) === max0 * 2 && b.me.hp === hp0 * 2);
+      const r = b.resolveMove(b.me, b.vMe, 0);
+      check('極巨化：噴射火焰 → 極巨火爆（威力 130）', r.mv.isMax && r.mv.n === '極巨火爆' && r.mv.bp === 130);
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('極巨火爆讓日照變強', b.field.weather === 'sunnyday');
+      check('極巨化與其他特殊能力擇一', !b.canZ(b.me) && !b.canMega(b.me));
+      await b.doTurn({ type: 'move', idx: 0 }); await b.doTurn({ type: 'move', idx: 0 });
+      check('3 回合後恢復，HP 減半', !b.me._dmax && Mon.maxHp(b.me) === max0);
+    }
+    // 戰鬥中變形
+    {
+      const b = setup(681, 50, 143, 50); b.initEngine();
+      b.me.ability = 'stance-change'; b.me.moves = [slot('shadowsneak'), slot('kingsshield')];
+      const atk0 = Mon.stats(b.me)[1];
+      await use(b, b.me, 'shadowsneak');
+      check('堅盾劍怪：攻擊時切換成刀劍形態（攻擊上升）', b.me.form === 'aegislash-blade' && Mon.stats(b.me)[1] > atk0);
+      await use(b, b.me, 'kingsshield');
+      check('堅盾劍怪：使用王者盾牌切換回盾牌形態', !b.me.form);
+      const w = setup(746, 30, 143, 50); w.initEngine(); w.me.ability = 'schooling';
+      await BattleForms.hpForms(w, w.me);
+      check('弱丁魚：Lv.20 以上、HP 1/4 以上時成為魚群', w.me.form === 'wishiwashi-school');
+      w.me.hp = 1; await BattleForms.hpForms(w, w.me);
+      check('弱丁魚：HP 低於 1/4 時魚群散開', !w.me.form);
+      const q = setup(143, 50, 778, 50); q.initEngine(); q.foe.ability = 'disguise';
+      q.me.moves = [slot('crunch')]; q.volOf(q.me).lockOn = 5;
+      const max = Mon.maxHp(q.foe);
+      await q.runMove(q.me, q.foe, { mv: md(moveId('crunch')), slot: q.me.moves[0] });
+      check('謎擬Ｑ：畫皮擋下攻擊，只受到 1/8 傷害', q.foe.form === 'mimikyu-busted' && max - q.foe.hp === Math.floor(max / 8), `${max - q.foe.hp}/${max}`);
+      await q.finish('run');
+      check('戰鬥結束後恢復原本的形態', !q.foe.form);
+    }
+    // 合體與分離
+    {
+      const keep = G.state;
+      G.state = Game.newState('T', 'kanto', 1);
+      const ky = Mon.create(646, 60), re = Mon.create(643, 60);
+      G.state.party = [ky, re];
+      const realPick = Game.partyMenu; let k = 0;
+      Game.partyMenu = async () => [0, 1][k++];
+      await Fusion.use('dna-splicers');
+      check('合體：酋雷姆＋萊希拉姆 → 焰白酋雷姆，萊希拉姆離開隊伍', ky.form === 'kyurem-white' && ky.fused === re && G.party.length === 1 && Mon.types(ky).join() === 'dragon,ice');
+      const sv = JSON.parse(JSON.stringify(G.state));
+      const ps = Game.parseSave(JSON.stringify(sv));
+      check('合體狀態可以存檔', ps.ok && ps.state.party[0].form === 'kyurem-white' && ps.state.party[0].fused.sp === 643);
+      k = 0; Game.partyMenu = async () => 0;
+      await Fusion.use('dna-splicers');
+      check('分離：萊希拉姆回到隊伍，不會複製或遺失', !ky.form && !ky.fused && G.party.length === 2 && G.party[1].sp === 643);
+      Game.partyMenu = realPick;
+      // 究極爆發
+      const nz = Mon.create(800, 70); nz.form = 'necrozma-dusk'; nz.item = 'ultranecrozium-z';
+      check('究極爆發：黃昏之鬃奈克洛茲瑪＋究極奈克洛Ｚ', Mega.formFor(nz) === 'necrozma-ultra');
+      G.state = keep;
+    }
+    // 太晶團體戰
+    {
+      const raids = [...World.events.values()].filter(e => e.kind === 'raid');
+      check('帕底亞有 6 個太晶結晶', raids.length === 6 && raids.every(e => World.regionAt(e.x, e.y) === 'paldea'), String(raids.length));
+      const boss = Mon.create(143, 40, { tera: 'fire' }); boss._raid = true;
+      check('團體戰首領 HP 5 倍', Mon.maxHp(boss) === _monStats(boss)[0] * 5);
+      const b = setup(25, 50, 143, 40); b.initEngine();
+      b.foeParty[0] = boss; boss.hp = Mon.maxHp(boss);
+      b.raid = { stars: 3, turns: 1 };
+      await Raid.endOfTurn(b);
+      check('團體戰：同伴攻擊首領、時間到就失敗', boss.hp < Mon.maxHp(boss) && b.fled);
+      const t = setup(25, 50, 143, 40);
+      G.state.bag['fire-tera-shard'] = 10;
+      check('太晶碎塊：10 個可以改變太晶屬性', ITEMS['fire-tera-shard'].tera === 'fire');
     }
   }
   // 地點專屬生態
