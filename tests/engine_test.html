@@ -1193,6 +1193,54 @@ async function run() {
     World.generate(20261010, 'kanto');
     G.state = keep;
   }
+  // 存檔：匯出 → 匯入往返、版本遷移
+  {
+    // 中後期的完整存檔：持有道具、地區形態、箱子位置與名稱、標記、薄荷、極限特訓、蛋、徽章、旗標
+    const st = Game.newState('往返', 'kanto', 4);
+    st.party = [Mon.create(6, 50), Mon.create(37, 30), Mon.create(25, 40)];
+    st.party[0].item = 'charizardite-x'; st.party[0].mint = 3; st.party[0].ivHT = [1, 0, 0, 0, 0, 1]; st.party[0].ev = [252, 0, 0, 252, 4, 0];
+    st.party[1].form = 'vulpix-alola'; st.party[2].marks = ['★']; st.party[2].hp = 7; st.party[2].st = 'par';
+    st.box = [Mon.create(1, 5), Mon.create(130, 20)];
+    st.box[0].boxPos = { b: 0, i: 3 }; st.box[1].boxPos = { b: 2, i: 29 };
+    st.boxMeta = [{ n: '草', wp: 'forest' }, { n: '箱子 2', wp: 'city' }, { n: '水', wp: 'river' }];
+    st.eggs = [{ mon: Mon.create(133, 1), steps: 1200 }];
+    st.badges = { kanto: [0, 1, 2], johto: [4] }; st.champs = { kanto: 1 };
+    st.bag = { 'poke-ball': 12, 'hyper-potion': 3, 'tera-orb': 1 }; st.money = 123456; st.flags = { rival1: 1, oak: 1 };
+    st.seen = { 4: 1, 6: 1, 37: 1 }; st.caught = { 4: 1, 6: 1 }; st.x = 100; st.y = 200; st.steps = 999; st.playMs = 3600000;
+    const first = Game.parseSave(Game.serialize(st));
+    check('完整存檔通過驗證', first.ok, first.error);
+    const again = Game.parseSave(Game.serialize(first.state));
+    check('存檔往返：匯出再匯入後資料完全相同', again.ok && Game.serialize(again.state) === Game.serialize(first.state));
+    const a = first.state;
+    check('存檔往返：保留持有道具、形態、箱子位置、標記、薄荷、異常狀態、蛋',
+      a.party[0].item === 'charizardite-x' && a.party[1].form === 'vulpix-alola' && a.box[1].boxPos.b === 2 && a.party[2].marks[0] === '★'
+      && a.party[0].mint === 3 && a.party[2].st === 'par' && a.party[2].hp === 7 && a.eggs.length === 1 && a.boxMeta[2].n === '水' && a.money === 123456);
+    // 戰鬥中存檔（超級進化中）：讀回時回到原本的形態
+    const mg = JSON.parse(Game.serialize(st));
+    if (typeof Mega !== 'undefined') Mega.apply(mg.party[0], 'charizard-mega-x');
+    const mr = Game.parseSave(JSON.stringify(mg));
+    check('超級進化中的存檔讀回時恢復原本形態', mr.ok && !mr.state.party[0].form && mr.state.party[0]._megaFrom === undefined);
+    // 版本遷移
+    const v1 = JSON.parse(Game.serialize(st)); v1.v = 1; delete v1.worldVer;
+    const m1 = Game.parseSave(JSON.stringify(v1));
+    check('第 1 版存檔遷移到目前版本，保留舊世界配置', m1.ok && m1.state.v === SAVE_VER && m1.state.worldVer === 1);
+    const v0 = JSON.parse(Game.serialize(st)); delete v0.v; delete v0.worldVer;
+    const m0 = Game.parseSave(JSON.stringify(v0));
+    check('沒有版本號的存檔視為第 1 版', m0.ok && m0.state.v === SAVE_VER && m0.state.worldVer === 1);
+    const vNew = JSON.parse(Game.serialize(st)); vNew.v = SAVE_VER + 1;
+    const mn = Game.parseSave(JSON.stringify(vNew));
+    check('較新版本的存檔不會被讀成錯誤的資料', !mn.ok && /較新的版本/.test(mn.error), mn.error);
+    check('每個舊版本都有遷移步驟', [...Array(SAVE_VER - 1).keys()].every(i => typeof Game.MIGRATE[i + 1] === 'function'));
+    // 讀回的存檔可以開始遊戲（世界依存檔的版本生成）
+    const keep = G.state;
+    const w2 = Game.parseSave(Game.serialize(st)).state;
+    World.generate(w2.seed, w2.region, w2.worldVer);
+    const order2 = World.towns.map(t => t.gym).join();
+    World.generate(m1.state.seed, m1.state.region, m1.state.worldVer);
+    check('舊存檔遷移後仍生成舊的道館配置', World.towns.map(t => t.gym).join() !== order2);
+    World.generate(20261010, 'kanto');
+    G.state = keep;
+  }
   // 寄放系統（箱子）
   {
     const keep = G.state;

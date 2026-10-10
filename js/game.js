@@ -21,7 +21,7 @@ const Game = {
   newState(name, region, starter) {
     const seed = Math.floor(Math.random() * 1e9);
     return {
-      v: 1, worldVer: WORLD_VER, seed, region, name, x: 0, y: 0, dir: 'down', surf: false,
+      v: SAVE_VER, worldVer: WORLD_VER, seed, region, name, x: 0, y: 0, dir: 'down', surf: false,
       party: [], box: [],
       bag: { 'poke-ball': 5, 'potion': 3 },
       money: 3000, badges: {}, champs: {}, seen: {}, caught: {},
@@ -34,14 +34,28 @@ const Game = {
     try {
       const prev = localStorage.getItem(SAVE_KEY);
       if (prev && Game.parseSave(prev).ok) localStorage.setItem(SAVE_KEY + '_bak', prev);
-      localStorage.setItem(SAVE_KEY, JSON.stringify(G.state));
+      localStorage.setItem(SAVE_KEY, Game.serialize(G.state));
       if (!silent) UI.banner('已儲存遊戲進度');
       return true;
     } catch (e) { console.error(e); UI.banner('存檔失敗！'); return false; }
   },
   // 驗證存檔內容；必要欄位錯誤時回傳 { ok:false, error }，選填欄位缺少時補上預設值
+  // 存檔版本遷移：MIGRATE[n] 把第 n 版的存檔升級成第 n+1 版（只補欄位，不刪除玩家資料）
+  MIGRATE: {
+    // 1 → 2：加上世界配置版本；沒有記錄的是舊世界（道館依離家由遠到近），保留原本的配置
+    1: s => { if (!Number.isInteger(s.worldVer)) s.worldVer = 1; },
+  },
+  migrateState(s) {
+    let v = Number.isInteger(s.v) && s.v >= 1 ? s.v : 1;
+    if (v > SAVE_VER) return `存檔來自較新的版本（第 ${v} 版，目前支援到第 ${SAVE_VER} 版）`;
+    for (; v < SAVE_VER; v++) Game.MIGRATE[v](s);
+    s.v = SAVE_VER;
+    return null;
+  },
   validateState(s) {
     if (!s || typeof s !== 'object' || Array.isArray(s)) return '存檔不是有效的資料';
+    const mErr = Game.migrateState(s);
+    if (mErr) return mErr;
     if (!Number.isFinite(s.seed)) return '缺少世界種子';
     if (!REGIONS[s.region]) return '出發地區不正確';
     if (!Number.isFinite(s.x) || !Number.isFinite(s.y)) return '位置資料不正確';
@@ -143,8 +157,9 @@ const Game = {
     return { state: b.ok ? b.state : null, fromBackup: b.ok, error: m.error || '找不到主存檔' };
   },
   // 匯出、匯入存檔（JSON 檔案）
+  serialize(state) { return JSON.stringify(state); },
   exportSave() {
-    const blob = new Blob([JSON.stringify(G.state)], { type: 'application/json' });
+    const blob = new Blob([Game.serialize(G.state)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `pokemon-openworld-${G.state.name}-${new Date().toISOString().slice(0, 10)}.json`;

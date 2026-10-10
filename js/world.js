@@ -5,6 +5,7 @@ const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5] };
 const WW = 960, WH = 600;
 const WORLD_VER = 2; // 世界配置的版本（見 World.generate）
+const SAVE_VER = 2;  // 存檔格式的版本（見 Game.MIGRATE）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
 
