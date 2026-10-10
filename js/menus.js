@@ -144,6 +144,11 @@ const DexUI = (() => {
       let tab = -1;
       const where = () => {
         const reg = Object.entries(REGIONS).find(([, r]) => r.gen === s.g);
+        if (!s.lg && World.habitats) {
+          const hs = World.habitats(id);
+          if (hs.length) return hs.map(h => `${REGIONS[h.region].n}地區・${U.esc(h.town.name)}附近的${BIOME_ZH[h.biome]}（${ECO_ZH[h.slot]}）`).join('<br>');
+          return '附近沒有發現牠的棲息地。可能需要進化或用其他方式取得。';
+        }
         return s.lg ? `${s.lg === 1 ? '傳說' : '幻之'}寶可夢：世界上只有一隻，就在${reg ? reg[1].n : ''}地區的某處。` : `主要棲息在${reg ? reg[1].n + '地區' : '各地'}。${s.t.includes('water') ? '在水面上常常可以遇到。' : ''}`;
       };
       const stats = () => {

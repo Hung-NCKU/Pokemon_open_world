@@ -439,29 +439,7 @@ const World = {
     this.pools = pools;
   },
 
-  rollWild(x, y, biome) {
-    const region = this.regionAt(x, y);
-    const gen = REGIONS[region].gen;
-    let L = U.clamp(this.levelAt(x, y) + U.ri(-2, 2), 2, 100);
-    const pool = this.pools[biome];
-    const night = U.isNight();
-    // 傳說與幻之寶可夢不會在野外隨機出現（每種只有一隻，站在地圖上的固定位置）
-    const local = U.chance(.75);
-    const build = (useGen, useLevel) => pool.filter(p => !p.lg && (!useGen || p.g === gen) && (!useLevel || p.wm <= L)).map(p => {
-      let w = p.w;
-      const s = POKEDEX[p.id];
-      const lvlEvo = (s.ev || []).find(e => e.lvl);
-      if (lvlEvo && L >= lvlEvo.lvl + 6) w *= .15;
-      if (night && (p.types.includes('ghost') || p.types.includes('dark'))) w *= 2.5;
-      return { id: p.id, w };
-    });
-    let cands = build(local, true);
-    if (!cands.length) cands = build(false, true);
-    if (!cands.length) cands = build(false, false);
-    // 野生寶可夢：隱藏特性 3%、有 5% 機率攜帶樹果
-    const item = Math.random() < .05 ? U.pick(['oran-berry', 'sitrus-berry', 'cheri-berry', 'pecha-berry', 'rawst-berry', 'chesto-berry']) : null;
-    return Mon.create(U.weighted(cands).id, L, { hidden: .03, item });
-  },
+  // 野生寶可夢的遭遇：見 js/ecology.js（rollWild、zoneTable）
 
   // 從指定屬性中挑選適合等級的寶可夢（訓練家、館主用）
   pickForLevel(rnd, L, { types = null, gen = null, strong = false } = {}) {

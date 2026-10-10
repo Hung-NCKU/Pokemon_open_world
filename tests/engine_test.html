@@ -30,6 +30,7 @@
 <script src="../js/sprites.js"></script>
 <script src="../js/audio.js"></script>
 <script src="../js/world.js"></script>
+<script src="../js/ecology.js"></script>
 <script src="../js/story.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/bagui.js"></script>
@@ -495,6 +496,34 @@ async function run() {
     const old = Game.newState('T', 'kanto', 4); old.party.push(Mon.create(4, 5)); delete old.legendsCaught; old.caught[150] = 1;
     Game.validateState(old);
     check('舊存檔：已捕捉的傳說不會再出現', old.legendsCaught[150] === 1 && !old.legendsCaught[4]);
+  }
+  // 地點專屬生態
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 4); G.state.party.push(Mon.create(4, 5));
+    const h = World.homeTown;
+    const zx = Math.floor(h.cx / ZONE), zy = Math.floor(h.cy / ZONE);
+    const t1 = World.zoneTable(zx, zy, 'tall');
+    World.zoneTables.clear();
+    const t2 = World.zoneTable(zx, zy, 'tall');
+    check('同一區域的遭遇表固定（由世界種子決定）', JSON.stringify(t1) === JSON.stringify(t2) && t1.length >= 7, t1.map(t => POKEDEX[t.id].n + ':' + t.slot).join(' '));
+    check('關都家鄉附近的草叢有波波、小拉達', t1.some(t => t.id === 16) && t1.some(t => t.id === 19));
+    const mm = [...World.landmarks.values()].find(l => l.id === 'mtmoon');
+    const mt = World.zoneTable(Math.floor(mm.x / ZONE), Math.floor(mm.y / ZONE), 'cave');
+    check('月見山的岩地有超音蝠、小拳石，稀有的皮皮', mt.some(t => t.id === 41) && mt.some(t => t.id === 74) && mt.some(t => t.id === 35 && t.slot === 'rare'));
+    const realNight = U.isNight;
+    U.isNight = () => false;
+    const dayOnly = new Set(), nightOnly = t1.find(t => t.slot === 'night');
+    for (let i = 0; i < 300; i++) dayOnly.add(World.baseOf(World.rollWild(h.cx, h.cy, 'tall').sp));
+    U.isNight = realNight;
+    check('白天不會遇到夜晚限定的寶可夢', !nightOnly || !dayOnly.has(nightOnly.id), nightOnly ? POKEDEX[nightOnly.id].n : '');
+    const lv = World.rollWild(h.cx, h.cy, 'tall');
+    check('遭遇的寶可夢不是傳說', !POKEDEX[lv.sp].lg);
+    check('高等級時換成進化後的形態（Lv.40 的小火龍 → 噴火龍）', World.evolveFor(4, 40) === 6 && World.evolveFor(4, 10) === 4);
+    const t0 = performance.now();
+    const hb = World.habitats(16);
+    check('圖鑑分布：列出波波的棲息地（1 秒內）', hb.length >= 1 && performance.now() - t0 < 1000, `${hb.length} 筆 ${Math.round(performance.now() - t0)}ms`);
+    G.state = keep;
   }
   // 招式學習器與製作
   {
