@@ -163,16 +163,21 @@ const Sound = (() => {
     o.start(t); o.stop(t + d + .06);
   }
   // 回傳排程函式；real = base + 音符時間，到循環終點時把 base 往後推一段
-  function midiScheduler(song, out, loop) {
+  // startAt：從曲中的某個時間點開始（短樂句結束後續播用）；pos() 回傳目前播放到曲中的位置
+  function midiScheduler(song, out, loop, startAt = 0) {
     const notes = song.notes;
     const loopS = song.loopS, loopE = song.hasLoop ? song.loopE : song.end;
-    let base = ctx.currentTime + .08, idx = 0;
-    return () => {
-      const horizon = ctx.currentTime + .3;
+    let base = ctx.currentTime + .08 - startAt;
+    let idx = Math.max(0, notes.findIndex(n => n.t >= startAt));
+    if (startAt > 0 && notes.findIndex(n => n.t >= startAt) < 0) idx = notes.length;
+    const step = () => {
+      // 預排 1 秒，避免分頁在背景或主執行緒忙碌時掉音
+      const horizon = ctx.currentTime + 1;
       while (true) {
         if (idx >= notes.length || notes[idx].t >= loopE) {
           if (!loop || loopE - loopS < .5) return false;
           base += loopE - loopS;
+          loops++;
           idx = notes.findIndex(n => n.t >= loopS);
           if (idx < 0) return false;
           continue;
@@ -186,6 +191,14 @@ const Sound = (() => {
         idx++;
       }
     };
+    let loops = 0;
+    // 目前播放到曲中的位置（預排已跨到下一輪時要扣回來）
+    step.pos = () => {
+      let p = ctx.currentTime - base;
+      if (loops > 0 && p < loopS) p += loopE - loopS;
+      return Math.max(0, p);
+    };
+    return step;
   }
 
   // ---------- 編曲輔助 ----------
@@ -301,7 +314,7 @@ const Sound = (() => {
   function play(name) {
     try { playInner(name); } catch (e) { console.warn('音樂播放失敗', name, e); }
   }
-  function playInner(name) {
+  function playInner(name, at = 0) {
     if (name === currentName) return;
     if (!ctx) { pending = name; return; }
     stopMusic();
@@ -316,8 +329,8 @@ const Sound = (() => {
     const midi = typeof Midi !== 'undefined' && Midi.get(MIDI_ALIAS[name] || name);
     if (midi) {
       const out = ctx.createGain(); out.connect(musicGain);
-      current = { out, name };
-      const step = midiScheduler(midi, out, true);
+      const step = midiScheduler(midi, out, true, at);
+      current = { out, name, step };
       step();
       timer = setInterval(() => { if (!step()) { clearInterval(timer); timer = null; } }, 60);
       return;
@@ -331,7 +344,7 @@ const Sound = (() => {
     const chs = s.ch.map(c => ({ ...c, i: 0, t: ctx.currentTime + .08 }));
     current = { out, name };
     const tick = () => {
-      const horizon = ctx.currentTime + .25;
+      const horizon = ctx.currentTime + 1;
       for (const c of chs) {
         while (c.t < horizon) {
           if (c.i >= c.notes.length) { if (!s.loop) break; c.i = 0; }
@@ -348,8 +361,11 @@ const Sound = (() => {
   function jingle(name) {
     if (!ctx) return Promise.resolve();
     if (Assets.sfx[name]) return fileSfx(name);
+    // 和原作一樣：背景音樂暫停，短樂句結束後從原本的位置續播
     const prev = currentName;
+    const prevPos = current && current.step ? current.step.pos() : 0;
     stopMusic();
+    const resume = () => { if (prev && currentName === null) { try { playInner(prev, prevPos); } catch (e) { console.warn(e); } } };
     const midi = typeof Midi !== 'undefined' && Midi.get(MIDI_ALIAS[name] || name);
     if (midi) {
       const out = ctx.createGain(); out.connect(musicGain);
@@ -357,7 +373,7 @@ const Sound = (() => {
       const iv = setInterval(() => { if (!step()) clearInterval(iv); }, 60);
       step();
       const ms = (midi.end + .3) * 1000;
-      return new Promise(r => setTimeout(() => { clearInterval(iv); out.disconnect(); if (prev) play(prev); r(); }, ms));
+      return new Promise(r => setTimeout(() => { clearInterval(iv); out.disconnect(); resume(); r(); }, ms));
     }
     const notes = parse(JINGLES[name] || JINGLES.save);
     const six = 60 / 140 / 4;
@@ -368,7 +384,7 @@ const Sound = (() => {
       t += len * six;
     }
     const ms = (t - ctx.currentTime) * 1000 + 150;
-    return new Promise(r => setTimeout(() => { if (prev) play(prev); r(); }, ms));
+    return new Promise(r => setTimeout(() => { resume(); r(); }, ms));
   }
   function fileSfx(name) {
     const a = new window.Audio(Assets.sfx[name]);

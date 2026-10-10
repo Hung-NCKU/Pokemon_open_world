@@ -206,3 +206,21 @@ body.in-battle #choices .choice.sel::before { color: #484848; font-size: 22px; l
   #touch .pad [data-dir=right] { grid-column: 3; grid-row: 2; } #touch .pad [data-dir=down] { grid-column: 2; grid-row: 3; }
   #touch .ab { display: flex; gap: 12px; align-items: flex-end; }
 }
+
+/* 綠寶石版背包（graphics/bag，240×160 × 3） */
+#bag { position: absolute; inset: 0; z-index: 45; background: url("../assets/gen3/bag_bg.png") 0 0 / 720px 480px; image-rendering: pixelated;
+  color: #404040; text-shadow: 2px 2px 0 #d8d0b0; font-size: 24px; }
+#bag .bag-name { position: absolute; left: 96px; top: 26px; width: 210px; height: 40px; line-height: 40px; text-align: center; }
+#bag .bag-dots { position: absolute; left: 128px; top: 82px; display: flex; gap: 14px; }
+#bag .bag-dots i { width: 10px; height: 10px; background: transparent; }
+#bag .bag-dots i.on { background: #f86040; box-shadow: 0 0 0 2px #f8f8f8; }
+#bag .bag-sprite { position: absolute; left: 120px; top: 84px; width: 192px; height: 192px; cursor: pointer;
+  background: url("../assets/gen3/bag_sprite.png") 0 0 / 192px 1152px no-repeat; }
+#bag .bag-icon { position: absolute; left: 12px; top: 210px; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; }
+#bag .bag-ic { width: 72px; height: 72px; background-repeat: no-repeat; image-rendering: pixelated; object-fit: contain; }
+#bag .bag-desc { position: absolute; left: 18px; top: 312px; width: 294px; height: 140px; font-size: 20px; line-height: 30px; white-space: normal; overflow: hidden; }
+#bag .bag-list { position: absolute; left: 342px; top: 30px; width: 354px; }
+#bag .bag-row { position: relative; height: 48px; line-height: 48px; padding-left: 36px; cursor: pointer; white-space: nowrap; }
+#bag .bag-row .cnt { position: absolute; right: 12px; }
+#bag .bag-row.sel::before { content: '▶'; position: absolute; left: 6px; font-size: 20px; }
+#bag .bag-money { display: none; }

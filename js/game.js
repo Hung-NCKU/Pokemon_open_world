@@ -353,12 +353,21 @@ const Game = {
   async bagMenu({ battle = null } = {}) {
     let start = 0;
     while (true) {
-      const ids = Object.keys(G.state.bag).filter(id => ITEMS[id] && G.state.bag[id] > 0);
-      const rows = ids.map(id => `<div class="grow"><b>${U.esc(ITEMS[id].n)}</b><div class="dim small">${U.esc(ITEMS[id].d)}</div></div><div>× ${G.state.bag[id]}</div>`);
-      const i = await UI.list({ title: '背包', rows, start, extra: `💰 ${G.state.money} 元` });
-      if (i < 0) return null;
-      start = i;
-      const id = ids[i], it = ITEMS[id];
+      let id;
+      if (Gen3.on && typeof BagUI !== 'undefined') {
+        // 綠寶石版背包畫面
+        id = await BagUI.pick();
+        if (!id) return null;
+      } else {
+        const ids = Object.keys(G.state.bag).filter(x => ITEMS[x] && G.state.bag[x] > 0);
+        const rows = ids.map(x => `<div class="grow"><b>${U.esc(ITEMS[x].n)}</b><div class="dim small">${U.esc(ITEMS[x].d)}</div></div><div>× ${G.state.bag[x]}</div>`);
+        const i = await UI.list({ title: '背包', rows, start, extra: `💰 ${G.state.money} 元` });
+        if (i < 0) return null;
+        start = i;
+        id = ids[i];
+      }
+      const it = ITEMS[id];
+      if (it.kind === 'key') { await UI.say(`${it.n}：${it.d}`); UI.hideDialog(); continue; }
       if (it.kind === 'ball') {
         if (!battle) { await UI.say('現在不能使用這個道具。'); UI.hideDialog(); continue; }
         return { item: id };

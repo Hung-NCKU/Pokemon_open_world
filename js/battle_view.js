@@ -273,7 +273,7 @@ Object.assign(Battle.prototype, {
     const img = this.el.querySelector(`.bmon.${side} img`);
     const c = this.center(side);
     const ball = this.ballEl('poke-ball');
-    ball.style.left = c.x - 24 + 'px'; ball.style.top = c.y + 40 + 'px';
+    ball.style.left = c.x - 24 + 'px'; ball.style.top = (side === 'foe' ? 140 : 250) + 'px';
     ball.animate([{ transform: `translate(${side === 'me' ? -200 : 120}px, -80px)` }, { transform: 'translate(0,0)' }], { duration: 300, easing: 'ease-out' });
     img.classList.add('gone');
     await U.sleep(300);
@@ -332,7 +332,8 @@ Object.assign(Battle.prototype, {
       const foe = this.el.querySelector('.bmon.foe img');
       const ball = this.ballEl(item);
       const c = this.center('foe');
-      const tx = c.x - 24, ty = c.y - 10;
+      // 球在寶可夢上方打開，收服後落到台座上（台座中心約 y=186）
+      const tx = 504, ty = 96, DROP = 48;
       ball.style.left = tx + 'px'; ball.style.top = ty + 'px';
       Sound.sfx('ball_throw');
       await anim(ball, [
@@ -347,9 +348,9 @@ Object.assign(Battle.prototype, {
       ball.classList.remove('open');
       foe.classList.add('gone');
       // 掉到地上彈跳
-      await anim(ball, [{ transform: 'translateY(0)' }, { transform: 'translateY(66px)', offset: .5 }, { transform: 'translateY(40px)', offset: .7 }, { transform: 'translateY(66px)' }],
+      await anim(ball, [{ transform: 'translateY(0)' }, { transform: `translateY(${DROP}px)`, offset: .5 }, { transform: `translateY(${DROP - 20}px)`, offset: .7 }, { transform: `translateY(${DROP}px)` }],
         { duration: 500, easing: 'ease-in', fill: 'forwards' }).finished;
-      ball.style.top = ty + 66 + 'px';
+      ball.style.top = ty + DROP + 'px';
       ball.getAnimations().forEach(a => a.cancel());
       for (let i = 0; i < shakes; i++) {
         await wait(350);
@@ -360,7 +361,7 @@ Object.assign(Battle.prototype, {
       if (caught) {
         Sound.sfx('caught');
         ball.classList.add('done');
-        for (let i = 0; i < 3; i++) this.spawn('yellow_star', tx + 24 + (i - 1) * 40, ty + 50, { dur: 500 });
+        for (let i = 0; i < 3; i++) this.spawn('yellow_star', tx + 24 + (i - 1) * 40, ty + DROP - 10, { dur: 500 });
         await wait(500);
         return ball;
       }

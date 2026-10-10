@@ -380,6 +380,48 @@ def build_midi():
     return list(out)
 
 
+# 背包畫面：背景、背包圖（各口袋）、道具圖示圖集（24×24，每列 16 個）
+def build_bag():
+    B = os.path.join(EM, "graphics/bag")
+    bg = render_tilemap(os.path.join(B, "menu.png"), os.path.join(B, "menu.bin"), os.path.join(B, "menu_male.pal"), 32)
+    bg.crop((0, 0, 240, 160)).save(os.path.join(OUT, "bag_bg.png"))
+    png_rgba(os.path.join(B, "bag_male.png"), os.path.join(B, "bag.pal")).save(os.path.join(OUT, "bag_sprite.png"))
+    I = os.path.join(EM, "graphics/items/icons")
+    P = os.path.join(EM, "graphics/items/icon_palettes")
+    def snake(s):
+        return re.sub(r"(?<!^)(?=[A-Z0-9])", "_", s).lower().replace("__", "_")
+    # 道具 → (圖檔, 調色盤)，依 src/data/item_icon_table.h（多個道具共用一張圖、換調色盤）
+    pairs = {}
+    table = os.path.join(EM, "src/data/item_icon_table.h")
+    if os.path.exists(table):
+        for item, icon, pal in re.findall(r"\[ITEM_(\w+)\]\s*=\s*\{gItemIcon_(\w+),\s*gItemIconPalette_(\w+)\}", open(table, encoding="utf-8").read()):
+            pairs[item.lower().replace("_", "-")] = (snake(icon), snake(pal))
+    for f in os.listdir(I):
+        if f.endswith(".png"):
+            pairs.setdefault(f[:-4].replace("_", "-"), (f[:-4], f[:-4]))
+    cols = 16
+    items = sorted(pairs)
+    sheet = Image.new("RGBA", (cols * 24, ((len(items) + cols - 1) // cols) * 24))
+    idx = {}
+    for name in items:
+        icon, pal = pairs[name]
+        png = os.path.join(I, icon + ".png")
+        palp = os.path.join(P, pal + ".pal")
+        if not os.path.exists(png):
+            continue
+        try:
+            ic = png_rgba(png, palp if os.path.exists(palp) else None)
+        except Exception:  # noqa: BLE001
+            continue
+        i = len(idx)
+        sheet.paste(ic.crop((0, 0, 24, 24)), ((i % cols) * 24, (i // cols) * 24))
+        idx[name] = i
+    sheet = sheet.crop((0, 0, cols * 24, ((len(idx) + cols - 1) // cols) * 24))
+    sheet.save(os.path.join(OUT, "item_icons.png"))
+    print(f"  道具圖示 {len(idx)} 個")
+    return idx
+
+
 # 寶可夢圖片在戰鬥中的位置（pokeemerald：front/back_pic_coordinates.h、enemy_mon_elevation.h），以全國圖鑑編號對應
 def build_pic_coords():
     G = os.path.join(EM, "src/data/pokemon_graphics")
@@ -422,6 +464,8 @@ def main():
     print("音樂與音效...")
     man["midi"] = build_midi()
     man["pic"] = build_pic_coords()
+    print("背包...")
+    man["itemIcons"] = build_bag()
     with open(os.path.join(OUT, "manifest.js"), "w", encoding="utf-8") as f:
         f.write("window.GEN3=" + json.dumps(man, ensure_ascii=False) + ";\n")
     print("完成 →", OUT)
