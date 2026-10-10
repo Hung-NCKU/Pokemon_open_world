@@ -52,28 +52,21 @@ const Gen3 = (() => {
   }
   // 依環境換色的圖塊（綠寶石沒有雪地、沙漠的道路，也沒有雪地的草叢）：
   //   snowpath：道路的草邊換成雪、路面帶一點積雪；desertpath：草邊換成沙；frost：草叢結霜（偏白的淡綠）
-  const MIX = (a, b, k) => a.map((v, i) => Math.round(v * (1 - k) + b[i] * k));
+  // 只用畫布合成（source-atop 疊色），不讀取像素：直接開啟 file:// 時圖片算跨來源，讀像素會出錯讓畫面停住
+  const TINT = { snowpath: 'rgba(236,240,250,.5)', desertpath: 'rgba(224,190,120,.38)', frost: 'rgba(238,244,250,.58)' };
   function recolor(src, kind) {
     if (!src) return null;
     const k = 'rc_' + kind + '_' + (src._id || (src._id = Math.random().toString(36).slice(2)));
     if (cache.has(k)) return cache.get(k);
     const [c, g] = canvas(src.width, src.height);
     g.drawImage(src, 0, 0);
-    const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
-    for (let i = 0; i < p.length; i += 4) {
-      const r = p[i], gg = p[i + 1], b = p[i + 2];
-      const green = gg > r + 10 && gg >= b - 10;
-      const lum = (r + gg + b) / 3 / 255;
-      let o = null;
-      if (kind === 'snowpath') o = green ? MIX([196, 206, 228], [240, 244, 252], lum) : MIX([r, gg, b], [232, 236, 246], .45);
-      else if (kind === 'desertpath') o = green ? MIX([200, 168, 104], [236, 208, 140], lum) : null;
-      else if (kind === 'frost') o = green ? MIX(MIX([r, gg, b], [240, 246, 250], .62), [214, 232, 226], .25) : MIX([r, gg, b], [236, 240, 250], .3);
-      if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
-    }
-    g.putImageData(d, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = TINT[kind] || 'rgba(255,255,255,0)';
+    g.fillRect(0, 0, c.width, c.height);
     cache.set(k, c);
     return c;
   }
+
   function building(kind) {
     let b = img['bld_' + kind];
     // 室內地圖建置時另外輸出的建築（小屋、告示牌）

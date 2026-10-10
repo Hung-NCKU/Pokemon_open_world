@@ -812,17 +812,23 @@ const World = {
     const S = src.width, c = document.createElement('canvas');
     c.width = c.height = S;
     const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
     g.drawImage(src, 0, 0);
     // 遮罩：離邊緣 depth 以內保留；depth 隨位置起伏（每 2 個原始像素一段，像原作的鋸齒邊）
-    const d = g.getImageData(0, 0, S, S), p = d.data, u = S / 16;
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      const along = side === 'n' || side === 's' ? x : y;
-      const dist = side === 'n' ? y : side === 's' ? S - 1 - y : side === 'w' ? x : S - 1 - x;
-      const seg = Math.floor(along / (u * 2));
-      const depth = (2 + Math.floor(hash2(seg, v, 31 + side.charCodeAt(0)) * 3)) * u;
-      if (dist >= depth) p[(y * S + x) * 4 + 3] = 0;
+    // 用 destination-in 合成遮罩，不讀取像素（file:// 開啟時讀像素會出錯）
+    const m = document.createElement('canvas');
+    m.width = m.height = S;
+    const mg = m.getContext('2d'), u = S / 16;
+    mg.fillStyle = '#000';
+    for (let seg = 0; seg < 8; seg++) {
+      const depth = (2 + Math.floor(hash2(seg, v, 31 + side.charCodeAt(0)) * 3)) * u, a = seg * u * 2, len = u * 2;
+      if (side === 'n') mg.fillRect(a, 0, len, depth);
+      if (side === 's') mg.fillRect(a, S - depth, len, depth);
+      if (side === 'w') mg.fillRect(0, a, depth, len);
+      if (side === 'e') mg.fillRect(S - depth, a, depth, len);
     }
-    g.putImageData(d, 0, 0);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(m, 0, 0);
     this._fringe.set(key, c);
     return c;
   },

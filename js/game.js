@@ -1428,8 +1428,10 @@ const Game = {
     const ox = Math.round(px - (VW * TILE) / 2 + TILE / 2), oy = Math.round(py - (VH * TILE) / 2 + TILE / 2);
     const x0 = Math.floor(ox / TILE), y0 = Math.floor(oy / TILE);
     const wf = Math.floor(G.frame / 30) % 4;
+    // 每一格各自防錯：一格出錯不會讓下面的格子與人物都畫不出來（畫面停在一半）
     for (let y = y0; y <= y0 + VH; y++) for (let x = x0; x <= x0 + VW; x++) {
-      World.drawTile(g, World.tile(x, y), x, y, x * TILE - ox, y * TILE - oy, wf);
+      try { World.drawTile(g, World.tile(x, y), x, y, x * TILE - ox, y * TILE - oy, wf); }
+      catch (e) { if (!G._tileErr) { G._tileErr = 1; Telemetry.error(`繪製地形失敗（${x},${y}）：${e && e.message}`, 'render'); } }
     }
     // 每個物件各自防錯：一個物件出錯時只略過它（並記錄位置），不會讓整個畫面只剩地形
     const safe = (what, x, y, fn) => { try { fn(); } catch (e) { Telemetry.error(`繪製${what}失敗（${x},${y}）：${e && e.message}`, 'render'); } };

@@ -34,7 +34,8 @@ const Assets = {
       src.width = img.width; src.height = img.height;
       const sg = src.getContext('2d');
       sg.drawImage(img, 0, 0);
-      const d = sg.getImageData(0, 0, src.width, src.height);
+      let d;
+      try { d = sg.getImageData(0, 0, src.width, src.height); } catch { return; } // file:// 開啟時不能讀像素
       const key = [d.data[0], d.data[1], d.data[2]];
       for (let i = 0; i < d.data.length; i += 4) {
         if (d.data[i] === key[0] && d.data[i + 1] === key[1] && d.data[i + 2] === key[2]) d.data[i + 3] = 0;
