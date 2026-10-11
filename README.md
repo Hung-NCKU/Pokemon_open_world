@@ -6,7 +6,7 @@
 
 ## 開始遊玩
 
-**線上遊玩：https://hung-ncku.github.io/Pokemon_open_world/** （電腦、手機都可以；手機建議加到主畫面全螢幕遊玩）。線上版使用內建的原創像素圖與晶片音樂，綠寶石的原版素材只在本機建置使用、不會公開。
+**線上遊玩：https://hung-ncku.github.io/Pokemon_open_world/** （電腦、手機都可以；手機建議加到主畫面全螢幕遊玩）。線上版是測試、教學用途，從 `gh-pages` 分支提供，含本機建置的綠寶石素材（`tools/deploy_pages.sh`）；`main` 分支不含原版素材，直接從 `main` 執行時使用內建的原創像素圖與晶片音樂。
 
 用瀏覽器（Chrome / Edge）直接開啟 `index.html`。寶可夢圖像從 PokéAPI 的公開圖庫線上載入，需要網路連線。
 
@@ -99,4 +99,4 @@ tests/                回歸測試與自動遊玩
 
 ## 版權聲明
 
-本專案為非營利的同人研究作品。寶可夢相關名稱、圖像與設定的版權屬於任天堂、Creatures Inc.、GAME FREAK inc. 與 The Pokémon Company。原版素材只在本機建置使用，不包含在此儲存庫中。
+本專案為非營利的同人研究作品。寶可夢相關名稱、圖像與設定的版權屬於任天堂、Creatures Inc.、GAME FREAK inc. 與 The Pokémon Company。原版素材不包含在 `main` 分支中；線上測試版（`gh-pages` 分支）含有本機建置的綠寶石素材，僅供非營利的測試與教學，如有疑慮可刪除 `gh-pages` 分支撤下。

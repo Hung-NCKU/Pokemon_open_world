@@ -140,8 +140,19 @@ Object.assign(Battle.prototype, {
   },
   async abilityMsg(m, txt) { await this.msg(`［${this.label(m)} 的${Abil.name(m.ability)}］\n${txt}`); },
   hasAbility(id) { return [this.me, this.foe].some(m => m && m.hp > 0 && m.ability === id); },
-  sideKey(m) { return m === this.me ? 'me' : 'foe'; },
-  volOf(m) { return m === this.me ? this.vMe : this.vFoe; },
+  sideKey(m) { return m === this.me ? 'me' : m === this.foe ? 'foe' : (this.foeParty && this.foeParty.includes(m) ? 'foe' : 'me'); },
+  volOf(m) {
+    if (m === this.me) return this.vMe;
+    if (m === this.foe) return this.vFoe;
+    // 不在場上的寶可夢：能力等級等暫時狀態都是初始值（每隻各自一份，不會借用場上其他寶可夢的）
+    this._benchVol = this._benchVol || new WeakMap();
+    if (m && typeof m === 'object') { if (!this._benchVol.has(m)) this._benchVol.set(m, newVol()); return this._benchVol.get(m); }
+    return newVol();
+  },
+  // 這隻寶可夢是不是本回合最後行動的（守住類招式最後行動時失敗）；雙打由 DoubleBattle 依行動佇列覆寫
+  isLastMover(m) { return !!(this.order && this.order[this.order.length - 1] === this.sideKey(m)); },
+  // 場上的寶可夢（雙打由 DoubleBattle 覆寫為四隻）
+  activeMons() { return [this.me, this.foe].filter(m => m && m.hp > 0); },
   otherOf(m) { return m === this.me ? this.foe : this.me; },
   // 太晶化：屬性只剩太晶屬性（直到戰鬥結束）
   isTera(m) { return !!(this.tera && m && (this.tera.me === m || this.tera.foe === m)); },
@@ -518,6 +529,15 @@ Object.assign(Battle.prototype, {
 
   // 回傳 true（命中）、false（失敗／未命中）、null（被打斷）
   async useMoveOn(user, target, mv, act) {
+    this._moveUsed = true; // 招式確實使出（雙打的全體招式依此決定要不要打其他目標）
+    // 濕氣：場上有濕氣時無法使用爆炸類招式（在守住、屬性免疫之前判斷，所以自爆的寶可夢不會倒下）
+    if (['selfdestruct', 'explosion', 'mindblown', 'mistyexplosion'].includes(mv.id)
+      && !['mold-breaker', 'teravolt', 'turboblaze'].includes(this.ab(user))
+      && [...new Set([...this.activeMons(), user, target])].some(m => m && m.hp > 0 && this.ab(m) === 'damp')) {
+      await this.msg('受到濕氣的影響，無法使用這個招式！');
+      this._moveUsed = false;
+      return false;
+    }
     // 預知未來、破滅之願：兩回合後才攻擊（同一邊只能有一個）
     if ((mv.id === 'futuresight' || mv.id === 'doomdesire') && !act.futureHit) {
       const side = this.sideKey(target);
@@ -573,10 +593,6 @@ Object.assign(Battle.prototype, {
       }
       if (mv.flags.powder && (this.typesOf(target).includes('grass') || this.ab(target) === 'overcoat' || this.itm(target) === 'safety-goggles')) {
         await this.msg(`對 ${tname} 好像沒有效果……`); return false;
-      }
-      // 濕氣：場上有濕氣時無法使用爆炸類招式
-      if (['selfdestruct', 'explosion', 'mindblown', 'mistyexplosion'].includes(mv.id) && [user, target].some(m => this.ab(m) === 'damp')) {
-        await this.msg('受到濕氣的影響，無法使用這個招式！'); return false;
       }
       // 特性造成的免疫（飄浮、蓄電、引火、神奇守護……）
       if (await this.abilityImmune(user, target, mv)) return false;
@@ -1434,7 +1450,7 @@ Object.assign(Battle.prototype, {
         v.sub = Math.floor(max / 4); await this.msg(`${name} 製造出了替身！`); return true;
       }
       case 'protect': case 'kingsshield': case 'spikyshield': case 'banefulbunker': case 'obstruct': case 'silktrap': case 'burningbulwark': case 'endure': {
-        const last = this.order[this.order.length - 1] === this.sideKey(target);
+        const last = this.isLastMover(target);
         if (last || U.rand() > Math.pow(1 / 3, v.protectCount)) { v.protectCount = 0; return fail(); }
         v.protectCount++;
         if (vs === 'endure') { v.endure = true; await this.msg(`${name} 擺出了挺住的架式！`); }

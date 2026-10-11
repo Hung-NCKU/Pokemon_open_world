@@ -322,7 +322,7 @@ const Game = {
       const sh = Mon.create(292, m.lv);
       G.party.push(sh);
       Game.markCaught(292);
-      await UI.say('隊伍中多了一隻 鐵面忍者 ！');
+      await UI.say('隊伍中多了一隻 脫殼忍者 ！');
     }
   },
   takeBall() { if (G.state.bag['poke-ball']) { Game.takeItem('poke-ball'); return true; } return false; },

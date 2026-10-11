@@ -29,6 +29,9 @@ class DoubleBattle extends Battle {
   }
   sideKey(m) { return this.foeParty.includes(m) ? 'foe' : 'me'; }
   sideOf(m) { return this.sideKey(m); }
+  // 守住類：佇列裡沒有其他還能行動的寶可夢時，就是最後行動
+  isLastMover() { return !this._pending || !this._pending.some(a => a.user && a.user.hp > 0); }
+  activeMons() { return [...this.actives('me'), ...this.actives('foe')]; }
   label(m) { return this.foeParty.includes(m) ? this.foeName(m) : Mon.name(m); }
   actives(side) { return (side === 'me' ? this.mySlots.map(i => G.party[i]) : this.foeSlots.map(i => this.foeParty[i])).filter(m => m && m.hp > 0); }
   allyOf(m) {
@@ -219,6 +222,7 @@ class DoubleBattle extends Battle {
         await this.switchTo(a.idx);
         this.mySlots[k] = a.idx;
         this.vols.set(this.me, this.vMe);
+        this.vols.delete(a.user); // 換下的寶可夢：能力等級等暫時狀態歸零（例如預知未來之後換下，不保留換下前的特攻等級）
         a.done = true;
       } else { const r = await this.useItem(a); if (r) return r; }
     }
@@ -236,6 +240,7 @@ class DoubleBattle extends Battle {
     }
     // 行動順序：每次行動後用當下的速度重新排序（第八世代起）
     const pending = [...moves];
+    this._pending = pending;
     let first = true;
     while (pending.length) {
       for (const a of pending) a.spe = a.user && a.user.hp > 0 ? this.speedOf(a.user, this.volOf(a.user)) * (this.field.trickRoom ? -1 : 1) : -1e9;
@@ -275,9 +280,11 @@ class DoubleBattle extends Battle {
       const others = ['allAdjacentFoes', 'allAdjacent'].includes(a.mv.target) ? [...opps.filter(o => o !== target), ...(hitsAlly ? [ally] : [])] : [];
       if (others.length) a.mv = { ...a.mv, spreadMod: .75 };
       this.firstMover = first; first = false;
+      this._moveUsed = false;
       await this.runMove(user, target, a);
-      // 大爆炸等自己倒下的招式：仍然打到其他目標
-      if (others.length && !this.volOf(user).lastMoveFailed) {
+      // 全體招式：只要招式確實使出了，每個目標分開判定（第一個目標守住、免疫或沒打中，不影響其他目標）
+      // 大爆炸等自己倒下的招式：仍然打到其他目標；濕氣讓招式沒有使出時不打
+      if (others.length && this._moveUsed) {
         for (const o of others) {
           if (o.hp <= 0) continue;
           if (o === ally) {
@@ -292,6 +299,7 @@ class DoubleBattle extends Battle {
       const r = await this.faintCheck();
       if (r) return r;
     }
+    this._pending = null;
     // 回合結束：每一對各處理一次殘留效果，場地計時只算一次
     const ms = this.actives('me'), fs = this.actives('foe');
     const done = new Set();

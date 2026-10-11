@@ -2136,6 +2136,104 @@ async function run() {
     window.fetch = realFetch; window.CLOUD_CONFIG = keepCfg;
     G.state = keep;
   }
+  // 第三輪審查 P1：雙打守住、全體招式各目標分開判定、濕氣的時機、預知未來的施術者換下
+  {
+    const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+    Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+    const slot = (sd) => ({ id: moveId(sd), pp: 10 });
+    const mkD = (mine, foes) => {
+      G.state = Game.newState('T', 'kanto', 1);
+      G.state.party = mine;
+      const b = new DoubleBattle({ trainer: { title: '雙胞胎', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+      b.setup();
+      for (const m of [...mine, ...foes]) b.volOf(m).lockOn = 5;
+      return b;
+    };
+    // 1. 雙打的守住類招式（以前讀取 this.order 會 TypeError）
+    for (const id of ['protect', 'kingsshield', 'spikyshield', 'banefulbunker', 'endure']) {
+      const a = Mon.create(681, 50), c = Mon.create(25, 50), f1 = Mon.create(68, 50), f2 = Mon.create(68, 50);
+      a.moves = [slot(id)]; c.moves = [slot('splash')]; f1.moves = [slot('karatechop')]; f2.moves = [slot('karatechop')];
+      f1.ability = f2.ability = 'guts';
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: b.actives('foe')[0] });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      const h = a.hp;
+      let err = null;
+      try { await b.doubleTurn(); } catch (e) { err = e; }
+      const ok = id === 'endure' ? a.hp > 0 : a.hp === h;
+      check(`雙打：${md(moveId(id)).n} 不會出錯並且生效`, !err && ok, err ? err.message : `${h} → ${a.hp}`);
+    }
+    {
+      const a = Mon.create(25, 50), c = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      const b = mkD([a, c], [f1, f2]);
+      b._pending = [{ user: f1 }];
+      const has = typeof b.isLastMover === 'function', notLast = has && b.isLastMover(a);
+      b._pending = [{ user: { hp: 0 } }];
+      check('雙打：守住只有在佇列裡沒有其他還能行動的寶可夢時才算最後行動', has && !notLast && b.isLastMover(a));
+      b._pending = null;
+    }
+    // 2. 全體招式：第一個目標守住或免疫，其他目標仍然受到攻擊
+    {
+      const run = async (foe1Sp, foe1Move, mvId, allySp) => {
+        const a = Mon.create(76, 50), c = Mon.create(allySp, 50), f1 = Mon.create(foe1Sp, 50), f2 = Mon.create(143, 50);
+        a.moves = [slot(mvId)]; c.moves = [slot('splash')]; f1.moves = [slot(foe1Move)]; f2.moves = [slot('splash')];
+        a.ability = 'sturdy'; f2.ability = 'thick-fat';
+        const b = mkD([a, c], [f1, f2]);
+        b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+        b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+        const h1 = f1.hp, h2 = f2.hp;
+        await b.doubleTurn();
+        return { f1: h1 - f1.hp, f2: h2 - f2.hp };
+      };
+      U.seed(71);
+      const p = await run(143, 'protect', 'rockslide', 25);
+      check('雙打：岩崩的第一個目標守住，第二個目標仍然受傷', p.f1 === 0 && p.f2 > 0, JSON.stringify(p));
+      const im = await run(18, 'splash', 'earthquake', 18);
+      check('雙打：地震的第一個目標免疫（飛行），第二個目標仍然受傷', im.f1 === 0 && im.f2 > 0, JSON.stringify(im));
+    }
+    // 3. 濕氣：在守住、屬性免疫之前判斷，使用者不會倒下；破格無視濕氣
+    {
+      const sd = async (foeSp, foeMove, meAb, foeAb) => {
+        G.state = Game.newState('T', 'kanto', 1);
+        const me = Mon.create(74, 50), foe = Mon.create(foeSp, 50);
+        me.moves = [slot('selfdestruct')]; foe.moves = [slot(foeMove)];
+        if (meAb) me.ability = meAb; if (foeAb) foe.ability = foeAb;
+        G.state.party = [me];
+        const b = new Battle({ wild: foe });
+        b.setup(); b.aiChoose = () => ({ idx: 0 }); b.vMe.lockOn = 5;
+        const fh = foe.hp;
+        await b.doTurn({ type: 'move', idx: 0 });
+        return { me: me.hp, foe: fh - foe.hp };
+      };
+      const r1 = await sd(143, 'protect', null, 'damp');
+      check('濕氣：對手守住＋濕氣時自爆被濕氣擋下，使用者不會倒下', r1.me > 0 && r1.foe === 0, JSON.stringify(r1));
+      const r2 = await sd(92, 'splash', 'damp', null);
+      check('濕氣：自己的濕氣讓自爆無法使出（對幽靈屬性也不會倒下）', r2.me > 0, JSON.stringify(r2));
+      const r3 = await sd(143, 'splash', 'mold-breaker', 'damp');
+      check('濕氣：破格無視濕氣，自爆照常使出', r3.me === 0 && r3.foe > 0, JSON.stringify(r3));
+    }
+    // 4. 預知未來：施術者換下後，用施術者自己（無能力變化）的狀態計算，不借用對手的特攻等級
+    {
+      G.state = Game.newState('T', 'kanto', 1);
+      const ala = Mon.create(65, 50), sq = Mon.create(7, 50);
+      ala.moves = [slot('futuresight')]; sq.moves = [slot('splash')];
+      G.state.party = [ala, sq];
+      const foe = Mon.create(143, 50); foe.moves = [slot('splash')];
+      const b = new Battle({ trainer: { title: 'T', name: 'T', party: [foe], kind: 'trainer', money: 1 } });
+      b.setup(); b.aiChoose = () => ({ idx: 0 });
+      await b.doTurn({ type: 'move', idx: 0 });
+      await b.doTurn({ type: 'switch', idx: 1 });
+      b.vFoe.stg.spa = 6; b.vMe.stg.spa = -6;
+      let seen = null;
+      const real = b.calcDamage.bind(b);
+      b.calcDamage = (u, t, vU, vT, ...r) => { if (u === ala) seen = vU; return real(u, t, vU, vT, ...r); };
+      const fh = foe.hp;
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('預知未來：施術者換下後仍然命中', foe.hp < fh && !b.futures.length);
+      check('預知未來：換下的施術者用自己的空白狀態（不借用對手或替補的特攻等級）', seen && seen !== b.vFoe && seen !== b.vMe && seen.stg.spa === 0 && b.sideKey(ala) === 'me');
+    }
+    [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
+  }
   // 對戰塔（世界配置第 6 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;
