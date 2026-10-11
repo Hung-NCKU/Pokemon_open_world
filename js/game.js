@@ -1541,6 +1541,8 @@ const Game = {
     const loaded = Game.loadSave();
     const scr = document.getElementById('title');
     scr.classList.remove('hidden');
+    const ld = document.getElementById('loading');
+    if (ld) ld.remove();
     // 標題畫面顯示目前的帳號
     let acc = scr.querySelector('.account');
     if (!acc) { acc = document.createElement('div'); acc.className = 'account'; scr.appendChild(acc); }

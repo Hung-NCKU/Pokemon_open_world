@@ -19,6 +19,8 @@ git archive HEAD | tar -x -C "$OUT"
 mkdir -p "$OUT/assets"
 cp -r assets/gen3 "$OUT/assets/"
 touch "$OUT/.nojekyll"
+# Service Worker 的版本＝提交編號（版本改變時，玩家的裝置會清掉舊的快取）
+sed -i "s/const VERSION = 'dev';/const VERSION = '$REV';/" "$OUT/sw.js"
 
 cd "$OUT"
 git init -q

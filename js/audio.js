@@ -570,5 +570,7 @@ const Sound = (() => {
     try { if (f) f(ctx.currentTime + .01); } catch (e) { console.warn('音效播放失敗', name, e); }
   }
 
-  return { init, play, stop: stopMusic, sfx, jingle, applyVolume, get current() { return currentName; } };
+  // 音樂資料晚一點才載入完成時：用新的資料重新播放目前的曲子（原本可能退回內建的晶片音樂）
+  function reload() { const n = currentName; if (n) { stopMusic(); play(n); } }
+  return { init, play, reload, stop: stopMusic, sfx, jingle, applyVolume, get current() { return currentName; } };
 })();

@@ -52,6 +52,7 @@
         <text x="480" y="405" text-anchor="middle" class="lg-sub" textLength="620" lengthAdjust="spacing">OPEN-WORLD GAME</text>
       </svg>
       <div class="sub">九大地區・全 1025 種寶可夢</div>
+      <div id="loading"><i></i>讀取中……第一次開啟需要下載遊戲資料，之後會快很多</div>
       <div class="note">非營利同人研究作品。寶可夢相關名稱與圖像版權屬於任天堂／Creatures／GAME FREAK／The Pokémon Company。</div>
     </div>
     <div id="banner"></div>
@@ -85,8 +86,6 @@
 <script src="js/forms.js"></script>
 <script src="js/tm.js"></script>
 <script src="assets/gen3/manifest.js"></script>
-<script src="assets/gen3/midi.js"></script>
-<script src="assets/gen3/se_bank.js"></script>
 <script src="js/gen3.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/audio.js"></script>
@@ -128,5 +127,15 @@
 <script src="js/gist_cloud.js"></script>
 <script src="js/account.js"></script>
 <script src="js/game.js"></script>
+<script>
+// 音樂與音效的資料（約 400 KB）不影響開始畫面，等頁面載入完成後才下載；瀏覽器本來也要等玩家第一次點擊才能播放聲音
+window.addEventListener('load', () => {
+  const add = (src, done) => { const s = document.createElement('script'); s.src = src; s.onload = done || null; document.body.appendChild(s); };
+  add('assets/gen3/midi.js', () => { if (window.Sound && Sound.reload) Sound.reload(); });
+  add('assets/gen3/se_bank.js');
+  // 線上版：用 Service Worker 把檔案存在裝置上，之後開啟幾乎不用等待
+  if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+});
+</script>
 </body>
 </html>
