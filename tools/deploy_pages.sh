@@ -21,6 +21,9 @@ cp -r assets/gen3 "$OUT/assets/"
 touch "$OUT/.nojekyll"
 # Service Worker 的版本＝提交編號（版本改變時，玩家的裝置會清掉舊的快取）
 sed -i "s/const VERSION = 'dev';/const VERSION = '$REV';/" "$OUT/sw.js"
+# 合併腳本成 app.js、圖鑑說明改成載入後才下載（只改發布的複本，原始碼不變）
+PY=${PYTHON:-python}
+"$PY" tools/build_web.py "$OUT" "$REV"
 
 cd "$OUT"
 git init -q

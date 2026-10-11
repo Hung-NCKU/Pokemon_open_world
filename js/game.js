@@ -658,7 +658,7 @@ const Game = {
     await UI.panel(`<div class="summary"><div class="left"><img class="big" src="${Mon.sprite(id)}"><div class="nm">No.${U.pad3(id)} ${U.esc(s.n)}</div>
       <div class="dim">${U.esc(s.gen)}</div><div>${s.t.map(typeTag).join('')}</div>${s.lg ? `<div class="legend">${s.lg === 1 ? '傳說的寶可夢' : '幻之寶可夢'}</div>` : ''}
       <div class="dim small">特性：${(s.ab || []).map(([a, h]) => U.esc(Abil.name(a)) + (h ? '（隱藏）' : '')).join('／')}</div></div>
-      <div class="right"><p>${G.state.caught[id] ? U.esc(s.fl) : '捕捉後可以查看更多資料。'}</p>
+      <div class="right"><p>${G.state.caught[id] ? U.esc(s.fl || "") : '捕捉後可以查看更多資料。'}</p>
       <table class="stats">${s.s.map((v, k) => `<tr><td>${STAT_ZH[k]}</td><td>${v}</td><td><div class="sbar"><div style="width:${Math.min(100, v / 1.6)}%"></div></div></td></tr>`).join('')}<tr><td>總和</td><td>${Mon.bst(id)}</td></tr></table>
       <p class="dim">捕捉率 ${s.cr}　打倒後的努力值：${ey || '無'}${evo ? '<br>' + evo : ''}</p></div></div>`);
   },
@@ -794,13 +794,13 @@ const Game = {
       // 地區名稱與等級帶
       const [lo, hi] = World.regionBand(k);
       for (const [txt, dy, size] of [[REGIONS[k].n, -18, 20], [`Lv.${lo}–${hi}`, 0, 16]]) {
-        g.font = `bold ${size}px "Cubic11", "Microsoft JhengHei"`;
+        g.font = `bold ${size}px "Cubic11", "Cubic11Full", "Microsoft JhengHei"`;
         g.fillStyle = 'rgba(0,0,0,.6)'; g.fillText(txt, x + 1, y - r + dy + 1);
         g.fillStyle = dy ? '#fff' : '#ffe080'; g.fillText(txt, x, y - r + dy);
       }
     }
     // 地標（去過的顯示名稱）
-    g.font = 'bold 14px "Cubic11", "Microsoft JhengHei"';
+    g.font = 'bold 14px "Cubic11", "Cubic11Full", "Microsoft JhengHei"';
     for (const lm of (World.landmarks || new Map()).values()) {
       const seen = G.state.flags['lm_' + lm.id] || G.state.flags['seen_' + lm.id];
       g.fillStyle = seen ? '#ffd040' : '#c08040';
@@ -1531,12 +1531,13 @@ const Game = {
   async title() {
     G.mode = 'title';
     Sound.play('title');   // 音訊在第一次按鍵或點擊後才能開始（瀏覽器限制），之後自動播放
-    // 雲端帳號：先下載雲端的存檔（比本機新才覆蓋）
+    // 雲端帳號：下載雲端的存檔（比本機新才覆蓋）。在背景進行，標題選單不用等網路；
+    // 玩家選了選項之後才等同步完成（通常早就完成了）。這台裝置還沒有存檔時（換新裝置）才先等，選單才會有「繼續遊戲」
+    let syncP = null;
+    const afterSync = r => { if (r === 'downloaded') UI.banner('已從雲端下載最新的存檔'); return r; };
     if (typeof Account !== 'undefined' && Account.online()) {
-      UI.showText('正在同步存檔……');
-      const r = await Account.sync();
-      UI.hideDialog();
-      if (r === 'downloaded') UI.banner('已從雲端下載最新的存檔');
+      syncP = Account.sync().then(afterSync);
+      if (!Game.loadSave()) { UI.showText('正在同步存檔……'); await syncP; syncP = null; UI.hideDialog(); }
     }
     const loaded = Game.loadSave();
     const scr = document.getElementById('title');
@@ -1561,6 +1562,14 @@ const Game = {
     while (true) {
       const opts = save ? ['繼續遊戲', '新遊戲', '匯入存檔', '帳號'] : ['新遊戲', '匯入存檔', '帳號'];
       const c = await UI.choose(opts, { cancel: false, cls: 'title-menu' });
+      // 背景的雲端同步還沒完成：等它完成；下載了比較新的存檔就改用它
+      if (syncP) {
+        const p = syncP; syncP = null;
+        UI.showText('正在同步存檔……');
+        const r = await p;
+        UI.hideDialog();
+        if (r === 'downloaded') { const l = Game.loadSave(); if (l && l.state) save = l.state; }
+      }
       if (opts[c] === '繼續遊戲') { scr.classList.add('hidden'); return Game.start(save); }
       // 帳號：登入、註冊、登出之後重新讀取該帳號的存檔
       if (opts[c] === '帳號') { await Account.menu(); return Game.title(); }
@@ -1613,7 +1622,7 @@ const Game = {
       } else {
         const i = await UI.list({
           title: `${reg.prof}：「選一隻作為你的夥伴吧！」`,
-          rows: reg.starters.map(id => `<img class="big-icon" src="${Mon.sprite(id)}"><div class="grow"><b>${POKEDEX[id].n}</b> ${POKEDEX[id].t.map(typeTag).join('')}<div class="dim small">${U.esc(POKEDEX[id].gen)}　${U.esc(POKEDEX[id].fl)}</div></div>`),
+          rows: reg.starters.map(id => `<img class="big-icon" src="${Mon.sprite(id)}"><div class="grow"><b>${POKEDEX[id].n}</b> ${POKEDEX[id].t.map(typeTag).join('')}<div class="dim small">${U.esc(POKEDEX[id].gen)}　${U.esc(POKEDEX[id].fl || "")}</div></div>`),
         });
         if (i < 0) { UI.hideDialog(); step = 2; continue; }
         const ok = await UI.choose(['是', '否'], { prompt: `確定要選擇 ${POKEDEX[reg.starters[i]].n} 嗎？` });

@@ -1,6 +1,9 @@
-@font-face { font-family: "Cubic11"; src: url("../fonts/Cubic_11.woff2") format("woff2"); font-display: swap; } /* 字型下載完成前先用系統字型 */
+/* 字型：先用只含遊戲文字的子集（約 100 KB，tools/subset_font.py 產生）；子集裡沒有的字（例如玩家取的名字）才下載完整的字型（約 400 KB）
+   下載完成前先用系統字型（font-display: swap） */
+@font-face { font-family: "Cubic11"; src: url("../fonts/Cubic_11_game.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Cubic11Full"; src: url("../fonts/Cubic_11.woff2") format("woff2"); font-display: swap; }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #10131c; overflow: hidden; font-family: "Cubic11", "Microsoft JhengHei", "PingFang TC", sans-serif; color: #222; }
+html, body { margin: 0; height: 100%; background: #10131c; overflow: hidden; font-family: "Cubic11", "Cubic11Full", "Microsoft JhengHei", "PingFang TC", sans-serif; color: #222; }
 #wrap { position: absolute; left: 0; top: 0; width: 720px; height: 480px; transform-origin: 0 0; }
 #game { position: relative; width: 720px; height: 480px; overflow: hidden; background: #000; user-select: none; border-radius: 6px; }
 canvas { display: block; image-rendering: pixelated; }

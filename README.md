@@ -61,6 +61,7 @@ python tools/build_assets.py
 - `tests/engine_test.html`：引擎與系統的回歸測試（對戰機制、存檔、世界生成、城鎮、室內、洞窟解謎、AI、遊玩節奏……）。用瀏覽器開啟即可。
 - `tests/smoke.html`：冒煙測試，幾秒內用遊戲本身的流程走過新遊戲、進出室內、單打、雙打、存檔與讀檔、雲端同步失敗（模擬），每次修改後都可以跑（會備份並還原本機存檔）。
 - `tests/playthrough.html`：自動遊玩機器人從新遊戲打到關都冠軍，記錄每段的練等場數與失敗次數；`?seed=數字` 可以固定世界重現。
+- `tools/subset_font.py`：改了遊戲文字之後重新產生字型子集（`fonts/Cubic_11_game.woff2`）。
 - `tools/check_caves.py`：確認每個推石頭的洞窟都解得開。
 
 ## 資料與參考

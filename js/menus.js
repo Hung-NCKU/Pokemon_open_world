@@ -167,7 +167,7 @@ const DexUI = (() => {
       };
       const evo = () => (s.ev || []).map(e => `→ ${G.state.seen[e.to] ? POKEDEX[e.to].n : '？？？'}：${(e.c || [e]).map(c => Mon.evoText(c)).join(' 或 ')}`).join('<br>');
       const draw = () => {
-        const body = tab === 2 ? stats() : `<p>${caught ? U.esc(s.fl) : '捕捉後可以查看更多資料。'}</p>${caught && evo() ? `<div class="dx-small">${evo()}</div>` : ''}`;
+        const body = tab === 2 ? stats() : `<p>${caught ? U.esc(s.fl || "") : '捕捉後可以查看更多資料。'}</p>${caught && evo() ? `<div class="dx-small">${evo()}</div>` : ''}`;
         root.innerHTML = `<div class="dx-tabs">${tabs.map((t, i) => `<span class="${i === tab ? 'on' : ''}" data-t="${i}">${t}</span>`).join('')}</div>
           <div class="dx-sprite"><img src="${Mon.sprite(id)}"></div>
           <div class="dx-no">No.${String(id).padStart(3, '0')}</div><div class="dx-name">${U.esc(s.n)}</div>

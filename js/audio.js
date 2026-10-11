@@ -1,5 +1,7 @@
 // 音樂與音效：GBA 音源風格的晶片音樂引擎（原創曲）
 // 若 assets/bgm、assets/sfx 內有同名音檔（自備官方素材），會優先播放音檔。
+// 自備音檔要先登記：在 index.html 加上 <script>window.CUSTOM_AUDIO = { bgm: ['title', ...], sfx: ['select', ...] };</script>
+// （沒有登記就不去找，避免每次開啟都對不存在的檔案發出上百個請求，拖慢第一次載入）
 
 // ---------- 自備素材載入 ----------
 const Assets = {
@@ -21,8 +23,11 @@ const Assets = {
       };
       tryNext();
     };
-    this.BGM_NAMES.forEach(n => probe('bgm', n, this.bgm));
-    this.SFX_NAMES.forEach(n => probe('sfx', n, this.sfx));
+    const custom = window.CUSTOM_AUDIO || {};
+    (custom.bgm || []).filter(n => this.BGM_NAMES.includes(n)).forEach(n => probe('bgm', n, this.bgm));
+    (custom.sfx || []).filter(n => this.SFX_NAMES.includes(n)).forEach(n => probe('sfx', n, this.sfx));
+    // 有綠寶石素材時用素材裡的主角圖，不用另外找 assets/player.png
+    if (window.GEN3) return;
     // 主角走路圖（pokeemerald graphics/object_events/pics/people/brendan/walking.png 的排列：
     // 16×32 九格：下站、上站、左站、下走1、下走2、上走1、上走2、左走1、左走2）
     const img = new Image();
