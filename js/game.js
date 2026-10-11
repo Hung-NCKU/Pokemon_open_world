@@ -1166,7 +1166,7 @@ const Game = {
     return r;
   },
 
-  // 鯉魚王訓練場的野生寶可夢：和隊伍平均等級相同的鯉魚王
+  // 初始城鎮寶可夢中心上方的鯉魚王：和隊伍平均等級相同
   trainingWild() {
     const lv = U.clamp(Math.round(G.party.reduce((a, m) => a + m.lv, 0) / Math.max(1, G.party.length)), 1, 100);
     return Mon.create(129, lv);
@@ -1238,10 +1238,6 @@ const Game = {
         UI.banner(`${REGIONS[World.regionAt(s.x, s.y)].n}地區・野外（約 Lv.${World.levelAt(s.x, s.y)}）`);
       }
     }
-    // 走進鯉魚王訓練場
-    const tg = World.trainingAt(s.x, s.y);
-    if (tg && !G.inTraining) UI.banner(`鯉魚王訓練場：只會遇到和隊伍平均等級相同（Lv.${Game.trainingWild().lv}）的鯉魚王`);
-    G.inTraining = !!tg;
     // 訓練家視線
     for (const tr of Game.nearbyTrainers(6)) {
       if (s.defeated[tr.x + ',' + tr.y]) continue;
@@ -1256,20 +1252,19 @@ const Game = {
     // 野生寶可夢
     const t = World.tile(s.x, s.y);
     let biome = null, rate = 0;
-    if (World.trainingAt(s.x, s.y)) { biome = 'training'; rate = .1; }
-    else if (t === T.TALL) { biome = 'tall'; rate = .1; }
+    if (t === T.TALL) { biome = 'tall'; rate = .1; }
     else if (t === T.SNOWTALL) { biome = 'snow'; rate = .1; }
     else if ((t === T.WATER || t === T.DEEP) && s.surf) { biome = 'water'; rate = .045; }
     else if (t === T.CAVE) { biome = 'cave'; rate = .07; }
     else if (t === T.DESERT) { biome = 'desert'; rate = .05; }
     if (typeof OverworldMons !== 'undefined' && OverworldMons.list.length) rate /= 2; // 看得到的寶可夢在附近時，隨機遇敵減半
     if (biome && !s.repel && Math.random() < rate) {
-      const wild = biome === 'training' ? Game.trainingWild() : World.rollWild(s.x, s.y, biome);
+      const wild = World.rollWild(s.x, s.y, biome);
       Sound.sfx('encounter');
       G.flash = 1;
       await U.sleep(450);
       G.flash = 0;
-      await Game.battle({ wild, biome: biome === 'training' ? 'tall' : biome });
+      await Game.battle({ wild, biome });
     }
   },
 
@@ -1531,6 +1526,7 @@ const Game = {
       World.drawPerson(g, x + 10, y, 'down', { pal: Spr.trainerPal(1, 1), sheet }, 0);
       return;
     }
+    if (e.kind === 'magikarp') { Game.drawLegend(g, { sp: 129 }, x, y); return; }
     if (e.kind === 'snorlax') {
       Game.drawLegend(g, { sp: 143 }, x, y);
       g.fillStyle = '#f8f8f8'; g.font = 'bold 18px sans-serif';

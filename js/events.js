@@ -232,3 +232,44 @@ Story.questSummary = function (s) {
   const side = Story.sideQuests(s);
   return _questSummary.call(this, s) + (side.length ? '\n' + side.map(x => '・' + x).join('\n') : '');
 };
+
+// 鯉魚王：每個地區初始城鎮的寶可夢中心正上方站著一隻，和牠說話就能對戰（等級是隊伍的平均等級），打幾次都可以
+// 只放事件實體，不改變地形；舊存檔的世界也有
+const _evGenerateK = World.generate;
+World.generate = function (...a) {
+  const r = _evGenerateK.apply(this, a);
+  this.placeMagikarps();
+  return r;
+};
+World.placeMagikarps = function () {
+  this.events = this.events || new Map();
+  for (const town of this.towns.filter(t => t.kind === 'home')) {
+    const c = this.buildings.find(b => b.town === town && b.kind === 'center');
+    if (!c) continue;
+    // 寶可夢中心上緣的正中間；被占用或走不到時往兩旁找
+    const mid = c.x + Math.floor(c.w / 2), y = c.y - 1;
+    const cols = [mid, mid - 1, mid + 1, mid - 2, mid + 2].filter(x => x >= c.x && x < c.x + c.w);
+    const ok = x => { const k = x + ',' + y; return this.passable(x, y) && this.tile(x, y) !== T.PATH && !this.events.has(k) && !this.trainers.has(k) && !this.doors.has(k)
+      && !(this.legends && this.legends.has(k)) && !(this.landmarks && this.landmarks.has(k)); };
+    const x = cols.find(x => ok(x) && this.detourExists(x, y)) ?? cols.find(ok);
+    if (x === undefined) continue;
+    this.events.set(x + ',' + y, { kind: 'magikarp', id: 'magikarp_' + town.region, x, y, sp: 129, region: town.region });
+  }
+};
+const _eventAtK = World.eventAt;
+World.eventAt = function (x, y) {
+  const e = this.events && this.events.get(x + ',' + y);
+  if (e && e.kind === 'magikarp') return e; // 不會因為打過就消失
+  return _eventAtK.call(this, x, y);
+};
+const _eventEntityK = Story.eventEntity;
+Story.eventEntity = async function (e) {
+  if (e.kind !== 'magikarp') return _eventEntityK.call(this, e);
+  if (!G.party.some(m => m.hp > 0)) { await UI.say('鯉魚王：「鯉魚～」\n（先讓寶可夢恢復精神再來吧！）'); return; }
+  const wild = Game.trainingWild();
+  const c = await UI.choose(['對戰', '不要'], { prompt: `鯉魚王：「鯉魚～鯉魚～」\n牠好像想和你比試一下！（Lv.${wild.lv}，隊伍的平均等級）` });
+  UI.hideDialog();
+  if (c !== 0) return;
+  Sound.sfx('encounter');
+  await Game.battle({ wild, biome: 'water' });
+};

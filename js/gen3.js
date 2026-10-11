@@ -66,7 +66,7 @@ const Gen3 = (() => {
   // 依環境換色的圖塊（綠寶石沒有雪地、沙漠的道路，也沒有雪地的草叢）：
   //   snowpath：道路的草邊換成雪、路面帶一點積雪；desertpath：草邊換成沙；frost：草叢結霜（偏白的淡綠）
   // 只用畫布合成（source-atop 疊色），不讀取像素：直接開啟 file:// 時圖片算跨來源，讀像素會出錯讓畫面停住
-  const TINT = { snowpath: 'rgba(236,240,250,.5)', desertpath: 'rgba(224,190,120,.38)', frost: 'rgba(238,244,250,.58)', training: 'rgba(248,200,72,.38)' };
+  const TINT = { snowpath: 'rgba(236,240,250,.5)', desertpath: 'rgba(224,190,120,.38)', frost: 'rgba(238,244,250,.58)' };
   function recolor(src, kind) {
     if (!src) return null;
     const k = 'rc_' + kind + '_' + (src._id || (src._id = Math.random().toString(36).slice(2)));

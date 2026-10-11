@@ -65,7 +65,7 @@ const OverworldMons = (() => {
       const x = s.x + U.ri(-NEAR, NEAR), y = s.y + U.ri(-7, 7);
       if (Math.abs(x - s.x) + Math.abs(y - s.y) < 4) continue;
       const t = World.tile(x, y);
-      if (!SPAWN_TILES.has(t) || !canStand(null, x, y) || World.trainingAt(x, y)) continue;
+      if (!SPAWN_TILES.has(t) || !canStand(null, x, y)) continue;
       const biome = t === T.TALL ? 'tall' : 'snow';
       let mon = World.rollWild(x, y, biome);
       // 夜行性的只在晚上出現（白天重抽一次）

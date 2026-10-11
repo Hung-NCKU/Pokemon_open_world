@@ -101,73 +101,7 @@ const World = {
     this.placeLegends(rng);
     this.alignTrees();
     if (this.worldVer >= 4) this.placeRouteTrainers();
-    this.placeTrainingGrounds();
     this.buildPools();
-  },
-
-  // 鯉魚王訓練場：每個地區的初始城鎮裡、寶可夢中心旁邊的一塊草叢，只會遇到和隊伍平均等級相同的鯉魚王
-  // 不改變地形（只把一塊草地「當成」訓練場來畫與遇敵），所以所有世界版本、舊存檔都有，也不會擋住路
-  placeTrainingGrounds() {
-    this.training = [];
-    this.trainingSet = new Set();
-    const rng = mulberry32((this.seed ^ 0x3a9c1) >>> 0);
-    // 可以走的地面（不含道路、城鎮）：訓練場只是疊在上面畫，底下必須本來就走得過去
-    const okTile = t => t === T.GRASS || t === T.FLOWER || t === T.TALL || t === T.SNOW || t === T.SNOWTALL || t === T.SAND || t === T.DESERT;
-    const taken = k => this.trainers.has(k) || (this.landmarks && this.landmarks.has(k)) || (this.legends && this.legends.has(k));
-    const fits = (x0, y0, W, H, region) => {
-      if (!this.inside(x0, y0) || !this.inside(x0 + W - 1, y0 + H - 1)) return false;
-      for (let y = y0; y < y0 + H; y++) for (let x = x0; x < x0 + W; x++) {
-        if (!okTile(this.tile(x, y)) || this.regionAt(x, y) !== region || this.townAt(x, y) || taken(x + ',' + y)) return false;
-      }
-      return true;
-    };
-    // 城鎮裡、寶可夢中心旁邊：只用城鎮的空地（不蓋到建築、道路、告示牌），避開門口前兩格，離寶可夢中心越近越好
-    // 城鎮裡放不下（例如手工配置的真新鎮）：可以延伸到城鎮外圍四格內的樹與草地，範圍裡的樹改成草地
-    // （只把樹變成可以走的地面，不會把可以走的地方變成障礙物，舊存檔的主角不會被卡住）
-    const RING = new Set([T.TREE, T.GRASS, T.FLOWER, T.TALL, T.SNOW, T.SNOWTALL, T.SAND, T.DESERT]);
-    const inTown = (town, center) => {
-      const doorFront = new Set();
-      for (const bd of this.buildings) if (bd.town === town) for (let dy = 1; dy <= 2; dy++) for (let dx = -1; dx <= 1; dx++) doorFront.add((bd.door.x + dx) + ',' + (bd.door.y + dy));
-      const inRing = (x, y) => x >= town.x - 4 && y >= town.y - 4 && x < town.x + TOWN_W + 4 && y < town.y + TOWN_H + 4 && !this.townAt(x, y);
-      const free = (x, y, ring) => !doorFront.has(x + ',' + y) && !taken(x + ',' + y) && this.inside(x, y)
-        && ((this.tile(x, y) === T.TOWN && this.townAt(x, y) === town) || (ring && inRing(x, y) && RING.has(this.tile(x, y))));
-      const gap = (x0, y0, W, H) => Math.max(0, center.x - (x0 + W), x0 - (center.x + center.w), center.y - (y0 + H), y0 - (center.y + center.h));
-      for (const ring of [false, true]) for (const [W, H] of [[7, 5], [6, 4], [5, 4], [4, 4], [4, 3], [3, 3]]) {
-        let best = null, bestGap = 3; // 和寶可夢中心相隔 2 格以內才算「旁邊」
-        for (let y0 = town.y - 4; y0 <= town.y + TOWN_H + 4 - H; y0++) for (let x0 = town.x - 4; x0 <= town.x + TOWN_W + 4 - W; x0++) {
-          const g = gap(x0, y0, W, H);
-          if (g >= bestGap) continue;
-          let ok = true;
-          for (let y = y0; ok && y < y0 + H; y++) for (let x = x0; x < x0 + W; x++) if (!free(x, y, ring)) { ok = false; break; }
-          if (ok) { best = { x: x0, y: y0, w: W, h: H, region: town.region, town: town.name, nearCenter: true }; bestGap = g; }
-        }
-        if (best) {
-          for (let y = best.y; y < best.y + H; y++) for (let x = best.x; x < best.x + W; x++) if (this.tile(x, y) === T.TREE) this.set(x, y, T.GRASS);
-          return best;
-        }
-      }
-      return null;
-    };
-    for (const town of this.towns.filter(t => t.kind === 'home')) {
-      const center = this.buildings.find(bd => bd.town === town && bd.kind === 'center');
-      let best = center ? inTown(town, center) : null;
-      // 寶可夢中心旁邊放不下時：城鎮外面的空地（先找 7×5，找不到再找 5×4；由近到遠）
-      for (const [W, H] of best ? [] : [[7, 5], [5, 4]]) {
-        for (let tries = 0; tries < 3000 && !best; tries++) {
-          const ang = rng() * Math.PI * 2, r = 7 + (tries / 3000) * 20;
-          const x0 = Math.round(town.cx + Math.cos(ang) * r - W / 2), y0 = Math.round(town.cy + Math.sin(ang) * r - H / 2);
-          if (fits(x0, y0, W, H, town.region)) best = { x: x0, y: y0, w: W, h: H, region: town.region, town: town.name };
-        }
-        if (best) break;
-      }
-      if (!best) continue;
-      this.training.push(best);
-      for (let y = best.y; y < best.y + best.h; y++) for (let x = best.x; x < best.x + best.w; x++) this.trainingSet.add(x + ',' + y);
-    }
-  },
-  trainingAt(x, y) {
-    if (!this.trainingSet || !this.trainingSet.has(x + ',' + y)) return null;
-    return this.training.find(a => x >= a.x && x < a.x + a.w && y >= a.y && y < a.y + a.h) || null;
   },
 
   // 道路旁的訓練家（第 4 版）：每個地區約每 8 格道路 1 位，彼此相隔 7 格以上，站在路邊面向道路
@@ -957,15 +891,6 @@ const World = {
       g.beginPath(); g.ellipse(px + 8 * s, py + 9 * s, 6 * s, 6 * s, 0, Math.PI, 0); g.rect(px + 2 * s, py + 9 * s, 12 * s, 7 * s); g.fill();
       g.fillStyle = '#100808';
       g.beginPath(); g.ellipse(px + 8 * s, py + 10 * s, 4.5 * s, 4.5 * s, 0, Math.PI, 0); g.rect(px + 3.5 * s, py + 10 * s, 9 * s, 6 * s); g.fill();
-      return;
-    }
-    // 鯉魚王訓練場：帶金色的草叢（和一般草叢分得出來）
-    if (this.trainingSet && this.trainingSet.has(x + ',' + y)) {
-      const im = Gen3.on && Gen3.recolor(Gen3.single('tall'), 'training');
-      if (im) { g.drawImage(im, px, py); return; }
-      const arr = this.tileCache[T.TALL];
-      g.drawImage(arr[Math.floor(hash2(x, y, 7) * arr.length)], px, py);
-      g.fillStyle = 'rgba(248,200,72,.32)'; g.fillRect(px, py, TILE, TILE);
       return;
     }
     if (Gen3.on) {
