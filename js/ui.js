@@ -158,7 +158,7 @@ define(UI, (() => {
     return new Promise(res => {
       const m = document.createElement('div');
       m.className = 'modal ' + cls;
-      m.innerHTML = `<h2><span>${title}</span><span class="extra">${extra}</span></h2><div class="body"></div><div class="hint">↑↓ 選擇　Z／Enter 確定　X／Esc 返回</div>`;
+      m.innerHTML = `<h2><span>${title}</span><span class="extra">${extra}</span></h2><div class="body"></div><div class="hint">↑↓ 選擇　Z 確定　X 返回</div>`;
       const body = m.querySelector('.body');
       let idx = Math.max(0, Math.min(start, rows.length - 1));
       const els = rows.map((r, i) => {

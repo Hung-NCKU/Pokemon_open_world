@@ -195,6 +195,31 @@ define(Game, {
     if (m.empty && !b.ok) return null;
     return { state: b.ok ? b.state : null, fromBackup: b.ok, error: m.error || '找不到主存檔' };
   },
+  // 即時存檔欄位（Shift＋F1～F12 存、F1～F12 讀；每個帳號各自 12 格，和一般存檔分開）
+  // 奔跑：按住 X（GBA 的 B 鍵）或 Shift
+  running() { return G.keys.has('Shift') || G.keys.has('x') || G.keys.has('X'); },
+  slotKey(n) { return (typeof Account !== 'undefined' ? Account.saveKey() : SAVE_KEY) + '_slot' + n; },
+  async quickSlot(n, save) {
+    if (!G.state || G.mode !== 'world' || G.busy || UI.active() || G.tower) {
+      UI.banner(save ? '只能在野外自由行動時即時存檔' : '只能在野外自由行動時讀取即時存檔'); return false;
+    }
+    if (save) {
+      try {
+        G.state.savedAt = new Date().toISOString();
+        localStorage.setItem(Game.slotKey(n), Game.serialize(G.state));
+      } catch { UI.banner('即時存檔失敗（瀏覽器的儲存空間不足？）'); return false; }
+      Sound.sfx('save');
+      UI.banner(`已即時存檔到第 ${n} 格（F${n} 讀取）`);
+      return true;
+    }
+    let raw = null;
+    try { raw = localStorage.getItem(Game.slotKey(n)); } catch { }
+    const r = Game.parseSave(raw);
+    if (!r.ok) { UI.banner(r.empty ? `第 ${n} 格沒有即時存檔（Shift＋F${n} 存檔）` : `第 ${n} 格的即時存檔無法使用：${r.error}`); return false; }
+    Game.start(r.state);
+    UI.banner(`已讀取第 ${n} 格的即時存檔`);
+    return true;
+  },
   // 匯出、匯入存檔（JSON 檔案）
   serialize(state) { return JSON.stringify(state); },
   exportSave() {
@@ -974,7 +999,7 @@ define(Game, {
         ${tm.map(l => `<p>${U.esc(l)}</p>`).join('') || '<p>還沒有耗時紀錄</p>'}
         <h3>對戰統計</h3>${r.battles.map(b => `<p>${U.esc({ wild: '野生', trainer: '訓練家', gym: '道館／四天王', champion: '冠軍', raid: '團體戰' }[b.kind] || b.kind)}：${b.n} 場，勝率 ${b.winRate}%，平均 ${b.avgTurns} 回合，我方平均高 ${b.avgLvDiff} 級</p>`).join('') || '<p>還沒有對戰紀錄</p>'}
         <h3>最近的錯誤（共 ${r.errors.length} 筆）</h3>${er.map(l => `<p class="err">${U.esc(l)}</p>`).join('') || '<p>沒有錯誤</p>'}
-        <p><small>F3：在畫面左上角顯示 FPS 與錯誤數</small></p></div>`);
+        <p><small>\` 鍵（Esc 下面）：在畫面左上角顯示 FPS 與錯誤數</small></p></div>`);
       const c = await UI.choose(['下載紀錄檔', '清除錯誤紀錄', '返回'], { prompt: '遊玩紀錄' });
       if (c === 0) Telemetry.download();
       else if (c === 1) Telemetry.clearErrors();
@@ -1483,7 +1508,7 @@ define(Game, {
     if (ow) { OverworldMons.touch(ow); return; }
     // 走向水面：停在岸邊（要衝浪時面向水面按確認）
     if (!Game.walkable(tx, ty)) return;
-    const run = G.keys.has('Shift');
+    const run = Game.running();
     G.move = { fx: s.x, fy: s.y, tx, ty, t: 0, dur: s.surf ? 120 : run ? 85 : 160 };
   },
 
@@ -1545,7 +1570,7 @@ define(Game, {
     const exclaim = (Gen3.on && Gen3.exclaim()) || Spr.exclaim();
     for (const p of people) safe(p.player ? '主角' : p.lg ? '傳說' : p.ow ? '野生寶可夢' : p.ev ? '事件' : '訓練家', s.x, s.y, () => {
       if (p.player) {
-        const sheet = G.keys.has('Shift') && G.move ? 'player_run' : 'player_walk';
+        const sheet = Game.running() && G.move ? 'player_run' : 'player_walk';
         World.drawPerson(g, px - ox, py - oy, s.dir, { pal: Spr.PLAYER, sheet }, walking, { surf: s.surf, tick: G.frame });
         return;
       }
@@ -1733,7 +1758,7 @@ define(Game, {
     Game.start(st, true);
     await UI.say(`${reg.prof}：「${POKEDEX[starter].n} 和你看起來很合得來呢！」`);
     await UI.say(`${reg.prof}：「這個世界很廣闊。往遠處走，寶可夢會越來越強。收集各地區的徽章、挑戰聯盟，並且完成這本圖鑑吧！」`);
-    await UI.say('（操作：方向鍵／WASD 移動，Shift 跑步，Z／Enter 調查，X／Esc 選單，M 地圖，按住 Space 二倍速）');
+    await UI.say('（操作：方向鍵／WASD 移動，按住 X 跑步，Z 調查，X 取消，Enter 選單，M 地圖，按住 Space 二倍速；Shift＋F1～F12 即時存檔、F1～F12 讀檔）');
     UI.hideDialog();
     Game.save(true);
   },
@@ -1808,12 +1833,16 @@ window.addEventListener('load', () => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
     // 按住 Space：二倍速（不當作確認鍵）
     if (e.key === ' ') { Game.setFast(true); return; }
+    // 即時存檔（像 GBA 模擬器）：Shift＋F1～F12 存到那一格、F1～F12 讀取
+    const fk = /^F([1-9]|1[0-2])$/.exec(e.key);
+    if (fk) { e.preventDefault(); if (!e.repeat) Game.quickSlot(+fk[1], e.shiftKey); return; }
     Sound.init();
     if (UI.handleKey(e)) { G.keys.clear(); return; }
     G.keys.add(e.key);
     if (G.mode !== 'world' || G.busy || e.repeat) return;
-    if (UI.isOk(e) && !G.move) Game.flow(() => Game.interact());
-    else if ((e.key === 'x' || e.key === 'X' || e.key === 'Escape') && !G.move) Game.flow(() => Game.mainMenu());
+    // 和 GBA 一樣：Enter＝START（選單）、Z＝A（調查）、X＝B（按住奔跑）
+    if (e.key === 'Enter' && !G.move) Game.flow(() => Game.mainMenu());
+    else if (UI.isOk(e) && !G.move) Game.flow(() => Game.interact());
     else if ((e.key === 'm' || e.key === 'M') && !G.move) Game.flow(() => Game.mapMenu());
   });
   // 點擊／觸控也能解除瀏覽器的音訊限制

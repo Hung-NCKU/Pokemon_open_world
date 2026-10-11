@@ -41,6 +41,35 @@
       Game.start(st, true);
       check('新遊戲：進入野外，玩家站在家門口', G.mode === 'world' && World.tile(G.state.x, G.state.y) !== undefined && !!World.homeTown);
 
+      // 1b. 按鍵（GBA 模擬器的配置）：Shift＋F1～F12 即時存檔、F1～F12 讀檔；Enter＝START（選單）；按住 X 奔跑
+      {
+        const key = (k, o = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...o }));
+        const up = k => window.dispatchEvent(new KeyboardEvent('keyup', { key: k, bubbles: true }));
+        const money0 = G.state.money, x0 = G.state.x;
+        key('F2', { shiftKey: true });
+        G.state.money += 777; G.state.x += 1;
+        key('F2');
+        await new Promise(r => setTimeout(r, 100));
+        check('即時存檔：Shift＋F2 存檔、F2 讀回原本的狀態', G.state.money === money0 && G.state.x === x0 && G.mode === 'world', `${G.state.money}/${money0}`);
+        key('F7');
+        check('即時存檔：沒有存檔的格子不會讀取', G.state.money === money0 && G.mode === 'world');
+        key('x');
+        check('按住 X 奔跑（GBA 的 B 鍵）', Game.running());
+        up('x');
+        check('放開 X 停止奔跑', !Game.running());
+        // Enter＝START：在野外打開開始選單（這一頁的 UI.choose 是自動選第一項的替身，所以只確認有呼叫選單）
+        const realMenu = Game.mainMenu;
+        let menuCalls = 0;
+        Game.mainMenu = async () => { menuCalls++; };
+        key('Enter'); up('Enter');
+        await new Promise(r => setTimeout(r, 50));
+        key('Escape'); up('Escape');
+        await new Promise(r => setTimeout(r, 50));
+        Game.mainMenu = realMenu;
+        check('Enter 打開開始選單（START）；Esc 不再打開選單', menuCalls === 1, String(menuCalls));
+        for (let n = 1; n <= 12; n++) try { localStorage.removeItem(Game.slotKey(n)); } catch { }
+      }
+
       // 2. 進出室內
       const house = World.buildings.find(b => b.town === World.homeTown && typeof Interior !== 'undefined' && Interior.can(b));
       if (house) {

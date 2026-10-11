@@ -342,7 +342,7 @@
     // 開始選單 → 記錄
     const saveKey = Account.saveKey();
     const savePol = { ...pol, choose: (p, labels) => (labels.includes('記錄') ? labels.indexOf('記錄') : labels.includes('是') ? labels.indexOf('是') : 0) };
-    await tap('x', 300);
+    await tap('Enter', 300); // START：開始選單
     await settle(savePol, idleWorld, 20000);
     const raw = localStorage.getItem(saveKey), saved = raw && JSON.parse(raw);
     check('記錄：用開始選單記錄，讀回的存檔和目前一致', saved && saved.party.length === G.party.length && saved.money === G.state.money && saved.party[0].lv === G.party[0].lv);
@@ -388,7 +388,7 @@
     // 像玩家一樣：開始選單 → 回到標題 → 按任意鍵 → 主選單「繼續遊戲」
     const pol = battlePolicy({ choose: (p, labels) => (labels.includes('前進') ? labels.indexOf('前進') : labels.includes('回到標題') ? labels.indexOf('回到標題') : labels.includes('不記錄直接回去') ? labels.indexOf('不記錄直接回去') : undefined),
       mainMenu: wins => Math.max(0, wins.indexOf('繼續遊戲')) });
-    if (G.mode === 'world' && G.state) { await tap('x', 300); await settle(pol, () => !!$('#title .press-start') || !!$('#mainmenu'), 30000); }
+    if (G.mode === 'world' && G.state) { await tap('Enter', 300); await settle(pol, () => !!$('#title .press-start') || !!$('#mainmenu'), 30000); }
     await settle(pol, () => G.mode === 'world' && G.state && G.state.name === '冠軍候補' && idleWorld(), 60000);
     check('聯盟：從主選單「繼續遊戲」讀取存檔，站在聯盟門口', G.state.name === '冠軍候補' && G.state.x === lb.door.x && G.state.y === lb.door.y + 1);
     const league = World.towns.find(t => t.region === 'hoenn' && t.kind === 'league');
@@ -414,7 +414,7 @@
               bagChoice: () => (m.hp >= Mon.maxHp(m) * .7 ? ['道具', '關閉背包'] : ['道具', '厲害傷藥']),
               partyPick: () => (m.hp >= Mon.maxHp(m) * .7 ? -1 : k) };
             const before = m.hp;
-            await tap('x', 300);
+            await tap('Enter', 300);
             await settle(usePol, () => !$('#bag') && !$('#party') && G.mode === 'world' && visible($('#choices')) && choiceLabels().includes('寶可導航') && m.hp > before || idleWorld(), 20000);
             if (visible($('#choices'))) await tap('x', 300);
             await settle(pol, idleWorld, 5000);

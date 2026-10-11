@@ -3,7 +3,7 @@
 // - 畫面更新率：每秒取樣，記錄平均與最差、超過 50ms 的卡頓次數
 // - 耗時：世界生成、地圖繪製、存檔、戰鬥……（最近一次、平均、最大）
 // - 遊玩事件：最近 60 筆（進入戰鬥、勝負、傳送、存檔），錯誤發生時可以對照前後發生了什麼
-// F3 切換畫面左上角的即時顯示；設定選單「遊玩紀錄」可以查看與下載
+// ` 鍵（Esc 下面）切換畫面左上角的即時顯示；設定選單「遊玩紀錄」可以查看與下載（F1～F12 是即時存檔／讀檔）
 import { G } from './core.js';
 const Telemetry = (() => {
   const KEY = 'pkmn_openworld_log';
@@ -88,7 +88,7 @@ const Telemetry = (() => {
   }
   function clearErrors() { errors = []; persist(); }
 
-  // F3：即時顯示
+  // ` 鍵：即時顯示
   let overlay = null;
   function draw() {
     const r = report();
@@ -108,7 +108,7 @@ const Telemetry = (() => {
   window.addEventListener('unhandledrejection', e => error(e.reason && e.reason.stack ? e.reason.stack.split('\n').slice(0, 3).join(' | ') : String(e.reason), 'promise'));
   const realErr = console.error;
   console.error = (...a) => { error(a.map(x => (x && x.stack) ? x.stack.split('\n').slice(0, 3).join(' | ') : String(x)).join(' '), 'console'); realErr.apply(console, a); };
-  window.addEventListener('keydown', e => { if (e.key === 'F3') { e.preventDefault(); toggleOverlay(); } });
+  window.addEventListener('keydown', e => { if (e.key === '`' && e.target.tagName !== 'INPUT') { e.preventDefault(); toggleOverlay(); } });
 
   return { battle, battleStats, error, event, time, measure, frame, report, download, clearErrors, toggleOverlay, get errors() { return errors; } };
 })();
