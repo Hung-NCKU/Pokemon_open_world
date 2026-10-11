@@ -90,6 +90,25 @@ class Battle {
     return this.finish(result);
   }
 
+  // 招式資訊（戰鬥的招式選單）：PP、屬性／分類、威力／命中
+  static moveInfo(m, s) {
+    const cat = { Physical: '物理', Special: '特殊', Status: '變化' }[m.cat] || '';
+    const bp = m.cat === 'Status' || !m.bp ? '—' : m.bp;
+    const acc = m.acc === true ? '—' : m.acc;
+    return `<div class="mv-info">PP　${s.pp}/${m.pp || MOVES[s.id].pp}<br>${(TYPES[m.type] || TYPES.unknown).n}・${cat}<br>威力${bp}　命中${acc}</div>`;
+  }
+  // 效果說明（一兩行）：招式說明、優先度、支援狀態的記號說明、無法使用的原因
+  static moveDesc(m, { why = '', maxName = '' } = {}) {
+    const parts = [];
+    if (why) parts.push(`<span class="mv-why">因${U.esc(why)}無法使用</span>`);
+    if (maxName) parts.push(`極巨化：${U.esc(maxName)}`);
+    if (m.pri) parts.push(`優先度${m.pri > 0 ? '+' : ''}${m.pri}`);
+    if (m.d) parts.push(U.esc(m.d));
+    if (m.support === 'partial') parts.push('<span class="mv-why">＊部分效果未實作</span>');
+    if (m.support === 'none') parts.push('<span class="mv-why">✕效果未支援</span>');
+    return parts.join('　');
+  }
+
   async chooseAction() {
     while (true) {
       const me = this.me;
@@ -101,15 +120,15 @@ class Battle {
         const mark = id => ({ full: '', partial: '＊', none: '✕' }[md(id).support]);
         const opts = me.moves.map(s => ({ label: MOVES[s.id].n + mark(s.id), disabled: s.pp <= 0 || !!this.moveBlocked(me, this.vMe, s.id) }));
         while (opts.length < 4) opts.push({ label: '－', disabled: true });
-        // 招式資訊：PP、屬性；無法使用時說明原因；極巨化中顯示極巨招式
+        // 招式資訊：右下角是 PP、屬性與分類、威力與命中；畫面上方是效果說明、＊／✕ 的意思、無法使用的原因、極巨招式
         const info = i => {
           const s = me.moves[i];
           if (!s) return '';
           const m = md(s.id);
-          const why = this.moveBlocked(me, this.vMe, s.id);
-          const maxName = me._dmax ? (m.cat === 'Status' ? (MAX_MOVES.guard || {}).n : (MAX_MOVES[m.type] || {}).n) : '';
-          return `PP　${s.pp}/${m.pp || MOVES[s.id].pp}<br>類型/${(TYPES[m.type] || TYPES.unknown).n}`
-            + (why ? `<br><span class="mv-why">因${U.esc(why)}無法使用</span>` : '') + (maxName ? `<br>${maxName}` : '');
+          return Battle.moveInfo(m, s) + `<div class="mv-desc">${Battle.moveDesc(m, {
+            why: this.moveBlocked(me, this.vMe, s.id),
+            maxName: me._dmax ? (m.cat === 'Status' ? (MAX_MOVES.guard || {}).n : (MAX_MOVES[m.type] || {}).n) : '',
+          })}</div>`;
         };
         // 特殊能力列：擁有的道具都會顯示，不能用時灰色並說明原因；同時只能選一種
         const gm = this.gimmicks(me);

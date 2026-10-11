@@ -1,0 +1,118 @@
+// 冒煙測試：用遊戲本身的流程快速走過主要功能，確認「整個遊戲接起來」沒有出錯
+// 新遊戲 → 進出室內 → 單打 → 雙打 → 存檔與讀檔 → 雲端同步失敗（模擬） → 畫面提示
+// 和 engine_test.html（單一機制）、playthrough.html（打到冠軍，很久）互補：這個幾秒就跑完，每次修改後都可以跑
+(() => {
+  const results = [], errors = [];
+  const check = (name, ok, detail = '') => results.push({ name, ok: !!ok, detail });
+  const moveId = sd => +Object.keys(SHOWDOWN.moves).find(k => SHOWDOWN.moves[k].id === sd);
+  window.addEventListener('error', e => errors.push(String(e.message) + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno));
+  const realErr = console.error;
+  console.error = (...a) => { errors.push(a.map(x => (x && x.stack) ? x.stack.split('\n').slice(0, 3).join(' | ') : String(x)).join(' ')); realErr(...a); };
+
+  // 不等待動畫與對話；選項一律選第一個可以選的（戰鬥中＝「戰鬥」→ 第一個招式）
+  U.sleep = () => Promise.resolve();
+  UI.say = async () => { };
+  UI.panel = async () => { };
+  UI.input = async (p, d) => d || '測試';
+  UI.list = async () => 0;
+  UI.choose = async opts => { const i = opts.findIndex(x => !(x && x.disabled)); return i < 0 ? 0 : i; };
+  Game.dexEntry = async () => { };
+  Sound.sfx = () => { }; Sound.play = () => { }; Sound.jingle = async () => { };
+  for (const k of ['moveAnim', 'anim', 'trainerIntro', 'trainerLeave', 'wildIntro']) Battle.prototype[k] = async () => { };
+  Battle.prototype.catchAnim = async function () { return null; };
+
+  async function run() {
+    // 這一頁和遊戲共用 localStorage（file:// 的網頁共用同一份）：先備份玩家的資料，結束時還原
+    const backup = {};
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^pkmn/.test(k)) backup[k] = localStorage.getItem(k); }
+    const realFetch = window.fetch, realCfg = window.CLOUD_CONFIG;
+    window.CLOUD_CONFIG = { url: '', anonKey: '', github: false };
+    if (Cloud.session) Cloud.logout();
+    try {
+      // 1. 新遊戲
+      U.seed(7);
+      const st = Game.newState('冒煙', 'kanto', 1);
+      const starter = Mon.create(4, 12);
+      starter.moves = [{ id: moveId('ember'), pp: 25 }, { id: moveId('scratch'), pp: 35 }];
+      const buddy = Mon.create(7, 12);
+      buddy.moves = [{ id: moveId('watergun'), pp: 25 }];
+      st.party = [starter, buddy];
+      Game.start(st, true);
+      check('新遊戲：進入野外，玩家站在家門口', G.mode === 'world' && World.tile(G.state.x, G.state.y) !== undefined && !!World.homeTown);
+
+      // 2. 進出室內
+      const house = World.buildings.find(b => b.town === World.homeTown && typeof Interior !== 'undefined' && Interior.can(b));
+      if (house) {
+        await Game.enterBuilding(house);
+        const inside = !!G.room;
+        Interior.leave();
+        check('室內：走進家裡再走出來', inside && !G.room, `inside=${inside}`);
+      } else check('室內：家裡有室內地圖', false);
+
+      // 3. 單打（野生）
+      const wild = Mon.create(16, 3);
+      const r1 = await Game.battle({ wild });
+      check('單打：和野生寶可夢戰鬥到打倒對手', wild.hp <= 0, `${r1} / HP ${wild.hp}`);
+      check('單打：結束後回到野外', G.mode === 'world');
+
+      // 4. 雙打（訓練家）
+      for (const m of G.party) { m.hp = Mon.maxHp(m); m.st = null; }
+      const foes = [Mon.create(19, 3), Mon.create(16, 3)];
+      foes.forEach(m => { m.moves = [{ id: moveId('tackle'), pp: 35 }]; });
+      const r2 = await Game.battle({ trainer: { title: '雙胞胎', name: '冒煙', party: foes, kind: 'trainer', money: 10 }, double: true });
+      check('雙打：和兩位對手的對戰打完', foes.every(m => m.hp <= 0) || G.party.every(m => m.hp <= 0), String(r2));
+      check('雙打：結束後回到野外', G.mode === 'world');
+
+      // 5. 存檔與讀檔
+      G.state.money = 4321;
+      const saved = Game.save(true);
+      const loaded = Game.loadSave();
+      check('存檔與讀檔：讀回相同的金錢與隊伍', saved && loaded && loaded.state.money === 4321 && loaded.state.party.length === G.party.length
+        && loaded.state.party[0].sp === G.party[0].sp, loaded && loaded.error);
+
+      // 6. 雲端同步失敗（模擬伺服器錯誤）：顯示失敗的提示，本機的存檔仍然在
+      window.CLOUD_CONFIG = { url: 'https://smoke.test', anonKey: 'anon', github: false };
+      const reply = (status, obj) => Promise.resolve({ ok: status < 300, status, text: () => Promise.resolve(JSON.stringify(obj)) });
+      window.fetch = async url => {
+        const u = new URL(url);
+        if (u.pathname === '/auth/v1/token') return reply(200, { access_token: 't', refresh_token: 'r', expires_in: 3600, user: { id: 'U1' } });
+        if (u.pathname === '/rest/v1/saves') return reply(500, { message: '伺服器暫時無法使用' });
+        return reply(404, {});
+      };
+      let banner = '';
+      const realBanner = UI.banner;
+      UI.banner = t => { banner = t; };
+      await Cloud.login('冒煙', 'secret12');
+      G.state.money = 5555;
+      Game.save(true);
+      await Cloud.flush();
+      UI.banner = realBanner;
+      const local = Game.loadSave();
+      check('雲端同步失敗：狀態為失敗並提示玩家', Cloud.status === 'failed' && /雲端同步失敗/.test(banner), `${Cloud.status} / ${banner}`);
+      check('雲端同步失敗：本機的存檔仍然是最新的', local && local.state.money === 5555);
+      Cloud.logout();
+      window.fetch = realFetch; window.CLOUD_CONFIG = { url: '', anonKey: '', github: false };
+
+      // 7. 畫面提示：野外顯示下一步
+      Hud.update();
+      const goal = document.getElementById('goal');
+      check('畫面提示：野外顯示任務的下一步', goal && /下一步：/.test(goal.textContent), goal && goal.textContent);
+    } catch (e) {
+      check('流程沒有例外', false, e.stack);
+    } finally {
+      window.fetch = realFetch; window.CLOUD_CONFIG = realCfg;
+      for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (/^pkmn/.test(k) && !(k in backup)) localStorage.removeItem(k); }
+      for (const k in backup) localStorage.setItem(k, backup[k]);
+    }
+    check('過程中沒有錯誤訊息', !errors.length, errors.slice(0, 5).join('\n'));
+
+    const pass = results.filter(r => r.ok).length;
+    const out = document.createElement('pre');
+    out.id = 'out';
+    out.style.cssText = 'position:fixed;inset:0;z-index:999;margin:0;padding:16px;background:#fff;color:#000;font:14px/1.6 monospace;overflow:auto;white-space:pre-wrap';
+    out.textContent = results.map(r => `${r.ok ? '✔' : '✘'} ${r.name}${r.detail && !r.ok ? '\n    ' + r.detail : ''}`).join('\n') + `\n\n${pass}/${results.length} 通過`;
+    document.body.appendChild(out);
+    document.title = pass === results.length ? 'PASS' : 'FAIL';
+  }
+  window.addEventListener('load', () => setTimeout(() => run().catch(e => { document.title = 'FAIL'; document.body.textContent = 'EXC ' + e.stack; }), 300));
+})();
