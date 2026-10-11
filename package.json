@@ -15,8 +15,8 @@
     "test:install": "playwright install --with-deps chromium"
   },
   "devDependencies": {
-    "@playwright/test": "1.48.2",
-    "vite": "5.4.10"
+    "@playwright/test": "1.55.1",
+    "vite": "6.4.4"
   },
   "dependencies": {
     "preact": "10.24.3"

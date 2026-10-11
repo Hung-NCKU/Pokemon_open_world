@@ -6,6 +6,9 @@
 
 ## 2026-10-11
 
+### 開發工具的安全性更新（npm audit）
+- `npm install` 回報 4 個漏洞，都在開發工具，不會進到遊戲：Playwright 下載瀏覽器時沒有驗證 SSL 憑證（高）、Vite 內建的 esbuild 開發伺服器可以被其他網站讀取（中）。升級 Playwright 1.48.2 → 1.55.1（Docker 的 Playwright 映像檔最新到這版）、Vite 5.4.10 → 6.4.4，`npm audit` 0 個漏洞；打包、引擎 543/543、冒煙 17/17 正常。
+
 ### `vite-esm` 分支：ES module、Vite 打包、Preact（使用者要求另開分支，避免改壞 main）
 - **ES module**：48 個傳統腳本改成 `import`／`export`（`tools/esm_convert.cjs` 用 espree＋eslint-scope 自動分析與改寫）。
   - 傳統腳本「比較早的檔案在執行期呼叫比較晚的檔案」很常見（`G` 被 35 個檔案往後參照），直接改成 import 會形成循環，模擬的執行順序整個亂掉（late.js 會在 engine.js 之前執行）。做法：26 個往後參照的單例物件先在 `js/core.js` 宣告成空物件、原本的檔案用 `define()` 填入；往後參照的函式搬到比較早的檔案（`md`、`newVol` 等 → 新的 `js/movedata.js`；`monSprite`、`playCry` → `sprites.js`）。工具模擬模組的執行順序，確認和原本的載入順序完全相同才改寫。
