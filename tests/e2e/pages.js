@@ -1,0 +1,17 @@
+// 共用：打開 tests/ 的測試頁，等頁面把 document.title 設成 PASS／FAIL，再把結果列出來
+import { expect } from '@playwright/test';
+
+export async function runPage(page, path, { timeout } = {}) {
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await page.goto(path);
+  await page.waitForFunction(() => document.title === 'PASS' || document.title === 'FAIL' || /^EXC /.test(document.body.innerText), null, { timeout, polling: 1000 });
+  const out = await page.evaluate(() => (document.getElementById('out') || document.body).innerText);
+  const summary = (out.match(/\d+\/\d+ 通過.*/) || [''])[0];
+  const failed = out.split('\n').filter(l => l.startsWith('✘') || l.startsWith('EXC'));
+  console.log(`${path}: ${summary}`);
+  if (failed.length) console.log(failed.join('\n'));
+  expect(failed, `${path} 失敗的測試`).toEqual([]);
+  expect(await page.title()).toBe('PASS');
+  return { summary, errors };
+}

@@ -8,3 +8,8 @@ __pycache__/
 
 # 測試用存檔（tools/perfect_save.html 產生）
 saves/
+
+# npm
+node_modules/
+test-results/
+playwright-report/

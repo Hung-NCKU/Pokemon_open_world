@@ -1,0 +1,10 @@
+.git
+.github
+.cache
+node_modules
+test-results
+playwright-report
+saves
+docker-compose.yml
+Dockerfile
+**/__pycache__

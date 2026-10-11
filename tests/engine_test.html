@@ -87,6 +87,8 @@ Battle.prototype.anim = async () => { };
 
 const results = [];
 function check(name, cond, detail = '') { results.push({ name, ok: !!cond, detail }); }
+// 需要 pokeemerald 素材（assets/gen3，不在版本庫裡）的測試：沒有素材時（例如 CI）標成略過
+function skip(name) { results.push({ name, ok: true, skipped: true, detail: '沒有 assets/gen3 素材，略過' }); }
 function moveId(sd) { return +Object.keys(SHOWDOWN.moves).find(k => SHOWDOWN.moves[k].id === sd); }
 
 // 建立一場 1 對 1 的戰鬥
@@ -2711,7 +2713,8 @@ async function run() {
       check('牆壁：雙打的光牆減傷約 2/3（2732/4096），單打 1/2', Math.abs(d1 / d0 - 2732 / 4096) < .03 && Math.abs(e1 / e0 - .5) < .03, `${d0}→${d1} / ${e0}→${e1}`);
     }
     // 5. 道館房間：鐵旋（電）、亞莎（火）用各自的道館
-    {
+    if (!window.INTERIORS) skip('道館房間：鐵旋、亞莎、杜娟的道館');
+    else {
       const key = gym => Interior.keyFor({ kind: 'gym', town: { region: 'hoenn', gym } });
       const has = k => !!(window.INTERIORS && INTERIORS[k]);
       check('道館房間：鐵旋用紫堇市道館、亞莎用釜炎鎮道館（有素材時），杜娟仍是卡那茲市道館',
@@ -2720,7 +2723,8 @@ async function run() {
     [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
   }
   // 寶可夢中心的治療動畫（綠寶石 FldEff_PokecenterHeal）：一顆一顆放球、音樂、閃光，結束後清掉
-  {
+  if (!window.INTERIORS) skip('治療動畫：寶可夢中心');
+  else {
     const keep = G.state;
     G.state = Game.newState('T', 'kanto', 1);
     G.state.party = [Mon.create(25, 10), Mon.create(4, 10), Mon.create(7, 10)];
@@ -3440,8 +3444,9 @@ async function run() {
     check('40 場隨機對戰沒有例外', !err, err || '');
   }
   const pass = results.filter(r => r.ok).length;
-  document.getElementById('out').innerHTML = results.map(r => `<span class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✔' : '✘'} ${r.name}</span>${r.detail ? '\n    ' + r.detail.replace(/</g, '&lt;') : ''}`).join('\n')
-    + `\n\n${pass}/${results.length} 通過` + (__errs.length ? '\n錯誤：' + __errs.join('\n') : '');
+  const skipped = results.filter(r => r.skipped).length;
+  document.getElementById('out').innerHTML = results.map(r => `<span class="${r.skipped ? 'skip' : r.ok ? 'pass' : 'fail'}">${r.skipped ? '－' : r.ok ? '✔' : '✘'} ${r.name}</span>${r.detail ? '\n    ' + r.detail.replace(/</g, '&lt;') : ''}`).join('\n')
+    + `\n\n${pass}/${results.length} 通過` + (skipped ? `（${skipped} 個略過）` : '') + (__errs.length ? '\n錯誤：' + __errs.join('\n') : '');
   document.title = pass === results.length ? 'PASS' : 'FAIL';
 }
 window.addEventListener('load', () => setTimeout(() => run().catch(e => { document.getElementById('out').textContent = 'EXC ' + e.stack; }), 50));

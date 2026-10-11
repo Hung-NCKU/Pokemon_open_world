@@ -1,0 +1,18 @@
+{
+  "name": "pokemon-openworld",
+  "private": true,
+  "version": "0.0.0",
+  "description": "綠寶石畫面、朱／紫機制的寶可夢開放世界網頁遊戲（個人非營利）",
+  "type": "module",
+  "scripts": {
+    "serve": "node tools/serve.mjs 8080",
+    "test": "playwright test --project=unit",
+    "test:engine": "playwright test tests/e2e/engine.spec.js",
+    "test:smoke": "playwright test tests/e2e/smoke.spec.js",
+    "test:natural": "playwright test --project=natural",
+    "test:install": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2"
+  }
+}

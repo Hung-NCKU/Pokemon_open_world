@@ -6,6 +6,14 @@
 
 ## 2026-10-11
 
+### 使用者要求：npm、測試框架（Playwright）、CI、Docker
+- `package.json`：`npm run serve`（`tools/serve.mjs`，沒有相依套件的靜態伺服器）、`npm test`（引擎＋冒煙）、`test:engine`、`test:smoke`、`test:natural`（實際遊玩，真實時間）、`test:install`（下載 Chromium）。
+- 測試框架：Playwright（`playwright.config.js`、`tests/e2e/*.spec.js`）。原本的測試頁不變，Playwright 透過本機伺服器打開它們，等 `document.title` 變成 PASS／FAIL，再列出失敗的項目；`PW_CHANNEL=chrome` 可以用已安裝的 Chrome。改用 http 而不是 file://，也不再需要「虛擬時間」：引擎測試真實時間約 40 秒。
+- CI：GitHub Actions（`.github/workflows/test.yml`）每次 push、PR 自動執行 `npm test`，`gh-pages` 分支除外。
+  - CI 沒有 pokeemerald 素材（`assets/gen3` 不在版本庫裡，原本引擎測試在沒有素材時會直接例外中止：`INTERIORS is not defined`）。需要素材的測試改成沒有素材時標「略過」：引擎 2 個（道館房間、治療動畫）、冒煙 1 個（進出室內）。本機把素材改名模擬 CI：引擎 530/530（2 個略過）、冒煙 11/11（1 個略過）；有素材時 543/543、17/17。
+- Docker：`docker compose up web`（nginx:1.27-alpine 提供靜態檔案，`docker/nginx.conf`）；`docker compose run --rm test`（mcr.microsoft.com/playwright 映像檔跑 `npm test`，本機不用裝 Node）。兩個都實際建置、執行確認過（第一次設定 nginx 的 `types` 區塊蓋掉了預設的 MIME 類型，所有檔案都變成 application/octet-stream，改回預設）。
+- 打包工具（Vite＋ES module）與前端框架依使用者要求在另一個分支 `vite-esm` 進行，避免改壞 main。
+
 ### 貪吃鬼與危機樹果；雙打的急速折返、危險迴避
 - 新增 10 種危機時（體力 1/4 以下）發動的樹果：勿花果、異奇果、芒芒果、樂芭果、芭亞果回復 1/3 體力（性格討厭那個味道會混亂），枝荔果、龍睛果、沙鱗果、龍火果、杏仔果提高攻擊／防禦／速度／特攻／特防。名稱與說明取自 PokéAPI 的 zh-Hant，並在 52poke 確認。
 - 貪吃鬼：危機樹果在體力一半以下就吃。特性 284 個全部有效果（`docs/UNSUPPORTED.md` 清單清空）。

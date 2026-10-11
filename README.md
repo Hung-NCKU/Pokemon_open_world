@@ -59,6 +59,19 @@ python tools/build_assets.py
 
 ## 測試
 
+指令（需要 Node.js 18 以上；第一次先 `npm install`、`npm run test:install` 下載 Playwright 的 Chromium，或設 `PW_CHANNEL=chrome` 改用已安裝的 Chrome）：
+
+| 指令 | 內容 |
+|---|---|
+| `npm run serve` | 本機伺服器 http://localhost:8080/（`tools/serve.mjs`，沒有相依套件） |
+| `npm test` | 引擎＋冒煙測試（Playwright 打開下面的測試頁，等結果，列出失敗的項目；約 1 分鐘） |
+| `npm run test:engine`／`test:smoke` | 只跑其中一個 |
+| `npm run test:natural` | 實際遊玩測試（真實時間，約 10～30 分鐘；`SCENARIO=1` 或 `2` 只跑一段） |
+| `docker compose up web` | 用 nginx 提供遊戲 http://localhost:8080/ |
+| `docker compose run --rm test` | 在 Playwright 的 Docker 映像檔裡跑 `npm test`（本機不用裝 Node 與瀏覽器） |
+
+GitHub Actions（`.github/workflows/test.yml`）在每次 push 與 PR 自動執行 `npm test`。CI 沒有 pokeemerald 的素材（`assets/gen3` 不在版本庫裡），需要素材的少數測試會標成「略過」；本機有素材時全部都會跑。
+
 - `tests/engine_test.html`：引擎與系統的回歸測試（對戰機制、存檔、世界生成、城鎮、室內、洞窟解謎、AI、遊玩節奏……）。用瀏覽器開啟即可。
 - `tests/smoke.html`：冒煙測試，幾秒內用遊戲本身的流程走過新遊戲、進出室內、單打、雙打、存檔與讀檔、雲端同步失敗（模擬）、綠寶石的取名字／設定／商店賣出／電腦，每次修改後都可以跑（會備份並還原本機存檔）。
 - `tests/natural.html`（`bash tools/natural.sh`）：實際遊玩測試，不替換任何介面，只用按鍵操作：從標題畫面開新遊戲、走進研究所、草叢戰鬥（捕捉、用傷藥、升級視窗、忘記招式）、商店購買、寶可夢中心、記錄存檔；另一段用 Lv.70 的隊伍走進豐緣聯盟，房間之間用背包補血、打到冠軍。用真實時間執行（約 10～30 分鐘）。
@@ -100,7 +113,10 @@ js/account.js         帳號（註冊、登入、各帳號的存檔）
 js/cloud.js、cloud_config.js   雲端帳號與存檔（Supabase）
 js/game.js            主程式、選單、存檔
 tools/                資料下載與素材建置
-tests/                回歸測試與自動遊玩
+tests/                回歸測試與自動遊玩（tests/e2e：Playwright 執行測試頁）
+package.json、playwright.config.js   npm 指令與測試設定
+Dockerfile、docker-compose.yml、docker/   Docker（nginx 提供遊戲、Playwright 跑測試）
+.github/workflows/    CI：每次 push 自動測試
 ```
 
 ## 版權聲明

@@ -1,0 +1,28 @@
+# 每次 push、PR 自動執行引擎測試與冒煙測試（Playwright＋Chromium）
+# pokeemerald 的素材（assets/gen3）不在版本庫裡，需要素材的少數測試會標成「略過」；完整的測試請在本機執行 npm test
+name: test
+
+on:
+  push:
+    branches-ignore: [gh-pages]   # 發布用的分支（含素材）不用測
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
