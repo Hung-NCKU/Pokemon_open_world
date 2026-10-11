@@ -1,13 +1,16 @@
 // Z 招式（一般屬性的 Z 純晶；資料：data/zmoves.js）
 // - 需要重要物品「Z 手環」，寶可夢攜帶某屬性的 Z 純晶，使用該屬性的攻擊招式時可以變成 Z 招式（招式選單按 E）
 // - 威力依原本招式的威力換算（第七世代表）；不會被守住完全擋下（只受到 1/4 傷害）；每場一次，和超級進化、太晶化擇一
-// - 取得：阿羅拉地區的博士送 Z 手環與一般 Z；阿羅拉的道館送同屬性的 Z 純晶；其餘的散落在阿羅拉各地
+// - 取得：阿羅拉地區的博士送 Z 手環與一般 Z，或第一次成為任一地區的冠軍時取得；阿羅拉的道館送同屬性的 Z 純晶，
+//   拿到 Z 手環後其他地區的館主（含重賽）也會給；其餘的散落在阿羅拉各地
+// - 動畫：Pokémon Showdown 的 Z 力量與 18 個 Z 招式動畫（data/sd_anims.js、js/sd_anim.js）
 import { G, Game, Story, T, UI, ZMove, define } from './core.js';
 import { mulberry32 } from './util.js';
 import { ITEMS, LEADERS, REGIONS, REGION_POS, TYPES } from './data.js';
 import { md } from './movedata.js';
 import { World } from './world.js';
 import { Battle } from './battle.js';
+import { SDAnim } from './sd_anim.js';
 ITEMS['z-ring'] = { n: 'Z 手環', price: 0, kind: 'key', d: '能把 Z 純晶的力量傳給寶可夢的手環。' };
 const ZCRYSTAL = {};
 for (const [type, z] of Object.entries(window.ZMOVES || {})) {
@@ -65,10 +68,22 @@ Battle.prototype.runMove = async function (user, target, act) {
     act.zShown = true;
     act.mv.zHitProtect = !!this.volOf(target).protect;
     await this.msg(`${this.label(user)} 把全身的力量集中起來！\n釋放出全力的 Z 招式！`);
-    if (this.teraAnim) await this.teraAnim(this.sideKey(user));
+    // Z 力量的演出（Showdown 的動畫：Z 標誌與光芒）；沒有動畫資料時用太晶化的閃光代替
+    if (SDAnim.ok() && this.el) await SDAnim.zpower(this, user, target);
+    else if (this.teraAnim) await this.teraAnim(this.sideKey(user));
   }
   return _runMove.call(this, user, target, act);
 };
+// Z 招式的動畫：Showdown 的 18 個 Z 招式動畫（js/sd_anim.js）；沒有資料時用原本招式的動畫
+// （move_anims.js 比 zmove.js 早載入，這裡包在最外層）
+function installZAnim() {
+  const prev = Battle.prototype.moveAnim;
+  Battle.prototype.moveAnim = async function (user, target, view) {
+    if (view && view.isZ && await SDAnim.zmove(this, user, target, view.t)) return;
+    return prev.call(this, user, target, view);
+  };
+}
+installZAnim();
 // 玩家在招式選單按 E；訓練家的王牌攜帶 Z 純晶時，選到同屬性的攻擊招式就使用
 const _doTurn = Battle.prototype.doTurn;
 Battle.prototype.doTurn = async function (action) {

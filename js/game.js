@@ -1118,7 +1118,14 @@ define(Game, {
       grass: 'grassyterrain', psychic: 'psychicterrain', fairy: 'mistyterrain' };
     const r = await Game.battle({ trainer: { title, name, party, kind: 'gym', money: rematch ? 150 : 100, sprite: LEADER_SPRITES[t.region][t.gym],
       field: late ? FIELD[type] : null, items: late ? 3 : 2, dmax: t.region === 'galar', aura: trial, lose: rematch ? '果然名不虛傳！' : '……我輸了。這枚徽章是你的了！' }, biome: 'gym' });
-    if (r === 'win' && rematch) { Game.save(true); return; }
+    if (r === 'win' && rematch) {
+      // 拿到 Z 手環之前打過的館主：重賽贏了也會給同屬性的 Z 純晶
+      if (G.state.bag['z-ring'] && window.ZMOVES && ZMOVES[type] && !G.state.bag[ZMOVES[type].item]) {
+        Game.giveItem(ZMOVES[type].item, 1);
+        await UI.say(`${name}：「這個送給你，用 Z 招式讓我見識一下吧！」\n獲得了${ITEMS[ZMOVES[type].item].n}！`);
+      }
+      Game.save(true); return;
+    }
     if (r === 'win') {
       (G.state.badges[t.region] = G.state.badges[t.region] || []).push(t.gym);
       Sound.jingle('badge');
@@ -1129,8 +1136,8 @@ define(Game, {
 獲得了太晶珠！
 （戰鬥中選招式時按 R 讓寶可夢太晶化；用過後到寶可夢中心充能）`);
       }
-      // 阿羅拉：同屬性的 Z 純晶
-      if (t.region === 'alola' && window.ZMOVES && ZMOVES[type] && !G.state.bag[ZMOVES[type].item]) {
+      // 同屬性的 Z 純晶：阿羅拉的道館；其他地區在拿到 Z 手環（第一次成為冠軍）之後
+      if ((t.region === 'alola' || G.state.bag['z-ring']) && window.ZMOVES && ZMOVES[type] && !G.state.bag[ZMOVES[type].item]) {
         Game.giveItem(ZMOVES[type].item, 1);
         await UI.say(`獲得了${ITEMS[ZMOVES[type].item].n}！`);
       }
@@ -1197,6 +1204,13 @@ define(Game, {
         if (st) Game.giveItem(st, 1);
         await UI.say(`${reg.champ}：「這是給新冠軍的禮物。」\n獲得了超級手環${st ? '和' + ITEMS[st].n : ''}！\n（寶可夢攜帶超級石時，在戰鬥中選招式時按 M 超級進化）`);
         await UI.say('聽說各地區都散落著其他的超級石……');
+      }
+      // Z 手環：阿羅拉以外也能在第一次成為冠軍時取得（之後打倒館主會拿到同屬性的 Z 純晶）
+      if (!G.state.bag['z-ring'] && window.ZMOVES) {
+        Game.giveItem('z-ring', 1);
+        if (!G.state.bag['normalium-z']) Game.giveItem('normalium-z', 1);
+        await UI.say(`獲得了 Z 手環和一般Ｚ！
+（讓寶可夢攜帶 Z 純晶，在戰鬥中選招式時按 E 使用 Z 招式；打倒館主可以拿到同屬性的 Z 純晶，館主也可以重賽）`);
       }
       Game.save(true);
     }

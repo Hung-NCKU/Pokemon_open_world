@@ -3462,6 +3462,31 @@ async function run() {
     check('撿拾：Lv.5 時以傷藥最多（約 30%）', counts.potion > 500 && counts.potion < 700, JSON.stringify(counts));
     G.state = keep.state;
   }
+  // Z 招式：Showdown 的動畫資料、阿羅拉以外的取得方式
+  {
+    const A = window.SD_ANIMS;
+    check('Z 招式動畫：Showdown 的 18 個 Z 招式與 Z 力量都有動畫', A && Object.keys(A.Z).length === 18 && Object.values(A.Z).every(id => A.BattleMoveAnims[id] && typeof A.BattleMoveAnims[id].anim === 'function') && A.BattleOtherAnims.zpower);
+    check('Z 招式動畫：用到的特效圖都有網址與大小', Object.values(A.BattleEffects).every(e => /^https:\/\/play\.pokemonshowdown\.com\/fx\//.test(e.url) && e.w > 0 && e.h > 0), Object.keys(A.BattleEffects).length + ' 種');
+    check('Z 招式動畫：Showdown 的座標換算（我方中心 210,245、對手中心 430,135）', (() => { const a = sdPos({ x: 0, y: 0, z: 0 }, { w: 100, h: 100 }), b = sdPos({ x: 0, y: 0, z: 200 }, { w: 100, h: 100 }); return a.left + a.width / 2 === 210 && a.top + a.height / 2 === 245 && b.left + b.width / 2 === 430 && b.top + b.height / 2 === 135; })());
+    const keep = { state: G.state, battle: Game.battle, say: UI.say, choose: UI.choose, save: Game.save };
+    UI.say = async () => { }; UI.choose = async () => 0; Game.save = () => { };
+    Game.battle = async () => 'win';
+    G.state = Game.newState('T', 'kanto', 1);
+    G.state.party = [Mon.create(25, 50)];
+    World.generate(G.state.seed, 'kanto', G.state.worldVer);
+    const gym = World.towns.find(t => t.region === 'kanto' && t.gym === 2); // 馬志士（電）
+    await Game.gymChallenge(gym);
+    check('Z 純晶：還沒有 Z 手環時，關都的館主不給 Z 純晶', !G.state.bag['electrium-z']);
+    await Game.championBattle(World.towns.find(t => t.region === 'kanto' && t.kind === 'league'));
+    check('Z 手環：第一次成為冠軍時和超級手環一起取得（附一般Ｚ）', G.state.bag['z-ring'] && G.state.bag['normalium-z'] && G.state.bag['mega-ring']);
+    await Game.gymChallenge(gym);
+    check('Z 純晶：拿到 Z 手環後，重賽贏了館主也會給同屬性的 Z 純晶', G.state.bag['electrium-z'] === 1);
+    await Game.gymChallenge(World.towns.find(t => t.region === 'kanto' && t.gym === 1)); // 小霞（水）：第一次挑戰
+    check('Z 純晶：拿到 Z 手環後，第一次打倒館主也會給', G.state.bag['waterium-z'] === 1);
+    Object.assign(Game, { battle: keep.battle, save: keep.save });
+    Object.assign(UI, { say: keep.say, choose: keep.choose });
+    G.state = keep.state;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

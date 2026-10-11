@@ -58,6 +58,7 @@ python tools/build_assets.py
 ### 對戰
 - 最新世代的數值與公式：物理／特殊、屬性相剋、會心、能力等級、異常狀態、天氣、場地、牆壁、陷阱、替身等。招式（691 個全部）、特性與持有道具依 Showdown 實作，包含變身、戲法、特性互換、幻覺、戰鬥中的形態變化。
 - 太晶化、超級進化、原始回歸、Z 招式、究極爆發、極巨化／超極巨化、太晶團體戰、雙打。
+- Z 招式：Z 手環在阿羅拉的博士或第一次成為冠軍時取得，Z 純晶由館主（含重賽）給予；使出時播放 Pokémon Showdown 的 Z 力量與 18 個 Z 招式動畫（`tools/fetch_showdown_anims.mjs` → `data/sd_anims.js`，CC0；特效圖從 Showdown 載入）。
 - 訓練家 AI 三層：一般訓練家估算傷害；館主會換人、看時機用異常狀態與天氣；四天王與冠軍會預測、強化與太晶化。
 
 ### 成長與系統
@@ -93,7 +94,7 @@ GitHub Actions（`.github/workflows/test.yml`）在每次 push 與 PR 自動執�
 
 ## 資料與參考
 
-- 寶可夢、招式資料：[PokéAPI](https://pokeapi.co/docs/v2)（`tools/fetch_data.py`）；對戰資料與回合處理：[Pokémon Showdown](https://github.com/smogon/pokemon-showdown)（`tools/fetch_showdown.py`）。
+- 寶可夢、招式資料：[PokéAPI](https://pokeapi.co/docs/v2)（`tools/fetch_data.py`）；對戰資料與回合處理：[Pokémon Showdown](https://github.com/smogon/pokemon-showdown)（`tools/fetch_showdown.py`）；Z 招式動畫：[Pokémon Showdown 客戶端](https://github.com/smogon/pokemon-showdown-client)的 battle-animations（CC0，特效圖 fx/ 大多為 CC0，閃電、冰柱等另有授權）。
 - 中文譯名：[神奇寶貝百科](https://wiki.52poke.com/)、[寶可夢官方圖鑑](https://tw.portal-pokemon.com/play/pokedex/)。
 - 對戰機制：[Smogon 朱紫對戰機制研究](https://www.smogon.com/forums/threads/scarlet-violet-battle-mechanics-research.3709545/)、[Bulbapedia](https://bulbapedia.bulbagarden.net/)、[Serebii](https://www.serebii.net/pokemon/)。
 - 畫面、地圖、流程：[pokeemerald](https://github.com/pret/pokeemerald)。道具圖示另參考 Showdown、PokéAPI、[pokesprite](https://github.com/msikma/pokesprite)、Serebii。
