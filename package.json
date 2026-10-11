@@ -13,6 +13,6 @@
     "test:install": "playwright install --with-deps chromium"
   },
   "devDependencies": {
-    "@playwright/test": "1.48.2"
+    "@playwright/test": "1.55.1"
   }
 }

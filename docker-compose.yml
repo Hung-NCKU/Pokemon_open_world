@@ -7,7 +7,7 @@ services:
       - "8080:80"
 
   test:
-    image: mcr.microsoft.com/playwright:v1.48.2-noble
+    image: mcr.microsoft.com/playwright:v1.55.1-noble
     working_dir: /app
     volumes:
       - .:/app

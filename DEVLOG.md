@@ -6,6 +6,9 @@
 
 ## 2026-10-11
 
+### 開發工具的安全性更新（npm audit）
+- Playwright 下載瀏覽器時沒有驗證 SSL 憑證（高，開發工具，不會進到遊戲）：升級 1.48.2 → 1.55.1（Docker 的 Playwright 映像檔一起換），`npm audit` 0 個漏洞；引擎 543/543、冒煙 17/17。`vite-esm` 分支另外把 Vite 升到 6.4.4（esbuild 開發伺服器的漏洞）。
+
 ### 使用者要求：npm、測試框架（Playwright）、CI、Docker
 - `package.json`：`npm run serve`（`tools/serve.mjs`，沒有相依套件的靜態伺服器）、`npm test`（引擎＋冒煙）、`test:engine`、`test:smoke`、`test:natural`（實際遊玩，真實時間）、`test:install`（下載 Chromium）。
 - 測試框架：Playwright（`playwright.config.js`、`tests/e2e/*.spec.js`）。原本的測試頁不變，Playwright 透過本機伺服器打開它們，等 `document.title` 變成 PASS／FAIL，再列出失敗的項目；`PW_CHANNEL=chrome` 可以用已安裝的 Chrome。改用 http 而不是 file://，也不再需要「虛擬時間」：引擎測試真實時間約 40 秒。
