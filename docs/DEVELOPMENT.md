@@ -307,18 +307,4 @@ if (lm.ver && lm.ver > this.worldVer) continue;                        // 新的
 
 ---
 
-## 12. 練習題
-
-由淺到深，每題都標出要看的檔案。
-
-1. **加一個城鎮事件**（`data/towns.js`、`js/town_events.js`）：在華藍市的小屋加一個送「好傷藥」的人，只送一次。提示：照 `oldman` 寫。
-2. **加一種天氣**（`js/weather.js`）：例如「冰雹」，雪地才會出現，冰屬性的遭遇變多。
-3. **改等級曲線並用機器人量測**（`js/world.js` 的 `levelAt`、`tests/playthrough.html?seed=`）：把 1.35 改成 1.2，跑三個種子比較練等場數。
-4. **新的 AI 規則**（`js/ai.js`）：讓第 3 層 AI 在玩家使用強化招式後優先用「黑霧」。寫一個測試。
-5. **新的室內房間**（`tools/build_interiors.py`）：從 pokeemerald 選一張地圖加成可以走進去的建築。記得檢查從入口走得到每個人。
-6. **新的世界配置版本**：做一個會改變地形的功能，讓它只在第 8 版出現，並寫測試確認第 7 版的地形雜湊不變。
-7. **雲端帳號**（`js/account.js`）：把 `Account.store` 換成你選的雲端服務。
-
----
-
 *這份文件與 [DEVLOG.md](../DEVLOG.md)（時間順序的完整紀錄）、[PROGRESS.md](../PROGRESS.md)（規劃與進度）一起閱讀。*
