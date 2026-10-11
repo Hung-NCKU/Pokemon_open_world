@@ -2826,6 +2826,543 @@ async function run() {
     }
     [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
   }
+  // 清單上未完成的招式與特性：逐一實作
+  {
+    const keepRand = U.rand;
+    U.rand = () => .99; // 不會擊中要害、傷害取最低、追加效果不發動
+    const ms = sd => ({ id: moveId(sd), pp: 10 });
+    // ---------- 未支援的招式 ----------
+    {
+      const b = setup(132, 50, 6, 50);
+      b.foe.moves = [ms('flamethrower'), ms('airslash')];
+      const ab0 = b.me.ability, atk = Mon.stats(b.foe)[1];
+      await use(b, b.me, 'transform');
+      check('變身：屬性、招式（PP 5）、特性、能力值都變成對方的', b.typesOf(b.me).join() === 'fire,flying' && b.me.moves.map(s => s.id).join() === b.foe.moves.map(s => s.id).join()
+        && b.me.moves.every(s => s.pp === 5) && b.me.ability === b.foe.ability && Mon.stats(b.me)[1] === atk, `${b.typesOf(b.me)} ${b.me.ability}`);
+      b.cleanupBattle();
+      check('變身：戰鬥結束後招式、特性、能力值恢復', b.me.moves[0].id === moveId('transform') && b.me.ability === ab0 && Mon.stats(b.me)[1] !== atk);
+      const b2 = setup(132, 50, 6, 50);
+      b2.me.ability = 'imposter'; b2.foe.moves = [ms('flamethrower')];
+      await b2.abilityStart(b2.me);
+      check('變身者：登場時變身成對手', b2.volOf(b2.me).transformed && b2.typesOf(b2.me).includes('fire'));
+    }
+    {
+      const b = setup(65, 50, 143, 50);
+      b.me.item = 'choice-scarf'; b.foe.item = 'leftovers';
+      await use(b, b.me, 'trick');
+      check('戲法：交換道具', b.me.item === 'leftovers' && b.foe.item === 'choice-scarf');
+      b.trainer = { name: 'T' };
+      b.cleanupBattle();
+      check('戲法：訓練家對戰結束後道具還原', b.me.item === 'choice-scarf' && b.foe.item === 'leftovers');
+      const b2 = setup(65, 50, 143, 50);
+      b2.foe.item = 'leftovers'; b2.foe.ability = 'sticky-hold';
+      await use(b2, b2.me, 'switcheroo');
+      check('掉包：黏著的對手不能交換', b2.foe.item === 'leftovers' && !b2.me.item);
+    }
+    {
+      const b = setup(65, 50, 143, 50);
+      b.me.ability = 'synchronize'; b.foe.ability = 'thick-fat';
+      await use(b, b.me, 'skillswap');
+      check('特性互換：交換特性', b.me.ability === 'thick-fat' && b.foe.ability === 'synchronize');
+      await b.onSwitchOut(b.me);
+      check('特性互換：退場時自己的特性恢復', b.me.ability === 'synchronize');
+      const c = setup(65, 50, 143, 50);
+      c.foe.ability = 'thick-fat';
+      await use(c, c.me, 'roleplay');
+      check('扮演：複製對手的特性', c.me.ability === 'thick-fat');
+      const d = setup(65, 50, 143, 50);
+      d.foe.ability = 'levitate';
+      await use(d, d.me, 'gastroacid');
+      check('胃液：特性失效', d.ab(d.foe) === null && d.foe.ability === 'levitate');
+      const e = setup(65, 50, 143, 50);
+      e.foe.st = 'slp'; e.foe.slpT = 3;
+      await use(e, e.me, 'worryseed');
+      check('煩惱種子：特性變成不眠並醒來', e.foe.ability === 'insomnia' && !e.foe.st);
+      const f = setup(65, 50, 143, 50);
+      await use(f, f.me, 'simplebeam');
+      check('單純光束：特性變成單純', f.foe.ability === 'simple');
+      const g = setup(65, 50, 143, 50);
+      g.me.ability = 'inner-focus';
+      await use(g, g.me, 'entrainment');
+      check('找夥伴：讓對手的特性和自己相同', g.foe.ability === 'inner-focus');
+      const h = setup(65, 50, 143, 50);
+      h.foe.ability = 'thick-fat';
+      await use(h, h.me, 'doodle');
+      check('描繪：複製對手的特性', h.me.ability === 'thick-fat');
+    }
+    {
+      const b = setup(65, 50, 143, 50);
+      b.vFoe.lastMove = moveId('thunderbolt');
+      b.me.moves = [ms('mimic'), ms('tackle')];
+      b.volOf(b.me).lockOn = 2;
+      await b.runMove(b.me, b.foe, { mv: md(moveId('mimic')), slot: b.me.moves[0] });
+      check('模仿：暫時學會對手最後使用的招式', b.me.moves[0].id === moveId('thunderbolt') && b.me.moves[0].mimicOf);
+      b.restoreMon(b.me, ['moves']);
+      check('模仿：退場後恢復成模仿', b.me.moves[0].id === moveId('mimic'));
+      const c = setup(235, 50, 143, 50);
+      c.vFoe.lastMove = moveId('thunderbolt');
+      const slot = await use(c, c.me, 'sketch');
+      c.cleanupBattle();
+      check('寫生：永久學會對手最後使用的招式', c.me.moves[0].id === moveId('thunderbolt'));
+      const d = setup(137, 50, 143, 50);
+      d.vFoe.lastMove = moveId('thunderbolt');
+      await use(d, d.me, 'conversion2');
+      check('紋理 2：變成抵抗電屬性的屬性', typeEff('electric', d.typesOf(d.me)) < 1, d.typesOf(d.me).join());
+    }
+    {
+      const b = setup(213, 50, 143, 50);
+      const s = Mon.stats(b.me);
+      await use(b, b.me, 'powertrick');
+      check('力量戲法：攻擊與防禦互換', Mon.stats(b.me)[1] === s[2] && Mon.stats(b.me)[2] === s[1]);
+      b.cleanupBattle();
+      check('力量戲法：戰鬥結束後恢復', Mon.stats(b.me)[1] === s[1]);
+      const c = setup(65, 50, 68, 50);
+      const a1 = Mon.stats(c.me), a2 = Mon.stats(c.foe);
+      await use(c, c.me, 'powersplit');
+      check('力量平分：雙方的攻擊、特攻變成平均值', Mon.stats(c.me)[1] === Math.floor((a1[1] + a2[1]) / 2) && Mon.stats(c.foe)[3] === Math.floor((a1[3] + a2[3]) / 2));
+      await use(c, c.me, 'guardsplit');
+      check('防守平分：雙方的防禦相同', Mon.stats(c.me)[2] === Mon.stats(c.foe)[2]);
+      c.cleanupBattle();
+    }
+    {
+      const b = setup(1008, 70, 143, 50);
+      const dead = Mon.create(25, 30); dead.hp = 0;
+      G.party.push(dead);
+      await use(b, b.me, 'revivalblessing');
+      check('復生祈禱：倒下的同伴以一半體力復活', dead.hp === Math.floor(Mon.maxHp(dead) / 2));
+      const c = setup(65, 50, 143, 50);
+      await use(c, c.me, 'magiccoat');
+      await use(c, c.foe, 'toxic');
+      check('魔法反射：把變化招式反彈回去', c.foe.st === 'tox' && !c.me.st);
+    }
+    {
+      // 忍耐：兩回合後把受到的傷害加倍奉還
+      const b = setup(143, 50, 68, 50);
+      await use(b, b.me, 'bide');
+      const h0 = b.me.hp;
+      await use(b, b.foe, 'tackle');
+      const took = h0 - b.me.hp;
+      await b.runMove(b.me, b.foe, { mv: md(moveId('bide')), slot: null, cont: true });
+      const f0 = b.foe.hp;
+      await b.runMove(b.me, b.foe, { mv: md(moveId('bide')), slot: null, cont: true });
+      check('忍耐：第三回合造成兩倍的傷害', took > 0 && f0 - b.foe.hp === Math.min(f0, took * 2) && !b.vMe.locked, `${took} → ${f0 - b.foe.hp}`);
+    }
+    // ---------- 部分效果未實作的招式 ----------
+    {
+      const b = setup(143, 50, 68, 50);
+      await use(b, b.me, 'stockpile'); await use(b, b.me, 'stockpile');
+      check('蓄力：防禦、特防各提高', b.vMe.stockpile === 2 && b.vMe.stg.def === 2 && b.vMe.stg.spd === 2);
+      const h = b.foe.hp;
+      await use(b, b.me, 'spitup');
+      check('噴出：用掉蓄力造成傷害，提高的防禦恢復', b.foe.hp < h && !b.vMe.stockpile && b.vMe.stg.def === 0);
+      await use(b, b.me, 'stockpile');
+      b.me.hp = 10;
+      await use(b, b.me, 'swallow');
+      check('吞下：依蓄力次數回復', b.me.hp === 10 + Math.floor(Mon.maxHp(b.me) / 4) && !b.vMe.stockpile);
+      await use(b, b.me, 'spitup');
+      check('噴出：沒有蓄力時失敗', b.vMe.lastMoveFailed);
+    }
+    {
+      const b = setup(94, 50, 143, 50);
+      await use(b, b.me, 'torment');
+      b.vFoe.lastMove = moveId('tackle');
+      check('無理取鬧：不能連續使用同一個招式', b.moveBlocked(b.foe, b.vFoe, moveId('tackle')) === '無理取鬧' && !b.moveBlocked(b.foe, b.vFoe, moveId('bodyslam')));
+      const c = setup(94, 50, 143, 50);
+      c.foe.moves = [ms('tackle'), ms('rest')];
+      c.me.moves = [ms('imprison'), ms('tackle')];
+      c.volOf(c.me).lockOn = 2;
+      await c.runMove(c.me, c.foe, { mv: md(moveId('imprison')), slot: c.me.moves[0] });
+      check('封印：對手不能使用自己也會的招式', c.moveBlocked(c.foe, c.vFoe, moveId('tackle')) === '封印' && !c.moveBlocked(c.foe, c.vFoe, moveId('rest')));
+      const d = setup(94, 50, 68, 70);
+      await use(d, d.me, 'grudge');
+      d.me.hp = 1;
+      const slot = await use(d, d.foe, 'crunch');
+      check('怨念：打倒自己的招式 PP 歸零', d.me.hp === 0 && slot.pp === 0, `${d.me.hp} ${slot.pp}`);
+    }
+    {
+      const b = setup(143, 50, 6, 50);
+      const dmg = () => { const st = b.calcDamage(b.foe, b.me, b.vFoe, b.vMe, { ...md(moveId('flamethrower')), type: 'fire' }, 1, 90); return st.dmg; };
+      const d0 = dmg();
+      await use(b, b.me, 'watersport');
+      check('玩水：火屬性招式威力變成 1/3', b.field.waterSport === 5 && dmg() < d0 * .5, `${d0} → ${dmg()}`);
+      const c = setup(143, 50, 68, 50);
+      const phys = () => c.calcDamage(c.foe, c.me, c.vFoe, c.vMe, md(moveId('tackle')), 1, 40).dmg;
+      const p0 = phys();
+      c.vMe.stg.def = 6;
+      const p1 = phys();
+      c.field.wonderRoom = 5;
+      check('奇妙空間：防禦與特防的能力值互換（能力等級不換）', p1 < p0 && phys() !== p1);
+      c.field.wonderRoom = 0;
+      c.me.item = 'leftovers';
+      await use(c, c.me, 'magicroom');
+      check('魔法空間：道具沒有效果', c.field.magicRoom === 5 && c.itm(c.me) === null);
+      await use(c, c.me, 'fairylock');
+      check('妖精之鎖：下回合不能換人或逃走', !!c.trappedBy(c.me));
+      await c.endOfTurn(); await c.endOfTurn();
+      check('妖精之鎖：一回合後解除', !c.trappedBy(c.me));
+      await use(c, c.me, 'electrify');
+      check('輸電：目標的招式變成電屬性', c.moveType(c.foe, md(moveId('tackle'))) === 'electric');
+    }
+    {
+      const b = setup(143, 50, 68, 50);
+      b.foe.st = 'slp'; b.foe.slpT = 3;
+      await use(b, b.me, 'uproar');
+      check('吵鬧：叫醒睡著的寶可夢，鎖定 3 回合', !b.foe.st && b.vMe.locked && b.vMe.uproar === 2);
+      const r = await b.setStatus(b.foe, 'slp', b.me, false);
+      check('吵鬧：期間無法入睡', !r && !b.foe.st);
+      await b.runMove(b.me, b.foe, { mv: md(moveId('uproar')), slot: null, cont: true });
+      await b.runMove(b.me, b.foe, { mv: md(moveId('uproar')), slot: null, cont: true });
+      check('吵鬧：3 回合後結束', !b.vMe.locked && !b.vMe.uproar);
+    }
+    {
+      const b = setup(143, 50, 68, 50);
+      b.me.item = 'sitrus-berry'; b.me.hp = 10;
+      await b.checkBerry(b.me);
+      await use(b, b.me, 'recycle');
+      check('回收利用：撿回用掉的樹果', b.me.item === 'sitrus-berry');
+      b.me.hp = Mon.maxHp(b.me);
+      await use(b, b.me, 'stuffcheeks');
+      check('大快朵頤：吃掉樹果，防禦大幅提高', !b.me.item && b.vMe.stg.def === 2);
+      b.me.item = 'sitrus-berry'; b.foe.item = 'sitrus-berry'; b.me.hp = 10; b.foe.hp = 10;
+      await use(b, b.me, 'teatime');
+      check('茶會：所有寶可夢吃掉樹果', !b.me.item && !b.foe.item && b.me.hp > 10 && b.foe.hp > 10);
+      await use(b, b.me, 'magicpowder');
+      check('魔法粉：目標變成超能力屬性', b.typesOf(b.foe).join() === 'psychic');
+      b.sides.me.reflect = 5; b.sides.foe.spikes = 2;
+      await use(b, b.me, 'courtchange');
+      check('換場：交換雙方場地上的效果', b.sides.foe.reflect === 5 && b.sides.me.spikes === 2 && !b.sides.me.reflect);
+    }
+    {
+      const b = setup(143, 50, 68, 50);
+      await use(b, b.me, 'wideguard');
+      const h = b.me.hp;
+      await use(b, b.foe, 'earthquake');
+      check('廣域防守：擋下範圍招式', b.me.hp === h && b.sides.me.wideGuard);
+      await use(b, b.me, 'quickguard');
+      await use(b, b.foe, 'quickattack');
+      check('快速防守：擋下先制招式', b.me.hp === h);
+      await use(b, b.me, 'craftyshield');
+      await use(b, b.foe, 'toxic');
+      check('戲法防守：擋下對手的變化招式', !b.me.st);
+      await b.endOfTurn();
+      check('防守類：回合結束後解除', !b.sides.me.wideGuard && !b.sides.me.quickGuard && !b.sides.me.craftyShield);
+    }
+    {
+      const b = setup(143, 50, 68, 50);
+      b.vFoe.lastMove = moveId('tackle');
+      b.foe.moves = [ms('tackle')];
+      const h = b.me.hp;
+      await use(b, b.me, 'instruct');
+      check('號令：目標再使出一次上次的招式', b.me.hp < h && b.foe.moves[0].pp === 9);
+      const c = setup(143, 50, 68, 50);
+      c.foe.moves = [ms('tackle')];
+      await use(c, c.me, 'afteryou');
+      check('先行一步：目標還沒行動時成功', !c.vMe.lastMoveFailed);
+      c.vFoe.movedThisTurn = true;
+      await use(c, c.me, 'quash');
+      check('延後：目標已經行動時失敗', c.vMe.lastMoveFailed);
+      const d = setup(143, 50, 3, 50);
+      await use(d, d.me, 'flowershield');
+      check('鮮花防守：草屬性的防禦提高', d.vFoe.stg.def === 1 && d.vMe.stg.def === 0);
+      await use(d, d.me, 'rototiller');
+      check('耕地：地面上的草屬性攻擊、特攻提高', d.vFoe.stg.atk === 1 && d.vFoe.stg.spa === 1);
+      const e = setup(143, 50, 68, 50);
+      await use(e, e.me, 'glaiverush');
+      const p0 = e.calcDamage(e.foe, e.me, e.vFoe, e.vMe, md(moveId('tackle')), 1, 40).dmg;
+      check('巨劍突擊：之後受到的傷害加倍、必定命中', e.vMe.glaiveRush && e.calcDamage(e.foe, e.me, e.vFoe, { ...e.vMe, glaiveRush: false }, md(moveId('tackle')), 1, 40).dmg * 2 >= p0 - 1);
+      await use(e, e.me, 'tackle');
+      check('巨劍突擊：自己下次行動後解除', !e.vMe.glaiveRush);
+      const g = setup(143, 50, 68, 50);
+      const party2 = Mon.create(25, 30); G.party.push(party2);
+      await use(g, g.me, 'healingwish');
+      party2.hp = 1; party2.moves.forEach(s => { s.pp = 0; });
+      g.myIdx = 1; g.vMe = newVol();
+      await g.onEntry(party2);
+      check('治癒之願：體力與狀態恢復，PP 不恢復', party2.hp === Mon.maxHp(party2) && party2.moves.every(s => s.pp === 0));
+    }
+    // ---------- 特性 ----------
+    {
+      const b = setup(143, 50, 68, 50);
+      const base = () => b.calcDamage(b.foe, b.me, b.vFoe, b.vMe, md(moveId('tackle')), 1, 40).dmg;
+      const d0 = base();
+      b.me.ability = 'tablets-of-ruin';
+      const d1 = base();
+      b.me.ability = 'sword-of-ruin';
+      check('災禍之簡、災禍之劍：降低其他寶可夢的攻擊、自己的防禦不受影響', d1 < d0 && base() === d0, `${d0} ${d1} ${base()}`);
+      b.foe.ability = 'sword-of-ruin'; b.me.ability = null;
+      check('災禍之劍：降低對手的防禦', base() > d0);
+      b.foe.ability = 'dark-aura';
+      const dk = () => b.calcDamage(b.foe, b.me, b.vFoe, b.vMe, md(moveId('crunch')), 1, 80).dmg;
+      const k1 = dk(); b.foe.ability = null; const k0 = dk();
+      check('暗黑氣場：惡屬性招式威力提高', k1 > k0);
+      b.foe.ability = 'merciless'; b.me.st = 'psn';
+      check('不仁不義：對中毒的目標必定擊中要害', b.calcDamage(b.foe, b.me, b.vFoe, b.vMe, md(moveId('tackle')), 1, 40).crit);
+      b.foe.ability = 'liquid-voice';
+      check('濕潤之聲：聲音招式變成水屬性', b.moveType(b.foe, md(moveId('hypervoice'))) === 'water');
+    }
+    {
+      const b = setup(778, 50, 68, 50);
+      const h = b.me.hp;
+      await use(b, b.foe, 'crunch');
+      check('畫皮：第一次攻擊由偽裝承受，損失 1/8 體力', b.me.form === 'mimikyu-busted' && h - b.me.hp === Math.floor(Mon.maxHp(b.me) / 8), `${b.me.form} ${h - b.me.hp}`);
+      const c = setup(875, 50, 68, 50);
+      const h2 = c.me.hp;
+      await use(c, c.foe, 'thunderbolt');
+      check('結凍頭：特殊招式不擋', c.me.hp < h2 && !c.me.form);
+      await use(c, c.foe, 'closecombat');
+      check('結凍頭：擋下物理招式', c.me.form === 'eiscue-noice');
+    }
+    {
+      const b = setup(681, 50, 143, 50);
+      const d0 = Mon.stats(b.me)[1];
+      await use(b, b.me, 'shadowsneak');
+      check('戰鬥切換：攻擊時變成刀劍形態', b.me.form === 'aegislash-blade' && Mon.stats(b.me)[1] > d0);
+      await use(b, b.me, 'kingsshield');
+      check('戰鬥切換：王者盾牌變回盾牌形態', !b.me.form);
+      const c = setup(555, 50, 143, 50);
+      c.me.ability = 'zen-mode'; c.me.hp = 10;
+      await c.endOfTurn();
+      check('達摩模式：體力一半以下時變成達摩模式', c.me.form === 'darmanitan-zen' && c.typesOf(c.me).includes('psychic'));
+      const d = setup(746, 30, 143, 50);
+      await d.onEntry(d.me);
+      check('魚群：Lv.20 以上登場時組成魚群', d.me.form === 'wishiwashi-school');
+      d.me.hp = 5; await d.endOfTurn();
+      check('魚群：體力 1/4 以下時散開', !d.me.form);
+      const e = setup(774, 50, 143, 50);
+      check('界限盾殼：流星的樣子不會陷入異常狀態', !(await e.setStatus(e.me, 'par', e.foe)));
+      const f = setup(351, 50, 143, 50);
+      f.field.weather = 'sunnyday'; f.field.weatherT = 5;
+      await f.abilityStart(f.me);
+      check('陰晴不定：晴天變成火屬性', f.typesOf(f.me).join() === 'fire');
+    }
+    {
+      const b = setup(289, 50, 143, 50);
+      await use(b, b.me, 'tackle');
+      const h = b.foe.hp;
+      await use(b, b.me, 'tackle');
+      check('懶惰：每兩回合只能行動一次', b.foe.hp === h);
+      const c = setup(143, 50, 68, 50);
+      c.me.ability = 'neutralizing-gas'; c.foe.ability = 'guts';
+      check('化學變化氣體：場上其他寶可夢的特性失效', c.ab(c.foe) === null && c.ab(c.me) === 'neutralizing-gas');
+      const d = setup(143, 50, 68, 50);
+      d.me.ability = 'color-change';
+      await use(d, d.foe, 'karatechop');
+      check('變色：變成打中自己的招式的屬性', d.typesOf(d.me).join() === 'fighting', `${d.typesOf(d.me)} ${d.me.hp} ${d.ab(d.me)}`);
+      const e = setup(143, 50, 68, 50);
+      e.me.ability = 'mummy';
+      await use(e, e.foe, 'closecombat');
+      check('木乃伊：接觸後對手的特性變成木乃伊', e.foe.ability === 'mummy');
+      const f = setup(143, 50, 68, 50);
+      f.me.ability = 'pickpocket'; f.foe.item = 'leftovers'; f.me.item = null;
+      await use(f, f.foe, 'karatechop');
+      check('順手牽羊：被接觸時搶走對手的道具', f.me.item === 'leftovers' && !f.foe.item, `${f.me.item} ${f.foe.item}`);
+      const g = setup(143, 50, 68, 50);
+      g.foe.ability = 'mirror-armor'; g.me.ability = 'intimidate';
+      await g.abilityStart(g.me);
+      check('鏡甲：把威嚇反彈回去', g.vFoe.stg.atk === 0 && g.vMe.stg.atk === -1);
+      const h2 = setup(143, 50, 68, 50);
+      h2.foe.ability = 'opportunist';
+      await use(h2, h2.me, 'swordsdance');
+      check('跟風：對手提高能力時自己也提高', h2.vFoe.stg.atk === 2);
+      const k = setup(143, 50, 68, 50);
+      k.me.ability = 'good-as-gold';
+      await use(k, k.foe, 'toxic');
+      check('黃金之軀：對手的變化招式無效', !k.me.st);
+      const q = setup(143, 50, 68, 50);
+      q.me.ability = 'dazzling';
+      const hq = q.me.hp;
+      await use(q, q.foe, 'quickattack');
+      check('鮮艷之軀：對手的先制招式無效', q.me.hp === hq);
+      const u = setup(143, 50, 68, 50);
+      u.foe.ability = 'unseen-fist'; u.vMe.protect = 'protect';
+      const hu = u.me.hp;
+      await use(u, u.foe, 'closecombat');
+      check('無形拳：接觸類招式無視守住', u.me.hp < hu);
+    }
+    {
+      const b = setup(143, 50, 68, 50);
+      b.foe.ability = 'emergency-exit'; b.foe.hp = Math.floor(Mon.maxHp(b.foe) * .6);
+      await use(b, b.me, 'bodyslam');
+      check('危險迴避：野生寶可夢體力降到一半以下時逃走', b.fled);
+      const c = setup(143, 50, 208, 50);
+      c.me.ability = 'corrosion';
+      await use(c, c.me, 'toxic');
+      check('腐蝕：可以讓鋼屬性中毒', c.foe.st === 'tox');
+      const d = setup(143, 50, 68, 50);
+      d.me.ability = 'cud-chew'; d.me.item = 'sitrus-berry'; d.me.hp = 10;
+      await d.checkBerry(d.me);
+      const h1 = d.me.hp;
+      await d.endOfTurn();
+      const h2 = d.me.hp;
+      await d.endOfTurn();
+      check('反芻：下一回合結束時再吃一次樹果', h2 === h1 && d.me.hp > h2, `${h1} ${h2} ${d.me.hp}`);
+      const e = setup(143, 50, 68, 50);
+      e.me.ability = 'slow-start';
+      const s0 = e.speedOf(e.me, e.vMe); e.vMe.turnsOut = 5;
+      check('慢啟動：登場後 5 回合速度減半', e.speedOf(e.me, e.vMe) === s0 * 2 || Math.abs(e.speedOf(e.me, e.vMe) - s0 * 2) <= 1);
+      const f = setup(143, 50, 68, 50);
+      f.foe.ability = 'bad-dreams'; f.me.st = 'slp'; f.me.slpT = 5;
+      const hf = f.me.hp;
+      await f.endOfTurn();
+      check('夢魘：睡著的對手每回合受到傷害', f.me.hp === hf - Math.floor(Mon.maxHp(f.me) / 8));
+      const g = setup(143, 50, 68, 50);
+      g.me.ability = 'cotton-down';
+      await use(g, g.foe, 'closecombat');
+      check('棉絮：受到攻擊時降低對手的速度', g.vFoe.stg.spe === -1);
+      const h = setup(143, 50, 68, 50);
+      h.me.ability = 'toxic-debris';
+      await use(h, h.foe, 'closecombat');
+      check('毒滿地：受到物理攻擊時在對手腳下撒毒菱', h.sides.foe.toxicspikes === 1);
+      const k = setup(143, 50, 68, 50);
+      k.me.ability = 'perish-body';
+      await use(k, k.foe, 'karatechop');
+      check('滅亡之軀：被接觸時雙方都進入滅亡倒數', k.vMe.perish === 4 && k.vFoe.perish === 4, `${k.vMe.perish} ${k.vFoe.perish}`);
+      const m = setup(845, 50, 68, 50);
+      await use(m, m.me, 'surf');
+      check('一口飛彈：衝浪後叼住獵物', m.me.form === 'cramorant-gulping');
+      const hm = m.foe.hp;
+      await use(m, m.foe, 'closecombat');
+      check('一口飛彈：受到攻擊時吐出獵物', !m.me.form && m.foe.hp < hm && m.vFoe.stg.def === -2);
+      const n = setup(877, 50, 68, 50);
+      await n.endOfTurn();
+      check('飽了又餓：回合結束時切換花紋', n.me.form === 'morpeko-hangry' && n.moveType(n.me, md(moveId('aurawheel'))) === 'dark');
+    }
+    {
+      // 幻覺：顯示成隊伍最後一隻，受到傷害後現出原形
+      G.state = Game.newState('T', 'kanto', 1);
+      const z = Mon.create(571, 50), last = Mon.create(25, 50);
+      z.ability = 'illusion'; z.moves = [ms('tackle')]; last.moves = [ms('tackle')];
+      const me = Mon.create(68, 50); me.moves = [ms('closecombat')];
+      G.state.party = [me];
+      const b = new Battle({ trainer: { title: 'T', name: 'T', party: [z, last], kind: 'trainer', money: 1 } });
+      b.setup();
+      check('幻覺：名稱顯示成隊伍最後一隻', b.label(z).includes(Mon.name(last)));
+      b.volOf(me).lockOn = 2;
+      await b.runMove(me, z, { mv: md(moveId('closecombat')), slot: me.moves[0] });
+      check('幻覺：受到傷害後現出原形', b.label(z).includes(Mon.name(z)));
+      // 全能變身：換下再上場後變成全能形態
+      const p = Mon.create(964, 50);
+      await b.onSwitchOut(p);
+      b.vMe = newVol();
+      G.party.push(p); b.myIdx = 1;
+      await b.onEntry(p);
+      check('全能變身：換下再上場後變成全能形態', p.form === 'palafin-hero' && Mon.stats(p)[1] > 100);
+      me.item = 'leftovers'; z.item = null;
+      await b.moveItem(me, z, null);
+      await b.finish('run');
+      check('戰鬥結束：訓練家對戰中被搶走的道具還回來、戰鬥形態恢復', me.item === 'leftovers' && !z.item && !p.form, `${me.item} ${z.item} ${p.form}`);
+    }
+    U.rand = keepRand;
+  }
+  // 雙打：交換場地、先行一步、延後、憤怒粉
+  {
+    const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+    Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+    const slot = sd => ({ id: moveId(sd), pp: 20 });
+    const mkD = (mine, foes) => {
+      G.state = Game.newState('T', 'kanto', 1);
+      G.state.party = mine;
+      const b = new DoubleBattle({ trainer: { title: '雙胞胎', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+      b.setup();
+      for (const m of [...mine, ...foes]) b.volOf(m).lockOn = 5;
+      return b;
+    };
+    const order = b => { const seen = []; const real = b.runMove.bind(b); b.runMove = async (u, t, a) => { seen.push(u); return real(u, t, a); }; return seen; };
+    {
+      const a = Mon.create(135, 50), c = Mon.create(213, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('allyswitch')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      await b.doubleTurn();
+      check('雙打：交換場地和隊友交換位置', b.slotOf(a) === 1 && b.slotOf(c) === 0);
+    }
+    {
+      const a = Mon.create(135, 50), c = Mon.create(213, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('afteryou')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: m === a ? c : f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      const seen = order(b);
+      await b.doubleTurn();
+      check('雙打：先行一步讓隊友接著行動', seen[0] === a && seen[1] === c, seen.map(m => Mon.name(m)).join());
+    }
+    {
+      const a = Mon.create(135, 50), c = Mon.create(143, 50), f1 = Mon.create(25, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('quash')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      const seen = order(b);
+      await b.doubleTurn();
+      check('雙打：延後讓目標最後行動', seen[seen.length - 1] === f1, seen.map(m => Mon.name(m)).join());
+    }
+    {
+      const a = Mon.create(3, 50), c = Mon.create(68, 50), f1 = Mon.create(12, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('tackle')]; c.moves = [slot('tackle')]; f1.moves = [slot('ragepowder')]; f2.moves = [slot('splash')];
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f2 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      const keepRand = U.rand; U.rand = () => .99;
+      const h1 = f1.hp, h2 = f2.hp;
+      await b.doubleTurn();
+      U.rand = keepRand;
+      check('雙打：憤怒粉吸引攻擊，但對草屬性無效', f1.hp < h1 && f2.hp < h2 && (h2 - f2.hp) < 60, `${h1 - f1.hp} / ${h2 - f2.hp}`);
+    }
+    [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
+  }
+  // 新實作的招式與特性：隨機組合對戰不出錯（單打與雙打）
+  {
+    const NEW_MOVES = ['mimic', 'bide', 'transform', 'sketch', 'conversion2', 'trick', 'roleplay', 'magiccoat', 'skillswap', 'powertrick', 'gastroacid', 'worryseed',
+      'switcheroo', 'guardsplit', 'powersplit', 'simplebeam', 'entrainment', 'revivalblessing', 'doodle', 'uproar', 'stockpile', 'spitup', 'swallow', 'torment',
+      'followme', 'helpinghand', 'recycle', 'imprison', 'grudge', 'watersport', 'healingwish', 'lunardance', 'wideguard', 'wonderroom', 'ragepowder', 'magicroom',
+      'afteryou', 'quickguard', 'allyswitch', 'quash', 'rototiller', 'craftyshield', 'flowershield', 'electrify', 'fairylock', 'magneticflux', 'gearup', 'instruct',
+      'stuffcheeks', 'magicpowder', 'teatime', 'courtchange', 'glaiverush', 'tackle', 'surf', 'quickattack', 'earthquake', 'swordsdance', 'toxic', 'featherdance'];
+    const NEW_AB = ['armor-tail', 'aura-break', 'bad-dreams', 'beads-of-ruin', 'color-change', 'corrosion', 'cotton-down', 'cud-chew', 'dancer', 'dark-aura',
+      'dauntless-shield', 'dazzling', 'disguise', 'electromorphosis', 'emergency-exit', 'fairy-aura', 'flower-veil', 'forecast', 'good-as-gold', 'guard-dog',
+      'gulp-missile', 'hospitality', 'hunger-switch', 'ice-face', 'illusion', 'imposter', 'innards-out', 'intrepid-sword', 'lingering-aroma', 'liquid-voice',
+      'magician', 'merciless', 'mirror-armor', 'multitype', 'mummy', 'mycelium-might', 'neutralizing-gas', 'opportunist', 'perish-body', 'pickpocket',
+      'poison-puppeteer', 'propeller-tail', 'queenly-majesty', 'ripen', 'rks-system', 'sand-spit', 'schooling', 'screen-cleaner', 'seed-sower', 'shields-down',
+      'slow-start', 'stalwart', 'stance-change', 'steam-engine', 'supersweet-syrup', 'sword-of-ruin', 'tablets-of-ruin', 'tera-shift', 'toxic-chain',
+      'toxic-debris', 'truant', 'unnerve', 'unseen-fist', 'vessel-of-ruin', 'wandering-spirit', 'water-compaction', 'wimp-out', 'wind-power', 'zen-mode', 'zero-to-hero'];
+    const SP = [132, 778, 875, 681, 555, 746, 571, 845, 877, 964, 1024, 351, 774, 289, 143, 68, 3, 25, 94, 213];
+    const rnd = () => { const m = Mon.create(U.pick(SP), U.ri(20, 70)); m.ability = U.pick(NEW_AB); m.item = U.pick([null, 'sitrus-berry', 'leftovers', 'choice-scarf', 'lum-berry']);
+      m.moves = [0, 1, 2, 3].map(() => U.pick(NEW_MOVES)).map(sd => ({ id: moveId(sd), pp: 10 })); return m; };
+    let err = null;
+    // 換人選單：選第一隻還能戰鬥、不在場上的寶可夢
+    const keepPM = Game.partyMenu;
+    Game.partyMenu = async o => { const b = o && o.battle; return G.party.findIndex((m, i) => m.hp > 0 && (!b || (i !== b.myIdx && !(b.mySlots && b.mySlots.includes(i))))); };
+    try {
+      for (let i = 0; i < 40; i++) {
+        G.state = Game.newState('T', 'kanto', 1);
+        G.state.party = [rnd(), rnd(), rnd()];
+        const foes = [rnd(), rnd(), rnd()];
+        const b = new Battle({ trainer: { title: 'T', name: 'T', party: foes, kind: 'trainer', money: 1 } });
+        b.setup();
+        for (let t = 0; t < 25; t++) {
+          const r = await b.doTurn({ type: 'move', idx: U.ri(0, b.me.moves.length - 1) });
+          if (r) break;
+        }
+        await b.finish('run');
+      }
+      const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+      Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+      for (let i = 0; i < 20; i++) {
+        G.state = Game.newState('T', 'kanto', 1);
+        G.state.party = [rnd(), rnd(), rnd()];
+        const foes = [rnd(), rnd(), rnd()];
+        const b = new DoubleBattle({ trainer: { title: 'T', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+        b.setup();
+        b.chooseDouble = async m => ({ type: 'move', idx: U.ri(0, m.moves.length - 1), user: m, target: U.pick(b.actives('foe')) });
+        for (let t = 0; t < 20; t++) { const r = await b.doubleTurn(); if (r) break; }
+        await b.finish('run');
+      }
+      [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
+    } catch (e) { err = e.stack; }
+    Game.partyMenu = keepPM;
+    check('新招式與新特性：60 場隨機對戰（含雙打）沒有例外', !err, err || '');
+    check('新招式與新特性：戰鬥結束後招式、特性恢復原狀', G.party.every(m => m.moves.every(s => !s.mimicOf) && !Mon.ovr.has(m)));
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

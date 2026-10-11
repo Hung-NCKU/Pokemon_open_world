@@ -9,6 +9,7 @@ const SPR = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/po
 const STRUGGLE = { id: 165, n: '掙扎', t: 'unknown', c: 'ph', p: 50, a: 0, pp: 1, pr: 0, tg: 'selected-pokemon', dr: -25 };
 
 const Mon = {
+  ovr: new WeakMap(),
   sp(id) { return POKEDEX[id]; },
   name(m) { return m.nick || Forms.data(m).n; },
   types(m) { return Forms.data(m).t; },
@@ -51,6 +52,9 @@ const Mon = {
       out[up] = Math.floor(out[up] * 1.1);
       out[down] = Math.floor(out[down] * 0.9);
     }
+    // 戰鬥中暫時改變的能力值（變身、力量戲法、力量平分、防守平分）；HP 不變，戰鬥結束時清除
+    const o = Mon.ovr.get(m);
+    if (o) for (const i of Object.keys(o)) if (+i > 0) out[i] = o[i];
     return out;
   },
   maxHp(m) { return Mon.stats(m)[0]; },

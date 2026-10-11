@@ -45,7 +45,7 @@ class DoubleBattle extends Battle {
     }
     if (mv.id === 'followme' || mv.id === 'ragepowder') {
       this._moveUsed = true;
-      this.volOf(user).followMe = true;
+      this.volOf(user).followMe = mv.id;
       await this.msg(`${this.label(user)} 成為了注目的焦點！`);
       return true;
     }
@@ -64,7 +64,26 @@ class DoubleBattle extends Battle {
     if (this.sideKey(m) === 'foe') this.ctx(null, m); else this.ctx(m, null);
     return () => this.ctx(me, foe);
   }
-  label(m) { return this.foeParty.includes(m) ? this.foeName(m) : Mon.name(m); }
+  label(m) { return this.foeParty.includes(m) ? this.foeName(m) : Mon.name(this.shownMon(m)); }
+  // 先行一步、延後：讓目標接著行動，或排到最後
+  reorder(m, how) {
+    const a = this._pending && this._pending.find(x => x.user === m);
+    if (!a) return false;
+    if (how === 'first') a.afterYou = true; else a.quash = true;
+    return true;
+  }
+  // 交換場地：和隊友交換位置
+  async swapAlly(user) {
+    const ally = this.allyOf(user);
+    if (!ally) return false;
+    const side = this.sideKey(user), arr = side === 'me' ? this.mySlots : this.foeSlots;
+    const i = this.slotOf(user), j = this.slotOf(ally);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    for (const m of [user, ally]) this.refreshSprite(m);
+    this.drawAll();
+    await this.msg(`${this.label(user)} 和 ${this.label(ally)} 交換了位置！`);
+    return true;
+  }
   actives(side) { return (side === 'me' ? this.mySlots.map(i => G.party[i]) : this.foeSlots.map(i => this.foeParty[i])).filter(m => m && m.hp > 0); }
   allyOf(m) {
     const side = this.sideKey(m);
@@ -280,7 +299,8 @@ class DoubleBattle extends Battle {
     let first = true;
     while (pending.length) {
       for (const a of pending) a.spe = a.user && a.user.hp > 0 ? this.speedOf(a.user, this.volOf(a.user)) * (this.field.trickRoom ? -1 : 1) : -1e9;
-      pending.sort((x, y) => y.pri - x.pri || y.spe - x.spe || x.rnd - y.rnd);
+      // 先行一步的目標排最前、被延後的排最後，其餘依優先度 → 速度
+      pending.sort((x, y) => (y.afterYou ? 1 : 0) - (x.afterYou ? 1 : 0) || (x.quash ? 1 : 0) - (y.quash ? 1 : 0) || y.pri - x.pri || y.spe - x.spe || x.rnd - y.rnd);
       const a = pending.shift();
       const user = a.user;
       if (!user || user.hp <= 0) continue;
@@ -291,7 +311,10 @@ class DoubleBattle extends Battle {
       const ally = this.allyOf(user);
       const toAlly = a.target && ally && a.target === ally && ally.hp > 0;
       let target = toAlly ? ally : a.target && a.target.hp > 0 && opps.includes(a.target) ? a.target : opps[0];
-      const lure = opps.find(o => this.volOf(o).followMe);
+      // 吸引招式：螺旋尾鰭、堅毅不受影響；憤怒粉對草屬性、防塵、防塵護目鏡無效
+      const powderSafe = this.typesOf(user).includes('grass') || this.ab(user) === 'overcoat' || this.itm(user) === 'safety-goggles';
+      const lure = ['propeller-tail', 'stalwart'].includes(this.ab(user)) || a.mv.id === 'snipeshot' ? null
+        : opps.find(o => this.volOf(o).followMe && !(this.volOf(o).followMe === 'ragepowder' && powderSafe));
       if (lure && !toAlly && ['normal', 'any', 'adjacentFoe'].includes(a.mv.target)) target = lure;
       if (toAlly) { if (this.sideKey(user) === 'me') this.ctx(ally, opps[0]); else this.ctx(opps[0], ally); }
       else this.pair(user, target);

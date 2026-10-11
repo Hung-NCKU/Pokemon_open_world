@@ -62,6 +62,8 @@ Object.assign(Battle.prototype, {
   setSprite(side, m) {
     const img = this.el.querySelector(`.bmon.${side} img`);
     const back = side === 'me';
+    const real = m;
+    m = this.lookOf ? this.lookOf(m) : m; // 變身、幻覺：顯示成對方的樣子
     const s = monSprite(m, back);
     // 圖片載入、放大定位之前先隱藏（否則會先以原始的小尺寸出現一下）
     img.className = 'sizing';
@@ -106,7 +108,7 @@ Object.assign(Battle.prototype, {
       img.onload = () => place(2);
     };
     img.src = s.url;
-    this.shown[side] = m;
+    this.shown[side] = real;
   },
 
   hpColor(r) { return r > .5 ? 'g' : r > .2 ? 'y' : 'r'; },
@@ -131,7 +133,7 @@ Object.assign(Battle.prototype, {
       const box = this.el.querySelector(`.hbox.${side}`);
       const max = Mon.maxHp(m);
       const r = Math.max(0, m.hp) / max;
-      box.querySelector('.hn').textContent = Mon.name(m) + (this.isTera && this.isTera(m) ? ' ✦' : '');
+      box.querySelector('.hn').textContent = Mon.name(this.shownMon ? this.shownMon(m) : m) + (this.isTera && this.isTera(m) ? ' ✦' : '');
       box.querySelector('.hl').textContent = 'Lv' + m.lv;
       const hs = box.querySelector('.hs');
       if (m.st && Gen3.on) { hs.style.backgroundImage = `url(${Gen3.base}ui_status.png)`; hs.style.backgroundPositionY = -STATUS_ICON_ROW[m.st] * 24 + 'px'; hs.style.display = 'block'; }

@@ -26,8 +26,9 @@ class Battle {
   get me() { return G.party[this.myIdx]; }
   get foe() { return this.foeParty[this.foeIdx]; }
   msg(t) { return UI.say(t, { auto: G.settings.battleAuto }); }
-  foeName(m = this.foe) { return (this.wildMon ? '野生的 ' : '對手的 ') + Mon.name(m); }
-  label(m) { return m === this.foe ? this.foeName(m) : Mon.name(m); }
+  // 幻覺：顯示成假扮的寶可夢
+  foeName(m = this.foe) { return (this.wildMon ? '野生的 ' : '對手的 ') + Mon.name(this.shownMon ? this.shownMon(m) : m); }
+  label(m) { return m === this.foe ? this.foeName(m) : Mon.name(this.shownMon ? this.shownMon(m) : m); }
 
   // ---------- 主流程 ----------
   async run() {
@@ -52,7 +53,7 @@ class Battle {
       await this.msg(`${this.trainer.title} ${this.trainer.name} 向你發起了對戰！`);
       await this.trainerLeave();
       await this.sendOut('foe', this.foe);
-      await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.foe)}！`);
+      await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.shownMon(this.foe))}！`);
     }
     await this.msg(`就決定是你了！${Mon.name(this.me)}！`);
     await this.sendOut('me', this.me);
@@ -231,7 +232,7 @@ class Battle {
         }
       }
       Game.markSeen(this.foe.sp);
-      await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.foe)}！`);
+      await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.shownMon(this.foe))}！`);
       await this.sendOut('foe', this.foe);
       await this.onEntry(this.foe);
       changed = false;
@@ -356,6 +357,8 @@ class Battle {
     // 太晶珠用過後要到寶可夢中心充能
     if (this.teraUsed && this.teraUsed.me) G.state.teraCharged = false;
     this.tera = null;
+    // 變身、交換的特性與道具、戰鬥形態恢復原狀
+    if (this.cleanupBattle) this.cleanupBattle();
     // 超級進化、原始回歸在戰鬥結束後恢復
     if (typeof Mega !== 'undefined') { G.party.forEach(m => Mega.revert(m)); this.foeParty.forEach(m => Mega.revert(m)); }
     if (result === 'win') Sound.play(this.wildMon ? 'victory_wild' : tr.kind === 'gym' || tr.kind === 'champion' ? 'victory_gym' : 'victory_trainer');

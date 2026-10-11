@@ -31,17 +31,18 @@ const IMPL = {
   volatile: new Set(['aquaring', 'attract', 'banefulbunker', 'burningbulwark', 'partiallytrapped', 'charge', 'confusion', 'curse', 'defensecurl', 'destinybond',
     'protect', 'disable', 'encore', 'endure', 'focusenergy', 'followme', 'ragepowder', 'helpinghand', 'ingrain', 'kingsshield', 'laserfocus', 'leechseed',
     'magnetrise', 'minimize', 'noretreat', 'obstruct', 'octolock', 'foresight', 'smackdown', 'spikyshield', 'silktrap', 'substitute', 'tarshot', 'taunt', 'yawn',
-    'flinch', 'saltcure', 'sparklingaria', 'syrupbomb', 'mustrecharge', 'lockedmove', 'roost', 'stockpile', 'torment', 'imprison', 'grudge', 'electrify']),
+    'flinch', 'saltcure', 'sparklingaria', 'syrupbomb', 'mustrecharge', 'lockedmove', 'roost', 'stockpile', 'torment', 'imprison', 'grudge', 'electrify',
+    'bide', 'magiccoat', 'powertrick', 'gastroacid', 'uproar', 'glaiverush']),
   side: new Set(['auroraveil', 'lightscreen', 'reflect', 'mist', 'safeguard', 'spikes', 'stealthrock', 'stickyweb', 'tailwind', 'toxicspikes', 'craftyshield', 'quickguard', 'wideguard']),
   pseudo: new Set(['trickroom', 'gravity', 'magicroom', 'wonderroom', 'fairylock', 'iondeluge', 'watersport', 'mudsport']),
-  slot: new Set(['Wish']),
+  slot: new Set(['Wish', 'healingwish', 'lunardance', 'revivalblessing']),
   calls: new Set(['metronome', 'sleeptalk', 'copycat', 'naturepower']),
   bp: new Set(['acrobatics', 'assurance', 'avalanche', 'beatup', 'boltbeak', 'crushgrip', 'dragonenergy', 'echoedvoice', 'electroball', 'eruption', 'fishiousrend',
     'flail', 'furycutter', 'grassknot', 'gyroball', 'heatcrash', 'heavyslam', 'hex', 'lastrespects', 'lowkick', 'payback', 'powertrip', 'ragefist', 'revenge',
     'reversal', 'risingvoltage', 'rollout', 'round', 'stompingtantrum', 'storedpower', 'triplekick', 'watershuriken', 'waterspout', 'wringout', 'punishment',
     'magnitude', 'present', 'facade', 'brine', 'venoshock', 'return', 'frustration', 'pikapapow', 'veeveevolley', 'wakeupslap', 'smellingsalts', 'weatherball',
     'barbbarrage', 'collisioncourse', 'electrodrift', 'hardpress', 'temperflare', 'iceball', 'triplearrows', 'tripleaxel', 'populationbomb', 'terrainpulse',
-    'knockoff', 'hydrosteam', 'psyblade', 'solarbeam', 'solarblade', 'expandingforce', 'mistyexplosion', 'grassyglide', 'freezedry', 'flyingpress']),
+    'knockoff', 'hydrosteam', 'psyblade', 'solarbeam', 'solarblade', 'expandingforce', 'mistyexplosion', 'grassyglide', 'freezedry', 'flyingpress', 'spitup']),
   // 只有專屬效果函式的招式中，已實作的部分
   special: new Set(['bellydrum', 'haze', 'painsplit', 'rest', 'perishsong', 'psychup', 'defog', 'splash', 'meanlook', 'block', 'lockon', 'mindreader', 'moonlight',
     'morningsun', 'synthesis', 'shoreup', 'strengthsap', 'aromatherapy', 'healbell', 'junglehealing', 'lunarblessing', 'purify', 'soak', 'topsyturvy', 'spite',
@@ -50,11 +51,12 @@ const IMPL = {
     'counter', 'mirrorcoat', 'metalburst', 'comeuppance', 'endeavor', 'finalgambit', 'superfang', 'naturesmadness', 'ruination', 'suckerpunch', 'thunderclap',
     'fakeout', 'firstimpression', 'focuspunch', 'brickbreak', 'psychicfangs', 'ragingbull', 'rapidspin', 'mortalspin', 'falseswipe', 'holdback', 'feint',
     'refresh', 'clearsmog', 'burnup', 'doubleshock', 'thief', 'covet', 'pluck', 'bugbite', 'incinerate', 'knockoff', 'clangoroussoul', 'filletaway', 'shedtail',
-    'courtchange', 'afteryou', 'allyswitch', 'quash', 'instruct', 'stuffcheeks', 'swallow', 'spitup', 'teatime', 'recycle', 'magicpowder', 'flowershield', 'rototiller']),
+    'courtchange', 'afteryou', 'allyswitch', 'quash', 'instruct', 'stuffcheeks', 'swallow', 'spitup', 'teatime', 'recycle', 'magicpowder', 'flowershield', 'rototiller',
+    'mimic', 'sketch', 'transform', 'conversion2', 'trick', 'switcheroo', 'roleplay', 'skillswap', 'worryseed', 'simplebeam', 'entrainment', 'doodle',
+    'guardsplit', 'powersplit', 'revivalblessing', 'bide']),
 };
-const NOOP_STATUS = new Set(['followme', 'ragepowder', 'helpinghand', 'afteryou', 'allyswitch', 'quash', 'instruct', 'gearup', 'magneticflux', 'celebrate',
-  'holdhands', 'happyhour', 'flowershield', 'rototiller', 'craftyshield', 'quickguard', 'wideguard', 'teatime', 'stuffcheeks', 'swallow', 'spitup', 'recycle',
-  'magicpowder', 'courtchange', 'imprison', 'grudge', 'electrify', 'torment', 'stockpile', 'magicroom', 'wonderroom', 'fairylock', 'iondeluge', 'watersport', 'mudsport']);
+// 只有訊息、沒有實際效果的招式（目前沒有）
+const NOOP_STATUS = new Set([]);
 
 function classify(m) {
   if (m.isNonstandard === 'Past' && !MOVES[m.num]) return 'none';
@@ -77,10 +79,39 @@ function classify(m) {
     if (miss.length) return m.cat === 'Status' && (miss.includes('v') || miss.includes('calls')) ? 'none' : 'partial';
     return 'full';
   }
-  if (m.id === 'bide' || m.id === 'beatup' && false) return 'none';
   return miss.length ? 'partial' : 'full';
 }
 const SUPPORT_ZH = { full: '', partial: '（部分效果未實作）', none: '（未支援）' };
+
+// 戰鬥中才會出現的形態（PokéAPI 的形態編號、屬性、種族值、體重）；名稱沿用物種名稱，戰鬥結束時恢復
+// 堅盾劍怪、弱丁魚、達摩狒狒、小隕星、謎擬Ｑ、海豚俠的形態在 data/late.js，變化由 js/late.js 的 BattleForms 處理
+const BATTLE_FORMS = {
+  'terapagos-terastal': [1024, 10276, ['normal'], [95, 95, 110, 105, 110, 85], 160],
+  'eiscue-noice': [875, 10185, ['ice'], [75, 80, 70, 65, 50, 130], 890],
+  'cramorant-gulping': [845, 10182, ['flying', 'water'], [70, 85, 55, 85, 95, 85], 180],
+  'cramorant-gorging': [845, 10183, ['flying', 'water'], [70, 85, 55, 85, 95, 85], 180],
+  'morpeko-hangry': [877, 10187, ['electric', 'dark'], [58, 95, 58, 70, 58, 97], 30],
+  'castform-sunny': [351, 10013, ['fire'], [70, 70, 70, 70, 70, 70], 8],
+  'castform-rainy': [351, 10014, ['water'], [70, 70, 70, 70, 70, 70], 8],
+  'castform-snowy': [351, 10015, ['ice'], [70, 70, 70, 70, 70, 70], 8],
+};
+if (window.FORMS && window.POKEDEX) {
+  for (const [k, [base, id, t, s, w]] of Object.entries(BATTLE_FORMS)) {
+    if (!POKEDEX[base] || FORMS[k]) continue;
+    FORMS[k] = { id, t, s, ey: [0, 0, 0, 0, 0, 0], ab: POKEDEX[base].ab, w, base, region: '', n: POKEDEX[base].n, l: [], battle: 1 };
+  }
+}
+// 不會被胃液、中和氣體消除，也不能被交換、複製、覆蓋的特性
+const FIXED_AB = new Set(['multitype', 'stance-change', 'schooling', 'comatose', 'shields-down', 'disguise', 'rks-system', 'battle-bond', 'power-construct',
+  'ice-face', 'gulp-missile', 'zero-to-hero', 'commander', 'tera-shift', 'as-one-glastrier', 'as-one-spectrier']);
+// 不能被複製（扮演、複製、塗鴉）的特性
+const NO_COPY_AB = new Set([...FIXED_AB, 'trace', 'receiver', 'power-of-alchemy', 'flower-gift', 'forecast', 'hunger-switch', 'illusion', 'imposter',
+  'neutralizing-gas', 'wonder-guard', 'zen-mode', 'protosynthesis', 'quark-drive', 'embody-aspect-teal', 'poison-puppeteer']);
+// 多屬性（阿爾宙斯的石板）、ＡＲ系統（銀伴戰獸的記憶碟）
+const PLATE_TYPE = { 'flame-plate': 'fire', 'splash-plate': 'water', 'zap-plate': 'electric', 'meadow-plate': 'grass', 'icicle-plate': 'ice',
+  'fist-plate': 'fighting', 'toxic-plate': 'poison', 'earth-plate': 'ground', 'sky-plate': 'flying', 'mind-plate': 'psychic', 'insect-plate': 'bug',
+  'stone-plate': 'rock', 'spooky-plate': 'ghost', 'draco-plate': 'dragon', 'dread-plate': 'dark', 'iron-plate': 'steel', 'pixie-plate': 'fairy' };
+const MEMORY_TYPE = Object.fromEntries(Object.values(PLATE_TYPE).map(t => [t + '-memory', t]));
 
 // ---------- 小工具 ----------
 const BOOST_TABLE = [1, 1.5, 2, 2.5, 3, 3.5, 4];
@@ -111,10 +142,21 @@ Object.assign(Battle.prototype, {
   ab(m) {
     if (!m || !m.ability) return null;
     if (this.moldTarget === m) return null;
+    return this.abRaw(m);
+  },
+  // 不考慮破格的特性
+  abRaw(m) {
+    if (!m || !m.ability) return null;
+    // 胃液、中和氣體：特性失效（固定的特性除外）
+    if (!FIXED_AB.has(m.ability)) {
+      const v = this.volOf(m);
+      if (v && v.gastro) return null;
+      if (m.ability !== 'neutralizing-gas' && this.activeMons && this.activeMons().some(x => x !== m && x.ability === 'neutralizing-gas' && !this.volOf(x).gastro)) return null;
+    }
     return m.ability;
   },
-  // 持有道具（笨拙特性讓道具失效）
-  itm(m) { return m && m.item && m.ability !== 'klutz' ? m.item : null; },
+  // 持有道具（笨拙特性、魔法空間讓道具失效）
+  itm(m) { return m && m.item && this.abRaw(m) !== 'klutz' && !(this.field && this.field.magicRoom) ? m.item : null; },
   async consume(m, txt) {
     const it = m.item;
     m.item = null;
@@ -122,6 +164,7 @@ Object.assign(Battle.prototype, {
     if (v) {
       if (m.ability === 'unburden') v.unburden = true; // 輕裝：道具消失後速度加倍
       if (it && it.endsWith('-berry')) v.lastBerry = it;
+      v.usedItem = it; // 回收利用
     }
     if (txt) await this.msg(txt.replace('{i}', Held.name(it)));
     if (it && it.endsWith('-berry') && m.ability === 'cheek-pouch' && m.hp > 0) {
@@ -139,7 +182,7 @@ Object.assign(Battle.prototype, {
     return ['atk', 'def', 'spa', 'spd', 'spe'][[1, 2, 3, 4, 5].reduce((b, i) => s[i] > s[b] ? i : b, 1) - 1];
   },
   async abilityMsg(m, txt) { await this.msg(`［${this.label(m)} 的${Abil.name(m.ability)}］\n${txt}`); },
-  hasAbility(id) { return [this.me, this.foe].some(m => m && m.hp > 0 && m.ability === id); },
+  hasAbility(id) { return this.activeMons().some(m => this.ab(m) === id); },
   sideKey(m) { return m === this.me ? 'me' : m === this.foe ? 'foe' : (this.foeParty && this.foeParty.includes(m) ? 'foe' : 'me'); },
   volOf(m) {
     if (m === this.me) return this.vMe;
@@ -189,6 +232,9 @@ Object.assign(Battle.prototype, {
     if (this.isTera(m)) return [Mon.teraType(m)];
     const v = this.volOf(m);
     let t = v && v.types ? v.types : Mon.types(m);
+    // 多屬性、ＡＲ系統：依攜帶的石板、記憶碟改變屬性
+    if (!(v && v.types) && m.ability === 'multitype' && PLATE_TYPE[m.item]) t = [PLATE_TYPE[m.item]];
+    if (!(v && v.types) && m.ability === 'rks-system' && MEMORY_TYPE[m.item]) t = [MEMORY_TYPE[m.item]];
     if (v && v.roost) t = t.filter(x => x !== 'flying');
     return t.length ? t : ['normal'];
   },
@@ -210,6 +256,7 @@ Object.assign(Battle.prototype, {
       || (a === 'slush-rush' && (w === 'snowscape' || w === 'hail')) || (a === 'surge-surfer' && this.field && this.field.terrain === 'electricterrain')) s *= 2;
     if (a === 'quick-feet' && m.st) s *= 1.5;
     if (v.unburden && !m.item) s *= 2;
+    if (a === 'slow-start' && v.turnsOut < 5) s *= .5; // 慢啟動：登場後 5 回合速度減半
     if (this.field && this.paradoxStat(m) === 'spe') s *= 1.5;
     if (this.itm(m) === 'choice-scarf') s *= 1.5;
     return Math.floor(s);
@@ -264,7 +311,7 @@ Object.assign(Battle.prototype, {
       if (ua === 'gale-wings' && a.mv.type === 'flying' && m.hp === Mon.maxHp(m)) a.pri += 1;
       if (ua === 'triage' && (a.mv.heal || a.mv.drain)) a.pri += 3;
       a.quick = this.itm(m) === 'quick-claw' && U.rand() < .2 ? 1 : 0;
-      a.stall = ua === 'stall' ? 1 : 0;
+      a.stall = ua === 'stall' || (ua === 'mycelium-might' && a.mv.cat === 'Status') ? 1 : 0;
       a.spe = this.speedOf(m, v) * (this.field.trickRoom ? -1 : 1);
       a.rnd = U.rand();
     }
@@ -292,6 +339,7 @@ Object.assign(Battle.prototype, {
     const v = this.volOf(m), o = this.otherOf(m);
     if (this.typesOf(m).includes('ghost') || this.itm(m) === 'shed-shell') return null;
     if (v.trapped || v.trap || v.ingrain || v.octolock) return '被困住了';
+    if (this.field && this.field.fairyLock) return '受到妖精之鎖的影響';
     const oa = o && o.hp > 0 ? this.ab(o) : null;
     if (oa === 'shadow-tag' && this.ab(m) !== 'shadow-tag') return `受到${Abil.name(oa)}的影響`;
     if (oa === 'arena-trap' && this.grounded(m)) return `受到${Abil.name(oa)}的影響`;
@@ -301,6 +349,9 @@ Object.assign(Battle.prototype, {
 
   // 決定實際要使用的招式（鎖定、蓄力、再來一次、掙扎）
   resolveMove(m, v, idx) {
+    // 忍耐、吵鬧被打斷（睡著、麻痺、畏縮）時結束
+    if (v.bide && !v.locked) v.bide = null;
+    if (v.uproar && !v.locked) v.uproar = 0;
     if (v.recharge) return { mv: { ...STRUGGLE_MD, n: '', pri: 0 }, slot: null, recharge: true };
     if (v.charging) return { mv: md(v.charging), slot: null, cont: true };
     if (v.locked) return { mv: md(v.locked.id), slot: null, cont: true };
@@ -372,7 +423,7 @@ Object.assign(Battle.prototype, {
     this.foeIdx = i;
     this.vFoe = newVol();
     Game.markSeen(this.foe.sp);
-    await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.foe)}！`);
+    await this.msg(`${this.trainer.name} 派出了 ${Mon.name(this.shownMon(this.foe))}！`);
     await this.sendOut('foe', this.foe);
     await this.onEntry(this.foe);
   },
@@ -386,6 +437,10 @@ Object.assign(Battle.prototype, {
     if (v.taunt > 0 && mv.cat === 'Status') return '挑釁';
     if (v.disable > 0 && v.disableMove === id) return '定身法';
     if (this.field && this.field.gravity && mv.flags.gravity) return '重力';
+    // 無理取鬧：不能連續使用同一個招式
+    if (v.torment && v.lastMove === +id && mv.id !== 'struggle') return '無理取鬧';
+    // 封印：對手使用了封印時，不能使用對手也會的招式
+    if (this.activeMons && this.activeMons().some(o => o !== m && this.sideKey(o) !== this.sideKey(m) && this.volOf(o).imprison && o.moves.some(s => s.id === +id))) return '封印';
     return null;
   },
 
@@ -415,6 +470,7 @@ Object.assign(Battle.prototype, {
     const name = this.label(user);
     let mv = act.mv;
     vU.movedThisTurn = true;
+    if (!act.dancer) { vU.grudge = false; vU.glaiveRush = false; } // 怨念、巨劍突擊的效果到自己下次行動為止
     if (act.recharge) { vU.recharge = false; await this.msg(`${name} 需要休息，無法動彈！`); return; }
     // 行動前判定（beforeMove）
     if (user.st === 'slp') {
@@ -426,6 +482,11 @@ Object.assign(Battle.prototype, {
     if (user.st === 'frz') {
       if (U.rand() < .2 || mv.flags.defrost) { user.st = null; this.draw(); await this.msg(`${name} 的冰凍融化了！`); }
       else { await this.msg(`${name} 因冰凍而無法行動！`); return; }
+    }
+    // 懶惰：每兩回合只能行動一次
+    if (this.ab(user) === 'truant' && !act.dancer) {
+      if (vU.truantLoaf) { vU.truantLoaf = false; vU.locked = null; await this.abilityMsg(user, `${name} 正在偷懶。`); return; }
+      vU.truantLoaf = true;
     }
     if (vU.flinch) {
       await this.msg(`${name} 畏縮了，無法使出招式！`);
@@ -503,10 +564,23 @@ Object.assign(Battle.prototype, {
       const t = this.moveType(user, mv);
       if (this.typesOf(user).join() !== t) { vU.types = [t]; vU.proteanUsed = true; await this.abilityMsg(user, `${name} 變成了${TYPES[t].n}屬性！`); }
     }
-    // 破格、渦輪火焰、兆級電壓：無視目標的特性
-    this.moldTarget = ['mold-breaker', 'teravolt', 'turboblaze'].includes(this.ab(user)) ? target : null;
+    // 破格、渦輪火焰、兆級電壓（菌絲之力的變化招式）：無視目標的特性
+    this.moldTarget = ['mold-breaker', 'teravolt', 'turboblaze'].includes(this.ab(user)) || (this.ab(user) === 'mycelium-might' && mv.cat === 'Status') ? target : null;
     let ok;
     try { ok = await this.useMoveOn(user, target, mv, act); } finally { this.moldTarget = null; }
+    // 吵鬧：連續 3 回合，期間場上的寶可夢都不會睡著
+    if (mv.id === 'uproar' && ok !== null && user.hp > 0) {
+      if (!vU.uproar) {
+        vU.uproar = 3; vU.locked = { id: moveId, turns: 99 };
+        await this.msg(`${name} 吵鬧了起來！`);
+        for (const m of this.activeMons()) if (m.st === 'slp' && this.ab(m) !== 'soundproof') { m.st = null; this.draw(); await this.msg(`${this.label(m)} 被吵醒了！`); }
+      }
+      if (--vU.uproar <= 0) { vU.uproar = 0; vU.locked = null; await this.msg(`${name} 安靜了下來。`); }
+    }
+    // 舞者：其他寶可夢使出舞蹈招式後跟著使出同一個招式
+    if (ok && mv.flags && mv.flags.dance && !act.dancer) await this.dancers(user, target, mv);
+    // 天氣改變後的形態（飄浮泡泡）
+    for (const m of this.activeMons()) await this.formCheck(m, 'move');
     if (vU.metronomeMove === mv.num && ok) vU.metronomeN = (vU.metronomeN || 0) + 1;
     else { vU.metronomeMove = mv.num; vU.metronomeN = 0; }
     vU.lastMoveFailed = !ok;
@@ -557,6 +631,8 @@ Object.assign(Battle.prototype, {
       await this.msg(mv.id === 'futuresight' ? `${this.label(user)} 預知了未來的攻擊！` : `${this.label(user)} 把破滅之願託付給了未來！`);
       return true;
     }
+    // 忍耐：承受兩回合的攻擊，再以兩倍奉還
+    if (mv.id === 'bide') return this.bide(user, target, mv);
     const vU = this.volOf(user), vT = this.volOf(target);
     const name = this.label(user), tname = this.label(target);
     const selfTarget = ['self', 'allySide', 'allyTeam', 'adjacentAllyOrSelf', 'allies', 'adjacentAlly'].includes(mv.target);
@@ -575,7 +651,8 @@ Object.assign(Battle.prototype, {
     if (hitsTarget) {
       if (!target || target.hp <= 0) { await this.msg('但是沒有目標……'); return false; }
       // 守住
-      if (vT.protect && mv.flags.protect && !mv.breaksProtect) {
+      // 無形拳：接觸類招式無視守住
+      if (vT.protect && mv.flags.protect && !mv.breaksProtect && !(this.ab(user) === 'unseen-fist' && mv.flags.contact)) {
         await this.msg(`${tname} 保護住了自己！`);
         await this.protectContact(user, target, mv);
         if (mv.hasCrashDamage) await this.crash(user);
@@ -591,6 +668,16 @@ Object.assign(Battle.prototype, {
       }
       // 精神場地擋下先制招式
       if (this.field.terrain === 'psychicterrain' && ((act && act.pri !== undefined ? act.pri : mv.pri) || 0) > 0 && this.grounded(target)) { await this.msg(`${tname} 受到了精神場地的保護！`); return false; }
+      // 快速防守、廣域防守、戲法防守：保護自己這一邊（這一回合）
+      const sT = this.sides[this.sideKey(target)], pri = (act && act.pri !== undefined ? act.pri : mv.pri) || 0, foeMove = this.sideKey(target) !== this.sideKey(user);
+      if (sT.quickGuard && pri > 0 && target !== user) { await this.msg(`${tname} 受到了快速防守的保護！`); return false; }
+      if (sT.wideGuard && ['allAdjacent', 'allAdjacentFoes'].includes(mv.target)) { await this.msg(`${tname} 受到了廣域防守的保護！`); return false; }
+      if (sT.craftyShield && mv.cat === 'Status' && foeMove) { await this.msg(`${tname} 受到了戲法防守的保護！`); return false; }
+      // 鮮艷之軀、女王的威嚴、尾甲：對手的先制招式對自己和隊友無效
+      if (pri > 0 && foeMove) {
+        const guard = [target, this.allyOf ? this.allyOf(target) : null].find(x => x && x.hp > 0 && ['dazzling', 'queenly-majesty', 'armor-tail'].includes(this.ab(x)));
+        if (guard) { await this.abilityMsg(guard, `${name} 無法使出 ${mv.n}！`); return false; }
+      }
       // 惡作劇之心的變化招式對惡屬性無效
       if (act.prankster && this.typesOf(target).includes('dark') && this.sideKey(target) !== this.sideKey(user)) { await this.msg(`對 ${tname} 好像沒有效果……`); return false; }
       // 屬性免疫（Showdown：變化招式預設忽略免疫）
@@ -609,8 +696,9 @@ Object.assign(Battle.prototype, {
       // 替身擋下變化招式
       if (vT.sub && mv.cat === 'Status' && !mv.flags.bypasssub && !mv.flags.sound && this.ab(user) !== 'infiltrator') { await this.msg('但是失敗了！'); return false; }
       // 魔法鏡：把變化招式反彈回去
-      if (mv.cat === 'Status' && mv.flags.reflectable && this.ab(target) === 'magic-bounce' && !act.bounced) {
-        await this.abilityMsg(target, `把 ${mv.n} 反彈了回去！`);
+      if (mv.cat === 'Status' && mv.flags.reflectable && (this.ab(target) === 'magic-bounce' || vT.magicCoat) && !act.bounced) {
+        if (vT.magicCoat) await this.msg(`${tname} 用魔法反射把 ${mv.n} 反彈了回去！`);
+        else await this.abilityMsg(target, `把 ${mv.n} 反彈了回去！`);
         return this.useMoveOn(target, user, mv, { ...act, bounced: true, prankster: false });
       }
       // 芳香幕：擋下挑釁、再來一次、定身法、著迷
@@ -656,6 +744,8 @@ Object.assign(Battle.prototype, {
     if (type === 'fire' && a === 'flash-fire') { this.volOf(target).flashFire = true; await this.abilityMsg(target, `${tname} 的火屬性招式威力提高了！`); return true; }
     if (mv.flags.wind && a === 'wind-rider') return raise({ atk: 1 });
     if (type === 'ground' && mv.cat !== 'Status' && a === 'levitate' && !this.field.gravity && !this.volOf(target).smackDown) { await this.abilityMsg(target, `${tname} 浮在空中，地面屬性招式沒有效果！`); return true; }
+    // 黃金之軀：對手的變化招式無效
+    if (a === 'good-as-gold' && mv.cat === 'Status') { await this.abilityMsg(target, `${tname} 不受 ${mv.n} 的影響！`); return true; }
     if (mv.flags.sound && a === 'soundproof') { await this.abilityMsg(target, '聲音類招式沒有效果！'); return true; }
     if (mv.flags.bullet && a === 'bulletproof') { await this.abilityMsg(target, '球和彈類招式沒有效果！'); return true; }
     if (a === 'wonder-guard' && mv.cat !== 'Status' && this.effectiveness({ ...mv, type }, target, user) <= 1 && mv.id !== 'struggle') {
@@ -684,6 +774,7 @@ Object.assign(Battle.prototype, {
     if (mv.id === 'blizzard' && (w === 'hail' || w === 'snowscape')) acc = true;
     if (vT.minimize && mv.flags.minimize) acc = true;
     if (vU.lockOn > 0) { vU.lockOn = 0; acc = true; }
+    if (vT.glaiveRush) acc = true; // 巨劍突擊之後：對手的招式必定命中
     const ua = this.ab(user), ta = this.ab(target);
     if (ua === 'no-guard' || ta === 'no-guard') acc = true;
     if (acc === true) return true;
@@ -770,6 +861,7 @@ Object.assign(Battle.prototype, {
       }
       case 'present': { const r = U.rand(); bp = r < .4 ? 40 : r < .7 ? 80 : r < .8 ? 120 : 0; break; }
       case 'beatup': bp = 5 + Math.floor(POKEDEX[user.sp].s[1] / 10); break;
+      case 'spitup': bp = 100 * (vU.stockpile || 0); break;
       case 'watershuriken': break;
     }
     // 太晶化：與太晶屬性相同、威力不到 60 的招式提升到 60（連續攻擊與先制招式除外）
@@ -782,7 +874,14 @@ Object.assign(Battle.prototype, {
     if (mv.id === 'terrainpulse') return { electricterrain: 'electric', grassyterrain: 'grass', mistyterrain: 'fairy', psychicterrain: 'psychic' }[this.field.terrain] || 'normal';
     if (mv.id === 'revelationdance') return this.typesOf(user)[0];
     if (mv.id === 'ragingbull' && user.sp === 128) return 'fighting';
+    if (mv.id === 'judgment' && PLATE_TYPE[user.item]) return PLATE_TYPE[user.item];
+    if (mv.id === 'multiattack' && MEMORY_TYPE[user.item]) return MEMORY_TYPE[user.item];
+    if (mv.id === 'aurawheel' && user.form === 'morpeko-hangry') return 'dark';
+    // 輸電：這回合目標的招式變成電屬性；等離子浴：一般屬性招式變成電屬性
+    if (this.volOf(user).electrify) return 'electric';
     const a = this.ab(user);
+    if (a === 'liquid-voice' && mv.flags && mv.flags.sound) return 'water';
+    if (this.field && this.field.ionDeluge && mv.type === 'normal' && !['normalize', 'aerilate', 'pixilate', 'refrigerate', 'galvanize'].includes(a)) return 'electric';
     if (a === 'normalize') return 'normal';
     const ate = { aerilate: 'flying', pixilate: 'fairy', refrigerate: 'ice', galvanize: 'electric' }[a];
     if (ate && mv.type === 'normal') return ate;
@@ -841,6 +940,13 @@ Object.assign(Battle.prototype, {
         total += d; n++;
         continue;
       }
+      // 結凍頭（冰砌鵝）：第一次受到的物理招式由冰臉承受（畫皮在 js/late.js）
+      if (this.ab(target) === 'ice-face' && target.sp === 875 && target.form !== 'eiscue-noice' && mv.cat === 'Physical') {
+        n++; subHit = true;
+        await this.abilityMsg(target, `${tname} 的冰臉代替承受了攻擊！`);
+        await this.setForm(target, 'eiscue-noice', `${tname} 的冰臉碎掉了！`);
+        continue;
+      }
       // 點到為止、手下留情：至少留下 1 HP
       if ((mv.id === 'falseswipe' || mv.id === 'holdback') && dmg >= target.hp) dmg = target.hp - 1;
       // 挺住、結實、氣勢披帶、氣勢頭帶
@@ -860,6 +966,9 @@ Object.assign(Battle.prototype, {
       await this.hurt(target, dmg, fixed !== null ? 1 : eff);
       if (crit) await this.msg('擊中了要害！');
       vT.hitBy.push({ by: this.sideKey(user), dmg, cat: mv.cat });
+      if (vT.bide) { vT.bide.dmg += dmg; vT.bide.by = user; } // 忍耐：累積受到的傷害
+      // 怨念：被打倒時，打倒自己的招式 PP 歸零
+      if (target.hp <= 0 && vT.grudge && act && act.slot) { act.slot.pp = 0; await this.msg(`${this.label(user)} 的 ${mv.n} 因為怨念失去了所有 PP！`); }
       vT.damagedThisTurn = true;
       vT.timesHit++;
       if (survived === 'endure') await this.msg(`${tname} 挺住了攻擊！`);
@@ -913,6 +1022,8 @@ Object.assign(Battle.prototype, {
         if (s.volatileStatus) await this.addVolatile(target, s.volatileStatus, user, mv, true);
         if (s.boosts) await this.boost(target, s.boosts, user, true);
       }
+      // 毒鎖鏈：30% 讓目標中劇毒（不是追加效果，強行不會消除）
+      if (ua === 'toxic-chain' && target.hp > 0 && !shielded && U.rand() < .3) await this.setStatus(target, 'tox', user, true);
       // 王者之證、銳利之牙：10% 畏縮
       if ((ui === 'kings-rock' || ui === 'razor-fang') && target.hp > 0 && !shielded && !secs.some(s => s.volatileStatus === 'flinch') && U.rand() < .1) vT.flinch = true;
     }
@@ -946,6 +1057,7 @@ Object.assign(Battle.prototype, {
     // 自身效果
     if (mv.self && mv.self.boosts && user.hp > 0) await later('self', async () => { if (user.hp > 0 && (!mv.self.chance || U.rand() * 100 < mv.self.chance)) await this.boost(user, mv.self.boosts, user); });
     if (mv.self && mv.self.volatileStatus === 'roost') vU.roost = true;
+    if (mv.self && mv.self.volatileStatus === 'glaiverush' && user.hp > 0) vU.glaiveRush = true;
     if (mv.selfBoost && mv.selfBoost.boosts && user.hp > 0) await later('selfBoost', async () => { if (user.hp > 0) await this.boost(user, mv.selfBoost.boosts, user); });
     // 解凍
     if (mv.thawsTarget && target.st === 'frz' && target.hp > 0) { target.st = null; this.draw(); await this.msg(`${tname} 的冰凍融化了！`); }
@@ -963,16 +1075,24 @@ Object.assign(Battle.prototype, {
     // 與道具相關的招式
     const tItem = this.itm(target);
     const sticky = this.ab(target) === 'sticky-hold';
-    if (mv.id === 'knockoff' && tItem && target.hp > 0 && !subHit && !sticky) { await this.consume(target, `${tname} 的{i}被拍落了！`); }
-    if (mv.id === 'incinerate' && tItem && tItem.endsWith('-berry') && !subHit) { await this.consume(target, `${tname} 的{i}被燒掉了！`); }
+    if (mv.id === 'knockoff' && tItem && target.hp > 0 && !subHit && !sticky) { this.keep(target, 'item'); await this.consume(target, `${tname} 的{i}被拍落了！`); vT.usedItem = null; }
+    if (mv.id === 'incinerate' && tItem && tItem.endsWith('-berry') && !subHit) { await this.consume(target, `${tname} 的{i}被燒掉了！`); vT.usedItem = null; }
     if ((mv.id === 'pluck' || mv.id === 'bugbite') && tItem && tItem.endsWith('-berry') && !subHit) {
       const b = await this.consume(target, `${this.label(user)} 吃掉了 ${tname} 的{i}！`);
-      if (b === 'sitrus-berry') await this.healMon(user, Math.floor(Mon.maxHp(user) / 4));
-      if (b === 'oran-berry') await this.healMon(user, 10);
+      vT.usedItem = null;
+      await this.berryEffect(user, b);
     }
-    if ((mv.id === 'thief' || mv.id === 'covet') && tItem && !user.item && this.wildMon && !subHit && !sticky) {
-      user.item = await this.consume(target, `${this.label(user)} 搶走了 ${tname} 的{i}！`);
+    // 小偷、想要、魔術師（打中時）：搶走目標的道具（訓練家對戰結束後會還回去）
+    const steal = mv.id === 'thief' || mv.id === 'covet';
+    if ((steal || (ua === 'magician' && total > 0)) && tItem && !user.item && user.hp > 0 && !subHit && !sticky) {
+      const it = await this.moveItem(target, user, steal ? `${this.label(user)} 搶走了 ${tname} 的{i}！` : null);
+      if (!steal) await this.abilityMsg(user, `搶走了 ${tname} 的${Held.name(it)}！`);
     }
+    // 一口飛彈：衝浪、潛水後叼住獵物（體力一半以上是沙丁魚，以下是皮卡丘）
+    if (ua === 'gulp-missile' && user.sp === 845 && (mv.id === 'surf' || mv.id === 'dive') && !user.form && user.hp > 0)
+      await this.setForm(user, user.hp * 2 > Mon.maxHp(user) ? 'cramorant-gulping' : 'cramorant-gorging');
+    // 噴出：用掉蓄力
+    if (mv.id === 'spitup') await this.clearStockpile(user);
     // 自爆類
     if (mv.selfdestruct === 'always' || mv.selfdestruct === 'ifHit') await this.selfFaint(user);
     if (mv.id === 'finalgambit') await this.selfFaint(user);
@@ -980,6 +1100,8 @@ Object.assign(Battle.prototype, {
     if (mv.forceSwitch && target.hp > 0) await this.forceOut(target);
     // 交換（急速折返等）
     if (mv.selfSwitch && user.hp > 0) await this.selfSwitchOut(user, mv);
+    // 危險迴避、躍躍欲逃：體力降到一半以下時退場
+    if (vT.emergencyExit && target.hp > 0) { vT.emergencyExit = false; await this.emergencyExit(target); }
     return true;
   },
 
@@ -1000,7 +1122,35 @@ Object.assign(Battle.prototype, {
       const crossed = hpBefore * 2 > max && target.hp * 2 <= max;
       if (crossed && ta === 'berserk') await this.boost(target, { spa: 1 }, target);
       if (crossed && ta === 'anger-shell') await this.boost(target, { atk: 1, spa: 1, spe: 1, def: -1, spd: -1 }, target);
+      // 危險迴避、躍躍欲逃：招式結束後退場
+      if (crossed && (ta === 'emergency-exit' || ta === 'wimp-out')) this.volOf(target).emergencyExit = true;
+      // 變色：變成打中自己的招式的屬性
+      if (ta === 'color-change' && mv.type && TYPES[mv.type] && this.typesOf(target).join() !== mv.type) { this.volOf(target).types = [mv.type]; await this.abilityMsg(target, `${tname} 變成了${TYPES[mv.type].n}屬性！`); }
+      if (ta === 'electromorphosis' || (ta === 'wind-power' && mv.flags.wind)) { this.volOf(target).charge = true; await this.abilityMsg(target, `${tname} 開始充電了！`); }
+      if (ta === 'steam-engine' && (mv.type === 'fire' || mv.type === 'water')) await this.boost(target, { spe: 6 }, target);
+      if (ta === 'water-compaction' && mv.type === 'water') await this.boost(target, { def: 2 }, target);
       await this.checkBerry(target);
+    }
+    if (dmg > 0) {
+      // 幻覺：受到傷害後現出原形
+      const vt = this.volOf(target);
+      if (vt.illusion && !vt.illusionBroken) { vt.illusionBroken = true; this.refreshSprite(target); await this.msg(`${this.label(target)} 的幻覺解除了！`); }
+      // 棉絮：降低其他寶可夢的速度；吐沙：颳起沙暴；掉出種子：長出青草場地；毒滿地：在對手腳下撒毒菱
+      if (ta === 'cotton-down') { await this.abilityMsg(target, '棉絮飛散了！'); for (const o of this.activeMons()) if (o !== target) await this.boost(o, { spe: -1 }, target, true); }
+      if (ta === 'sand-spit' && this.field.weather !== 'sandstorm') { this.field.weather = 'sandstorm'; this.field.weatherT = this.itm(target) === 'smooth-rock' ? 8 : 5; await this.abilityMsg(target, '開始颳沙暴了！'); }
+      if (ta === 'seed-sower' && this.field.terrain !== 'grassyterrain') { this.field.terrain = 'grassyterrain'; this.field.terrainT = this.itm(target) === 'terrain-extender' ? 8 : 5; await this.abilityMsg(target, '腳下青草如茵！'); }
+      if (ta === 'toxic-debris' && mv.cat === 'Physical') { const sd = this.sides[this.sideKey(user)]; if (sd.toxicspikes < 2) { sd.toxicspikes++; await this.abilityMsg(target, '對手的腳下散落著毒菱！'); } }
+      // 一口飛彈：受到攻擊時把叼著的獵物吐向對手
+      if (ta === 'gulp-missile' && target.sp === 845 && (target.form === 'cramorant-gulping' || target.form === 'cramorant-gorging') && user.hp > 0) {
+        const pika = target.form === 'cramorant-gorging';
+        await this.setForm(target, this.baseForm(target));
+        if (this.ab(user) !== 'magic-guard') { await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 4))); await this.abilityMsg(target, `${uname} 受到了傷害！`); }
+        if (pika) await this.setStatus(user, 'par', target, true); else await this.boost(user, { def: -1 }, target, true);
+      }
+    }
+    // 飛出的內在物：倒下時給對手和失去的體力相同的傷害
+    if (target.hp <= 0 && ta === 'innards-out' && user.hp > 0 && this.ab(user) !== 'magic-guard') {
+      await this.hurt(user, Math.min(user.hp, hpBefore)); await this.abilityMsg(target, `${uname} 受到了傷害！`);
     }
     if (target.hp <= 0 && contact && ta === 'aftermath' && user.hp > 0 && this.ab(user) !== 'magic-guard') {
       await this.hurt(user, Math.max(1, Math.floor(Mon.maxHp(user) / 4))); await this.abilityMsg(target, `${uname} 受到了傷害！`);
@@ -1020,23 +1170,43 @@ Object.assign(Battle.prototype, {
       }
     }
     if (ta === 'gooey' || ta === 'tangling-hair') await this.boost(user, { spe: -1 }, target, true);
+    // 木乃伊、甩不掉的氣味：把對手的特性變成自己的特性；遊魂：和對手交換特性
+    const uAb = user.ability;
+    if ((ta === 'mummy' || ta === 'lingering-aroma') && uAb !== ta && !FIXED_AB.has(uAb)) {
+      this.keep(user, 'ability'); user.ability = ta; await this.abilityMsg(target, `${uname} 的特性變成了${Abil.name(ta)}！`);
+    }
+    if (ta === 'wandering-spirit' && !FIXED_AB.has(uAb) && !NO_COPY_AB.has(uAb) && target.hp > 0) {
+      this.keep(user, 'ability'); this.keep(target, 'ability');
+      await this.abilityMsg(target, `和 ${uname} 交換了特性！`);
+      [user.ability, target.ability] = [target.ability, uAb];
+    }
+    // 滅亡之軀：被接觸時雙方 3 回合後倒下
+    if (ta === 'perish-body' && !this.volOf(user).perish) {
+      this.volOf(user).perish = 4; if (!this.volOf(target).perish && target.hp > 0) this.volOf(target).perish = 4;
+      await this.abilityMsg(target, '雙方都會在 3 回合後倒下！');
+    }
+    // 順手牽羊：被接觸時搶走對手的道具
+    if (ta === 'pickpocket' && target.hp > 0 && !target.item && this.itm(user) && this.ab(user) !== 'sticky-hold') {
+      const it = await this.moveItem(user, target, null);
+      await this.abilityMsg(target, `搶走了 ${uname} 的${Held.name(it)}！`);
+    }
     if (ua === 'poison-touch' && target.hp > 0 && U.rand() < .3) await this.setStatus(target, 'psn', user, true);
   },
   // 樹果：HP 低於一半時回復
   async checkBerry(m) {
     if (!m || m.hp <= 0) return;
     const it = this.itm(m), max = Mon.maxHp(m);
-    if (it === 'sitrus-berry' && m.hp * 2 <= max) { await this.consume(m, `${this.label(m)} 吃掉了{i}，回復了體力！`); await this.healMon(m, Math.floor(max / 4)); }
-    else if (it === 'oran-berry' && m.hp * 2 <= max) { await this.consume(m, `${this.label(m)} 吃掉了{i}，回復了體力！`); await this.healMon(m, 10); }
+    if (!['sitrus-berry', 'oran-berry'].includes(it) || m.hp * 2 > max || this.unnerved(m)) return;
+    await this.consume(m, `${this.label(m)} 吃掉了{i}，回復了體力！`);
+    await this.berryEffect(m, it);
   },
   // 異常狀態樹果、木子果
   async checkStatusBerry(m) {
     const it = this.itm(m);
-    if (!it || !m.st) return;
+    if (!it || !m.st || this.unnerved(m)) return;
     if (it === 'lum-berry' || (STATUS_BERRY[it] || []).includes(m.st)) {
       await this.consume(m, `${this.label(m)} 吃掉了{i}！`);
-      m.st = null; this.draw();
-      await this.msg(`${this.label(m)} 的異常狀態治好了！`);
+      await this.berryEffect(m, it);
     }
   },
 
@@ -1071,7 +1241,7 @@ Object.assign(Battle.prototype, {
     const contact = mv.flags.contact && ui !== 'punching-glove' && ua !== 'long-reach';
     // 會心
     let critStage = (mv.critRatio ? mv.critRatio - 1 : 0) + (vU.focus || 0) + (ua === 'super-luck' ? 1 : 0) + (ui === 'scope-lens' || ui === 'razor-claw' ? 1 : 0);
-    let crit = !!mv.willCrit || vU.laserFocus > 0 || U.rand() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
+    let crit = !!mv.willCrit || vU.laserFocus > 0 || (ua === 'merciless' && (target.st === 'psn' || target.st === 'tox')) || U.rand() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
     if (ta === 'battle-armor' || ta === 'shell-armor') crit = false;
     if (vU.laserFocus > 0) vU.laserFocus = 0;
     // 威力修正（Showdown onBasePower）
@@ -1108,6 +1278,13 @@ Object.assign(Battle.prototype, {
     if (t === 'mistyterrain' && mv.type === 'dragon' && this.grounded(target)) bpMod *= .5;
     if (t === 'grassyterrain' && ['earthquake', 'bulldoze', 'magnitude'].includes(mv.id)) bpMod *= .5;
     if (vU.charge && mv.type === 'electric') { bpMod *= 2; vU.charge = false; }
+    // 暗黑氣場、妖精氣場（氣場破壞反轉）
+    const on = this.activeMons ? this.activeMons() : [user, target];
+    const aura = { dark: 'dark-aura', fairy: 'fairy-aura' }[mv.type];
+    if (aura && on.some(m => this.ab(m) === aura)) bpMod *= on.some(m => this.ab(m) === 'aura-break') ? 3072 / 4096 : 5448 / 4096;
+    // 玩水、玩泥巴：火屬性、電屬性招式的威力變成 1/3
+    if (this.field.waterSport && mv.type === 'fire') bpMod *= 1352 / 4096;
+    if (this.field.mudSport && mv.type === 'electric') bpMod *= 1352 / 4096;
     bp = Math.max(1, Math.floor(bp * bpMod));
 
     // 攻擊與防禦能力（純樸無視對方的能力等級）
@@ -1120,7 +1297,9 @@ Object.assign(Battle.prototype, {
     let dS = mv.ignoreDefensive || ua === 'unaware' ? 0 : vT.stg[defStat];
     if (crit) { aS = Math.max(0, aS); dS = Math.min(0, dS); }
     let A = Math.floor(Mon.stats(atkMon)[IDX[atkStat]] * boostMul(aS));
-    let D = Math.floor(st[IDX[defStat]] * boostMul(dS));
+    // 奇妙空間：防禦與特防的能力值互換（能力等級不換）
+    const dIdx = this.field.wonderRoom ? { def: 4, spd: 2 }[defStat] : IDX[defStat];
+    let D = Math.floor(st[dIdx] * boostMul(dS));
     const lowHp = user.hp * 3 <= Mon.maxHp(user);
     let aMod = 1;
     if (phys && (ua === 'huge-power' || ua === 'pure-power')) aMod *= 2;
@@ -1129,6 +1308,9 @@ Object.assign(Battle.prototype, {
     if (lowHp && ({ blaze: 'fire', torrent: 'water', overgrow: 'grass', swarm: 'bug' }[ua] === mv.type)) aMod *= 1.5;
     if (!phys && ua === 'solar-power' && w === 'sunnyday') aMod *= 1.5;
     if (ua === 'defeatist' && user.hp * 2 <= Mon.maxHp(user)) aMod *= .5;
+    if (phys && ua === 'slow-start' && vU.turnsOut < 5) aMod *= .5;
+    // 災禍之簡、災禍之鼎：降低其他寶可夢的攻擊、特攻
+    if (on.some(m => m !== atkMon && this.ab(m) === (phys ? 'tablets-of-ruin' : 'vessel-of-ruin')) && this.ab(atkMon) !== (phys ? 'tablets-of-ruin' : 'vessel-of-ruin')) aMod *= .75;
     if (ua === 'water-bubble' && mv.type === 'water') aMod *= 2;
     if (!phys && ua === 'hadron-engine' && t === 'electricterrain') aMod *= 5461 / 4096;
     if (phys && ua === 'orichalcum-pulse' && w === 'sunnyday') aMod *= 5461 / 4096;
@@ -1144,6 +1326,9 @@ Object.assign(Battle.prototype, {
     let dMod = 1;
     if (this.paradoxStat(target) === defStat) dMod *= 1.3;
     if (defStat === 'def' && ta === 'fur-coat') dMod *= 2;
+    // 災禍之劍、災禍之玉：降低其他寶可夢的防禦、特防
+    const ruinD = defStat === 'def' ? 'sword-of-ruin' : 'beads-of-ruin';
+    if (on.some(m => m !== target && this.ab(m) === ruinD) && this.ab(target) !== ruinD) dMod *= .75;
     if (defStat === 'def' && ta === 'marvel-scale' && target.st) dMod *= 1.5;
     if (defStat === 'def' && ta === 'grass-pelt' && t === 'grassyterrain') dMod *= 1.5;
     if (ti === 'eviolite' && (POKEDEX[target.sp].ev || []).length) dMod *= 1.5;
@@ -1178,6 +1363,7 @@ Object.assign(Battle.prototype, {
     if (ui === 'metronome') fMod *= 1 + Math.min(1, .2 * (vU.metronomeN || 0));
     base = Math.floor(base * fMod);
     if (vT.minimize && mv.flags.minimize) base *= 2;
+    if (vT.glaiveRush) base *= 2; // 巨劍突擊之後受到的傷害加倍
     if ((mv.id === 'collisioncourse' || mv.id === 'electrodrift') && eff > 1) base = Math.floor(base * 5461 / 4096);
     if (vT.semi === 'dig' && ['earthquake', 'magnitude'].includes(mv.id)) base *= 2;
     if (vT.semi === 'dive' && ['surf', 'whirlpool'].includes(mv.id)) base *= 2;
@@ -1198,7 +1384,7 @@ Object.assign(Battle.prototype, {
     switch (mv.id) {
       case 'rest': {
         const max = Mon.maxHp(user);
-        if (user.hp >= max || user.st === 'slp' || (this.field.terrain === 'electricterrain' && this.grounded(user))) return fail();
+        if (user.hp >= max || user.st === 'slp' || (this.field.terrain === 'electricterrain' && this.grounded(user)) || this.activeMons().some(m => this.volOf(m).uproar > 0) || ['insomnia', 'vital-spirit'].includes(this.ab(user))) return fail();
         user.hp = max; user.st = 'slp'; user.slpT = 3; this.draw();
         await this.statusFx(user, 'slp');
         await this.msg(`${name} 睡著了，體力完全恢復了！`);
@@ -1286,8 +1472,173 @@ Object.assign(Battle.prototype, {
       case 'healingwish': case 'lunardance': {
         const party = user === this.me ? G.party : this.foeParty;
         if (!party.some(m => m !== user && m.hp > 0)) return fail();
-        await this.selfFaint(user); this.pendingHealingWish = this.sideKey(user); return true;
+        await this.selfFaint(user); this.pendingHealingWish = { side: this.sideKey(user), lunar: mv.id === 'lunardance' }; return true;
       }
+      // ---------- 複製、變身 ----------
+      case 'mimic': case 'sketch': {
+        const last = vT.lastMove && md(vT.lastMove);
+        const i = user.moves.findIndex(s => s === act.slot) >= 0 ? user.moves.indexOf(act.slot) : user.moves.findIndex(s => s.id === mv.num);
+        if (!last || i < 0 || last.id === 'struggle' || last.flags.failmimic || (mv.id === 'sketch' && last.flags.nosketch) || user.moves.some(s => s.id === vT.lastMove)) return fail();
+        // 模仿：在場期間暫時學會；寫生：永久學會
+        user.moves[i] = mv.id === 'mimic' ? { id: vT.lastMove, pp: last.pp, mimicOf: user.moves[i] } : { id: vT.lastMove, pp: last.pp };
+        await this.msg(`${name} 學會了 ${last.n}！`); return true;
+      }
+      case 'transform':
+        if (vU.transformed || vT.transformed || vT.sub || this.illusionOf(target) || target === user) return fail();
+        await this.transformInto(user, target); return true;
+      case 'conversion2': {
+        const last = vT.lastMove && md(vT.lastMove);
+        if (!last || !CHART[last.type]) return fail();
+        const opts = Object.keys(CHART).filter(t => TYPES[t] && t !== 'stellar' && typeEff(last.type, [t]) < 1 && !this.typesOf(user).includes(t));
+        if (!opts.length) return fail();
+        const t = U.pick(opts);
+        vU.types = [t]; await this.msg(`${name} 變成了${TYPES[t].n}屬性！`); return true;
+      }
+      // ---------- 道具交換 ----------
+      case 'trick': case 'switcheroo': {
+        const a = user.item || null, b = target.item || null;
+        const locked = x => x && ((window.MEGA_STONES && MEGA_STONES[x]) || x.endsWith('-z') || PLATE_TYPE[x] || MEMORY_TYPE[x]);
+        if ((!a && !b) || locked(a) || locked(b) || this.ab(target) === 'sticky-hold') return fail();
+        this.keep(user, 'item'); this.keep(target, 'item');
+        user.item = b; target.item = a;
+        for (const [m, v] of [[user, vU], [target, vT]]) { v.choiceLock = null; if (!m.item && m.ability === 'unburden') v.unburden = true; }
+        await this.msg(`${name} 和 ${tname} 交換了道具！`);
+        if (b) await this.msg(`${name} 得到了${Held.name(b)}！`);
+        if (a) await this.msg(`${tname} 得到了${Held.name(a)}！`);
+        return true;
+      }
+      // ---------- 特性 ----------
+      case 'roleplay': {
+        const ta = target.ability;
+        if (!ta || ta === user.ability || NO_COPY_AB.has(ta) || FIXED_AB.has(user.ability)) return fail();
+        this.keep(user, 'ability'); user.ability = ta;
+        await this.msg(`${name} 複製了 ${tname} 的${Abil.name(ta)}！`);
+        await this.abilityStart(user); return true;
+      }
+      case 'skillswap': {
+        const a = user.ability, b = target.ability;
+        const bad = x => !x || FIXED_AB.has(x) || ['wonder-guard', 'illusion', 'neutralizing-gas', 'hunger-switch', 'zen-mode'].includes(x);
+        if (bad(a) || bad(b)) return fail();
+        this.keep(user, 'ability'); this.keep(target, 'ability');
+        user.ability = b; target.ability = a;
+        await this.msg(`${name} 和 ${tname} 交換了特性！`);
+        if (this.sideKey(user) !== this.sideKey(target)) { await this.abilityStart(user); await this.abilityStart(target); }
+        return true;
+      }
+      case 'worryseed': case 'simplebeam': {
+        const nb = mv.id === 'worryseed' ? 'insomnia' : 'simple';
+        if (target.ability === nb || FIXED_AB.has(target.ability) || target.ability === 'truant') return fail();
+        this.keep(target, 'ability'); target.ability = nb; vT.gastro = false;
+        await this.msg(`${tname} 的特性變成了${Abil.name(nb)}！`);
+        if (nb === 'insomnia' && target.st === 'slp') { target.st = null; this.draw(); await this.msg(`${tname} 醒過來了！`); }
+        return true;
+      }
+      case 'entrainment': {
+        const a = user.ability;
+        if (!a || a === target.ability || NO_COPY_AB.has(a) || FIXED_AB.has(target.ability) || target.ability === 'truant') return fail();
+        this.keep(target, 'ability'); target.ability = a; vT.gastro = false;
+        await this.msg(`${tname} 的特性變成了${Abil.name(a)}！`);
+        await this.abilityStart(target); return true;
+      }
+      case 'doodle': {
+        const ta = target.ability;
+        if (!ta || NO_COPY_AB.has(ta)) return fail();
+        let any = false;
+        for (const m of [user, this.allyOf ? this.allyOf(user) : null]) {
+          if (!m || m.hp <= 0 || m.ability === ta || FIXED_AB.has(m.ability)) continue;
+          this.keep(m, 'ability'); m.ability = ta; any = true;
+          await this.msg(`${this.label(m)} 的特性變成了${Abil.name(ta)}！`);
+          await this.abilityStart(m);
+        }
+        return any || fail();
+      }
+      // ---------- 能力值 ----------
+      case 'guardsplit': case 'powersplit': {
+        const su = Mon.stats(user), st = Mon.stats(target);
+        for (const k of mv.id === 'guardsplit' ? [2, 4] : [1, 3]) { const avg = Math.floor((su[k] + st[k]) / 2); this.setStat(user, k, avg); this.setStat(target, k, avg); }
+        await this.msg(mv.id === 'guardsplit' ? `${name} 和 ${tname} 平分了防守！` : `${name} 和 ${tname} 平分了力量！`); return true;
+      }
+      // ---------- 復活、回收、吃樹果 ----------
+      case 'revivalblessing': {
+        const mine = this.sideKey(user) === 'me', party = mine ? G.party : this.foeParty;
+        const dead = party.filter(m => m.hp <= 0);
+        if (!dead.length) return fail();
+        let m = dead[0];
+        if (mine && dead.length > 1) m = dead[Math.max(0, await UI.choose(dead.map(x => Mon.name(x)), { prompt: '要讓哪一隻寶可夢復活？', cancel: false }))];
+        m.hp = Math.max(1, Math.floor(Mon.maxHp(m) / 2)); m.st = null; delete m._fainted;
+        this.draw(); await this.msg(`${Mon.name(m)} 復活了！`); return true;
+      }
+      case 'recycle':
+        if (user.item || !vU.usedItem) return fail();
+        user.item = vU.usedItem; vU.usedItem = null;
+        await this.msg(`${name} 撿回了${Held.name(user.item)}！`); return true;
+      case 'stuffcheeks': {
+        const it = this.itm(user);
+        if (!it || !it.endsWith('-berry') || this.unnerved(user)) return fail();
+        const b = await this.consume(user, `${name} 吃掉了{i}！`);
+        await this.berryEffect(user, b);
+        await this.boost(user, { def: 2 }, user); return true;
+      }
+      case 'teatime': {
+        let any = false;
+        for (const m of this.activeMons()) {
+          const it = this.itm(m);
+          if (!it || !it.endsWith('-berry')) continue;
+          any = true;
+          const b = await this.consume(m, `${this.label(m)} 吃掉了{i}！`);
+          await this.berryEffect(m, b);
+        }
+        return any || fail();
+      }
+      // ---------- 蓄力 ----------
+      case 'swallow': {
+        const n = vU.stockpile || 0, max = Mon.maxHp(user);
+        if (!n || user.hp >= max) return fail();
+        await this.healMon(user, Math.floor(max * [0, .25, .5, 1][n]));
+        await this.msg(`${name} 的體力回復了！`);
+        await this.clearStockpile(user); return true;
+      }
+      // ---------- 屬性、場地 ----------
+      case 'magicpowder':
+        if (this.typesOf(target).join() === 'psychic') return fail();
+        vT.types = ['psychic']; await this.msg(`${tname} 變成了超能力屬性！`); return true;
+      case 'courtchange': {
+        const A = this.sides.me, B = this.sides.foe;
+        for (const k of ['reflect', 'lightscreen', 'auroraveil', 'tailwind', 'mist', 'safeguard', 'spikes', 'toxicspikes', 'stealthrock', 'stickyweb']) [A[k], B[k]] = [B[k], A[k]];
+        await this.msg('雙方場地上的效果交換了！'); return true;
+      }
+      case 'rototiller': case 'flowershield': {
+        const ms = this.activeMons().filter(m => this.typesOf(m).includes('grass') && (mv.id === 'flowershield' || this.grounded(m)));
+        if (!ms.length) return fail();
+        for (const m of ms) await this.boost(m, mv.id === 'rototiller' ? { atk: 1, spa: 1 } : { def: 1 }, user);
+        return true;
+      }
+      case 'gearup': case 'magneticflux': {
+        const ms = [user, this.allyOf ? this.allyOf(user) : null].filter(m => m && m.hp > 0 && ['plus', 'minus'].includes(this.ab(m)));
+        if (!ms.length) return fail();
+        for (const m of ms) await this.boost(m, mv.id === 'gearup' ? { atk: 1, spa: 1 } : { def: 1, spd: 1 }, user);
+        return true;
+      }
+      // ---------- 行動順序、隊友 ----------
+      case 'afteryou': case 'quash':
+        if (target === user || vT.movedThisTurn || !this.reorder(target, mv.id === 'afteryou' ? 'first' : 'last')) return fail();
+        await this.msg(mv.id === 'afteryou' ? `${tname} 接受了對方的好意！` : `${tname} 的行動被延後了！`); return true;
+      case 'allyswitch':
+        if (!this.swapAlly || !(await this.swapAlly(user))) return fail();
+        return true;
+      case 'instruct': {
+        const id = vT.lastMove, last = id && md(id);
+        const slot = last && target.moves.find(s => s.id === id && s.pp > 0);
+        if (!slot || target === user || target.hp <= 0 || last.flags.failinstruct || last.flags.charge || last.callsMove || vT.locked || vT.recharge || vT.charging) return fail();
+        await this.msg(`${tname} 聽從了 ${name} 的指示！`);
+        const foe = this.activeMons().find(o => o.hp > 0 && this.sideKey(o) !== this.sideKey(target));
+        if (!foe) return true;
+        const restore = this.pairUp(target, foe);
+        try { await this.runMove(target, foe, { mv: last, slot, instructed: true }); } finally { restore(); }
+        return true;
+      }
+      case 'helpinghand': return fail(); // 單打沒有隊友（雙打由 DoubleBattle 處理）
+      case 'followme': case 'ragepowder': await this.msg(`${name} 成為了注目的焦點！`); return true;
       case 'teleport':
         if (this.wildMon) { await this.msg(`${name} 逃走了！`); this.fled = true; return true; }
         await this.selfSwitchOut(user, mv); return true;
@@ -1326,6 +1677,21 @@ Object.assign(Battle.prototype, {
         if (this.field.gravity) return fail();
         this.field.gravity = 5; vU.magnetRise = 0; vT.magnetRise = 0;
         await this.msg('重力變強了！');
+      } else if (mv.pseudoWeather === 'magicroom' || mv.pseudoWeather === 'wonderroom') {
+        // 魔法空間（道具沒有效果）、奇妙空間（防禦與特防互換）：5 回合，再用一次結束
+        const k = mv.pseudoWeather === 'magicroom' ? 'magicRoom' : 'wonderRoom', zh = k === 'magicRoom' ? '魔法空間' : '奇妙空間';
+        this.field[k] = this.field[k] ? 0 : 5;
+        await this.msg(this.field[k] ? `周圍變成了${zh}！` : `${zh}消失了，恢復原狀了！`);
+      } else if (mv.pseudoWeather === 'watersport' || mv.pseudoWeather === 'mudsport') {
+        const k = mv.pseudoWeather === 'watersport' ? 'waterSport' : 'mudSport';
+        if (this.field[k]) return fail();
+        this.field[k] = 5;
+        await this.msg(k === 'waterSport' ? '火的威力減弱了！' : '電的威力減弱了！');
+      } else if (mv.pseudoWeather === 'fairylock') {
+        if (this.field.fairyLock) return fail();
+        this.field.fairyLock = 2; await this.msg('下一回合誰都無法逃走了！');
+      } else if (mv.pseudoWeather === 'iondeluge') {
+        this.field.ionDeluge = true; await this.msg('電漿傾盆而下！');
       } else await this.msg('但是什麼事都沒有發生。');
       did = true;
     }
@@ -1339,11 +1705,19 @@ Object.assign(Battle.prototype, {
       else if (sc === 'toxicspikes') { if (side.toxicspikes >= 2) return fail(); side.toxicspikes++; await this.msg('對手的腳下散落著毒菱！'); }
       else if (sc === 'stealthrock') { if (side.stealthrock) return fail(); side.stealthrock = true; await this.msg('對手的周圍浮著尖銳的岩石！'); }
       else if (sc === 'stickyweb') { if (side.stickyweb) return fail(); side.stickyweb = true; await this.msg('對手的腳下佈滿了黏黏網！'); }
+      else if (['wideguard', 'quickguard', 'craftyshield'].includes(sc)) {
+        // 廣域防守、快速防守、戲法防守：這一回合保護自己這一邊；最後行動時失敗
+        if (this.isLastMover(user)) return fail();
+        side[{ wideguard: 'wideGuard', quickguard: 'quickGuard', craftyshield: 'craftyShield' }[sc]] = true;
+        await this.msg(`${{ wideguard: '廣域防守', quickguard: '快速防守', craftyshield: '戲法防守' }[sc]}保護了己方！`);
+      }
       else if (zh) {
         if (side[sc]) return fail();
         if (sc === 'auroraveil' && !['hail', 'snowscape'].includes(this.field.weather)) return fail();
         side[sc] = sc === 'tailwind' ? 4 : ['reflect', 'lightscreen', 'auroraveil'].includes(sc) && this.itm(user) === 'light-clay' ? 8 : 5;
         await this.msg(`${name} 張起了${zh}！`);
+        // 風力發電：順風吹起時充電
+        if (sc === 'tailwind') for (const m of this.activeMons()) if (this.sideKey(m) === this.sideKey(user) && this.ab(m) === 'wind-power') { this.volOf(m).charge = true; await this.abilityMsg(m, `${this.label(m)} 開始充電了！`); }
       } else await this.msg('但是什麼事都沒有發生。');
       did = true;
     }
@@ -1398,9 +1772,14 @@ Object.assign(Battle.prototype, {
     const grounded = this.grounded(target);
     if (this.field.terrain === 'mistyterrain' && grounded) return fail(`${name} 受到薄霧場地的保護！`);
     if (status === 'slp' && this.field.terrain === 'electricterrain' && grounded) return fail(`${name} 受到電氣場地的保護！`);
+    // 吵鬧：場上有寶可夢在吵鬧時不會睡著
+    if (status === 'slp' && this.activeMons().some(m => this.volOf(m).uproar > 0)) return fail(`${name} 因為吵鬧無法入睡！`);
+    // 花幕：草屬性的自己和隊友不會被對手變成異常狀態
+    if (source && source !== target && types.includes('grass') && [target, this.allyOf ? this.allyOf(target) : null].some(x => x && x.hp > 0 && this.ab(x) === 'flower-veil')) return fail(`${name} 受到了花幕的保護！`);
     if (status === 'brn' && types.includes('fire')) return fail();
     if (status === 'par' && types.includes('electric')) return fail();
-    if ((status === 'psn' || status === 'tox') && (types.includes('poison') || types.includes('steel'))) return fail();
+    // 腐蝕：可以讓毒屬性、鋼屬性中毒
+    if ((status === 'psn' || status === 'tox') && (types.includes('poison') || types.includes('steel')) && !(source && this.ab(source) === 'corrosion')) return fail();
     if (status === 'frz' && (types.includes('ice') || this.field.weather === 'sunnyday')) return fail();
     if (status === 'par' && mv && mv.id === 'thunderwave' && types.includes('ground')) return fail();
     // 特性造成的異常狀態免疫
@@ -1410,7 +1789,8 @@ Object.assign(Battle.prototype, {
       'water-bubble': ['brn'], 'thermal-exchange': ['brn'], 'magma-armor': ['frz'], comatose: ['par', 'slp', 'frz', 'brn', 'psn', 'tox'],
       'purifying-salt': ['par', 'slp', 'frz', 'brn', 'psn', 'tox'],
     }[a];
-    if ((immune && immune.includes(status)) || (a === 'leaf-guard' && this.wx() === 'sunnyday')) {
+    // 界限盾殼：流星的樣子不會變成異常狀態
+    if ((immune && immune.includes(status)) || (a === 'leaf-guard' && this.wx() === 'sunnyday') || (a === 'shields-down' && target.sp === 774 && target.form !== 'minior-red')) {
       if (!secondary) await this.abilityMsg(target, `${name} 不會陷入異常狀態！`);
       return false;
     }
@@ -1425,6 +1805,8 @@ Object.assign(Battle.prototype, {
       await this.abilityMsg(target, '把異常狀態傳給了對手！');
       await this.setStatus(source, status === 'tox' ? 'tox' : status, target, true);
     }
+    // 毒傀儡：讓對手中毒時也會混亂
+    if (source && source !== target && (status === 'psn' || status === 'tox') && this.ab(source) === 'poison-puppeteer') await this.addVolatile(target, 'confusion', source, null, true);
     await this.checkStatusBerry(target);
     return true;
   },
@@ -1514,6 +1896,28 @@ Object.assign(Battle.prototype, {
       case 'syrupbomb': if (!v.syrupBomb) { v.syrupBomb = 3; await this.msg(`${name} 沾滿了糖漿！`); } return true;
       case 'sparklingaria': return true;
       case 'roost': v.roost = true; return true;
+      case 'stockpile': {
+        if ((v.stockpile || 0) >= 3) return fail();
+        v.stockpile = (v.stockpile || 0) + 1;
+        await this.msg(`${name} 蓄力了 ${v.stockpile} 次！`);
+        const d0 = v.stg.def, s0 = v.stg.spd;
+        await this.boost(target, { def: 1, spd: 1 }, target);
+        v.stockDef = (v.stockDef || 0) + v.stg.def - d0; v.stockSpd = (v.stockSpd || 0) + v.stg.spd - s0;
+        return true;
+      }
+      case 'torment': if (v.torment) return fail(); v.torment = true; await this.msg(`${name} 陷入了無理取鬧的狀態！`); return true;
+      case 'imprison': if (v.imprison) return fail(); v.imprison = true; await this.msg(`${name} 封印了對手的招式！`); return true;
+      case 'grudge': v.grudge = true; await this.msg(`${name} 想要向對手施加怨念！`); return true;
+      case 'electrify': if (v.movedThisTurn) return fail(); v.electrify = true; await this.msg(`${name} 的招式變成了電屬性！`); return true;
+      case 'magiccoat': v.magicCoat = true; await this.msg(`${name} 用魔法反射包圍了自己！`); return true;
+      case 'gastroacid':
+        if (v.gastro || FIXED_AB.has(target.ability)) return fail();
+        v.gastro = true; await this.msg(`${name} 的特性失效了！`); return true;
+      case 'powertrick': {
+        const st = Mon.stats(target);
+        this.setStat(target, 1, st[2]); this.setStat(target, 2, st[1]);
+        await this.msg(`${name} 交換了攻擊和防禦！`); return true;
+      }
       default:
         if (!secondary) await this.msg('但是什麼事都沒有發生。');
         return false;
@@ -1527,12 +1931,22 @@ Object.assign(Battle.prototype, {
     const a = this.ab(target);
     const byFoe = source && source !== target;
     let any = false, droppedByFoe = false;
+    const raised = {};
     for (let [k, c] of Object.entries(boosts)) {
       const key = STAGE_OF[k];
       if (!key || !c) continue;
       if (a === 'contrary') c = -c;
       if (a === 'simple') c *= 2;
       if (c < 0 && byFoe) {
+        // 鏡甲：把對手降低能力的效果反彈回去
+        if (a === 'mirror-armor' && !this._mirror && source.hp > 0) {
+          await this.abilityMsg(target, '把能力降低反彈了回去！');
+          this._mirror = true;
+          try { await this.boost(source, { [k]: c }, target, secondary); } finally { this._mirror = false; }
+          continue;
+        }
+        // 花幕：草屬性的自己和隊友的能力不會被對手降低
+        if (this.typesOf(target).includes('grass') && [target, this.allyOf ? this.allyOf(target) : null].some(x => x && x.hp > 0 && this.ab(x) === 'flower-veil')) { if (!secondary) await this.msg(`${name} 受到了花幕的保護！`); continue; }
         if (this.sides[this.sideKey(target)].mist) { if (!secondary) await this.msg(`${name} 受到白霧的保護！`); continue; }
         if (this.volOf(target).sub && !secondary) { await this.msg('但是失敗了！'); continue; }
         // 恆淨之軀、白色煙霧、金屬防護、清淨墜飾：不會被對手降低能力
@@ -1548,6 +1962,7 @@ Object.assign(Battle.prototype, {
         continue;
       }
       v.stg[key] = U.clamp(cur + c, -6, 6);
+      if (c > 0) raised[k] = v.stg[key] - cur;
       if (c < 0) { v.statsLoweredThisTurn = true; if (byFoe) droppedByFoe = true; }
       any = true;
       const amt = Math.abs(c) >= 3 ? '極大幅' : Math.abs(c) === 2 ? '大幅' : '';
@@ -1557,6 +1972,14 @@ Object.assign(Battle.prototype, {
     // 不服輸、好勝：被對手降低能力時大幅提高攻擊／特攻
     if (droppedByFoe && a === 'defiant') await this.boost(target, { atk: 2 }, target);
     if (droppedByFoe && a === 'competitive') await this.boost(target, { spa: 2 }, target);
+    // 跟風：對手的能力提高時，自己也提高同樣的等級
+    if (Object.keys(raised).length && !this._opportunist) {
+      for (const o of this.activeMons()) {
+        if (o.hp <= 0 || this.sideKey(o) === this.sideKey(target) || this.ab(o) !== 'opportunist') continue;
+        this._opportunist = true;
+        try { await this.boost(o, raised, o); } finally { this._opportunist = false; }
+      }
+    }
     // 白色香草：恢復被降低的能力
     if (this.itm(target) === 'white-herb' && Object.values(v.stg).some(s => s < 0)) {
       await this.consume(target, `${name} 用{i}恢復了降低的能力！`);
@@ -1597,7 +2020,7 @@ Object.assign(Battle.prototype, {
 
   // 吹飛：野生戰鬥直接結束；訓練家戰隨機換上下一隻
   async forceOut(target) {
-    if (this.ab(target) === 'suction-cups' || this.volOf(target).ingrain) { await this.msg(`${this.label(target)} 緊緊吸附在地面上！`); return; }
+    if (['suction-cups', 'guard-dog'].includes(this.ab(target)) || this.volOf(target).ingrain) { await this.msg(`${this.label(target)} 緊緊吸附在地面上！`); return; }
     if (this.wildMon) { this.fled = true; await this.msg(this.sideKey(target) === 'foe' ? `${this.label(target)} 被吹走了！` : '被吹走了，戰鬥結束了！'); return; }
     const isFoe = target === this.foe;
     const party = isFoe ? this.foeParty : G.party;
@@ -1630,12 +2053,17 @@ Object.assign(Battle.prototype, {
 
   // 登場時：撒菱、隱形岩、毒菱、黏黏網、治癒之願
   async onEntry(m) {
+    Mon.ovr.delete(m);
     const side = this.sides[this.sideKey(m)];
     const v = this.volOf(m);
     v.turnsOut = 0;
-    if (this.pendingHealingWish === this.sideKey(m)) {
+    // 治癒之願：體力與異常狀態全部恢復；新月舞連 PP 也恢復
+    const hw = this.pendingHealingWish;
+    if (hw && hw.side === this.sideKey(m)) {
       this.pendingHealingWish = null;
-      Mon.heal(m); this.draw(); await this.msg(`治癒之願讓 ${this.label(m)} 恢復了！`);
+      m.hp = Mon.maxHp(m); m.st = null;
+      if (hw.lunar) m.moves.forEach(x => { if (MOVES[x.id]) x.pp = MOVES[x.id].pp; });
+      this.draw(); await this.msg(`${hw.lunar ? '新月舞' : '治癒之願'}讓 ${this.label(m)} 恢復了！`);
     }
     const grounded = this.grounded(m);
     // 厚底靴、魔法防守不受場上的陷阱影響
@@ -1660,8 +2088,13 @@ Object.assign(Battle.prototype, {
 
   // 特性的登場效果
   async abilityStart(m) {
+    // 登場時的形態（陰晴不定）
+    await this.formCheck(m, 'entry');
     const a = this.ab(m), o = this.otherOf(m), name = this.label(m);
     if (!a) return;
+    // 每場戰鬥只發動一次的登場特性
+    const once = () => { this._abOnce = this._abOnce || new Set(); if (this._abOnce.has(m)) return false; this._abOnce.add(m); return true; };
+    const foes = this.activeMons().filter(x => x.hp > 0 && this.sideKey(x) !== this.sideKey(m));
     const rock = it => this.itm(m) === it ? 8 : 5;
     const setW = async (w, it, txt) => {
       if (this.field.weather === w) return;
@@ -1690,10 +2123,44 @@ Object.assign(Battle.prototype, {
         await this.abilityMsg(m, `威嚇了 ${this.label(o)}！`);
         const oa = this.ab(o);
         if (['inner-focus', 'own-tempo', 'oblivious', 'scrappy'].includes(oa)) { await this.abilityMsg(o, `${this.label(o)} 沒有被威嚇！`); return; }
+        if (oa === 'guard-dog') { await this.boost(o, { atk: 1 }, o); return; } // 看門犬：被威嚇時反而提高攻擊
         await this.boost(o, { atk: -1 }, m);
         if (oa === 'rattled') await this.boost(o, { spe: 1 }, o);
         return;
       }
+      case 'intrepid-sword': if (once()) await this.boost(m, { atk: 1 }, m); return;
+      case 'dauntless-shield': if (once()) await this.boost(m, { def: 1 }, m); return;
+      case 'supersweet-syrup':
+        if (!once() || !foes.length) return;
+        await this.abilityMsg(m, '散發出了甜甜的香氣！');
+        for (const f of foes) await this.boost(f, { evasion: -1 }, m);
+        return;
+      case 'screen-cleaner': {
+        let any = false;
+        for (const sd of Object.values(this.sides)) for (const k of ['reflect', 'lightscreen', 'auroraveil']) if (sd[k]) { sd[k] = 0; any = true; }
+        if (any) await this.abilityMsg(m, '雙方的牆壁都消失了！');
+        return;
+      }
+      case 'hospitality': {
+        const ally = this.allyOf ? this.allyOf(m) : null;
+        if (ally && ally.hp > 0 && ally.hp < Mon.maxHp(ally)) { await this.healMon(ally, Math.floor(Mon.maxHp(ally) / 4)); await this.abilityMsg(m, `${this.label(ally)} 的體力回復了！`); }
+        return;
+      }
+      case 'imposter': {
+        const t = o && o.hp > 0 ? o : foes[0];
+        if (!t || this.volOf(m).transformed || this.volOf(t).sub || this.volOf(t).transformed || this.illusionOf(t)) return;
+        return this.transformInto(m, t);
+      }
+      case 'tera-shift': if (m.sp === 1024) await this.setForm(m, 'terapagos-terastal', `${name} 變成了太晶形態！`); return;
+      case 'neutralizing-gas': return this.abilityMsg(m, '周圍充滿了化學變化氣體！');
+      case 'slow-start': return this.abilityMsg(m, `${name} 無法拿出平時的水準！`);
+      case 'dark-aura': return this.abilityMsg(m, `${name} 散發著暗黑氣場！`);
+      case 'fairy-aura': return this.abilityMsg(m, `${name} 散發著妖精氣場！`);
+      case 'aura-break': return this.abilityMsg(m, `${name} 壓制了所有的氣場！`);
+      case 'tablets-of-ruin': return this.abilityMsg(m, '周圍寶可夢的攻擊降低了！');
+      case 'sword-of-ruin': return this.abilityMsg(m, '周圍寶可夢的防禦降低了！');
+      case 'vessel-of-ruin': return this.abilityMsg(m, '周圍寶可夢的特攻降低了！');
+      case 'beads-of-ruin': return this.abilityMsg(m, '周圍寶可夢的特防降低了！');
       case 'download': {
         if (!o) return;
         const s = Mon.stats(o);
@@ -1729,6 +2196,11 @@ Object.assign(Battle.prototype, {
     const v = this.volOf(m);
     if (v && v.tracedFrom) { m.ability = v.tracedFrom; v.tracedFrom = null; }
     const a = this.ab(m);
+    // 變身、模仿、被交換或覆蓋的特性在退場時恢復
+    this.restoreMon(m, ['moves', 'ability']);
+    Mon.ovr.delete(m);
+    // 退場時恢復的戰鬥形態（畫皮、全能形態、太晶形態、冰臉維持到戰鬥結束）
+    if (/^(castform-|cramorant-|morpeko-hangry|aegislash-blade)/.test(m.form || '') && typeof BForm !== 'undefined') BForm.revert(m);
     if (a === 'natural-cure' && m.st) { m.st = null; }
     if (a === 'regenerator' && m.hp > 0) m.hp = Math.min(Mon.maxHp(m), m.hp + Math.floor(Mon.maxHp(m) / 3));
   },
@@ -1779,7 +2251,7 @@ Object.assign(Battle.prototype, {
     }
     for (const [m, v, om] of [[this.me, this.vMe, this.foe], [this.foe, this.vFoe, this.me]]) {
       if (this.residualSkip && this.residualSkip.has(m)) continue; // 雙打：這回合已處理過
-      v.flinch = false; v.protect = false; v.endure = false; v.roost = false;
+      v.flinch = false; v.protect = false; v.endure = false; v.roost = false; v.magicCoat = false; v.electrify = false;
       if (!m || m.hp <= 0) continue;
       const wasOut = v.turnsOut > 0;
       v.turnsOut++;
@@ -1815,6 +2287,10 @@ Object.assign(Battle.prototype, {
         else if (m.st === 'tox') { v.toxN = Math.min(15, v.toxN + 1); await hurt(v.toxN / 16, `${name} 受到了劇毒的傷害！`); }
       }
       if (m.hp > 0 && v.curse) await hurt(1 / 4, `${name} 受到了詛咒的傷害！`);
+      // 夢魘：睡著時受到對手的夢魘傷害
+      if (m.hp > 0 && m.st === 'slp' && om && om.hp > 0 && this.ab(om) === 'bad-dreams') await hurt(1 / 8, `${name} 被夢魘折磨著！`);
+      // 反芻：上一回合吃的樹果再吃一次
+      if (m.hp > 0 && v.cudChew && --v.cudChew.t <= 0) { const b = v.cudChew.b; v.cudChew = null; await this.abilityMsg(m, `${name} 又吃了一次${Held.name(b)}！`); await this.berryEffect(m, b, true); }
       if (m.hp > 0 && v.trap > 0) {
         v.trap--;
         if (v.trap > 0) await hurt(1 / (v.trapDiv || 8), `${name} 受到了束縛的傷害！`);
@@ -1864,9 +2340,196 @@ Object.assign(Battle.prototype, {
     if (f.terrain && --f.terrainT <= 0) { f.terrain = null; await this.msg('場地恢復原狀了。'); }
     if (f.trickRoom && --f.trickRoom <= 0) await this.msg('扭曲的時空恢復原狀了！');
     if (f.gravity && --f.gravity <= 0) await this.msg('重力恢復正常了。');
+    if (f.magicRoom && --f.magicRoom <= 0) await this.msg('魔法空間消失了，恢復原狀了！');
+    if (f.wonderRoom && --f.wonderRoom <= 0) await this.msg('奇妙空間消失了，恢復原狀了！');
+    if (f.waterSport && --f.waterSport <= 0) await this.msg('玩水的效果消失了。');
+    if (f.mudSport && --f.mudSport <= 0) await this.msg('玩泥巴的效果消失了。');
+    if (f.fairyLock) f.fairyLock--;
+    f.ionDeluge = false;
+    for (const sd of Object.values(this.sides)) { sd.wideGuard = false; sd.quickGuard = false; sd.craftyShield = false; }
+    // 回合結束時的形態變化（結凍頭、飽了又餓；達摩模式、魚群、界限盾殼在 js/late.js）
+    for (const m of [this.me, this.foe]) if (m && m.hp > 0 && !(this.residualSkip && this.residualSkip.has(m))) await this.formCheck(m, 'end');
     // 同歸：本回合倒下時把對手一起帶走
     for (const [m, v] of [[this.me, this.vMe], [this.foe, this.vFoe]]) if (v.destinyBond && m.hp > 0) v.destinyBond = false;
   },
+});
+
+// ---------- 戰鬥中暫時的改變（變身、特性與道具交換、戰鬥形態），退場或戰鬥結束時恢復 ----------
+Object.assign(Battle.prototype, {
+  // 記住原本的值（同一個欄位只記第一次）
+  keep(m, key) {
+    if (!m) return;
+    this._orig = this._orig || new Map();
+    const o = this._orig.get(m) || {};
+    if (!(key in o)) o[key] = m[key];
+    this._orig.set(m, o);
+  },
+  restoreMon(m, keys) {
+    const o = this._orig && this._orig.get(m);
+    if (o) for (const k of keys) if (k in o) {
+      if (o[k] === undefined) delete m[k]; else m[k] = o[k];
+      delete o[k];
+    }
+    // 模仿學來的招式換回模仿
+    if (keys.includes('moves') && m.moves) m.moves = m.moves.map(s => s.mimicOf || s);
+    if (m.hp > Mon.maxHp(m)) m.hp = Mon.maxHp(m);
+  },
+  // 戰鬥結束：招式、特性、形態恢復；訓練家對戰中被交換、搶走的道具也還回去（野生對戰搶到的道具保留）
+  cleanupBattle() {
+    for (const m of [...G.party, ...(this.foeParty || [])]) {
+      this.restoreMon(m, ['moves', 'ability']); // 形態由 js/late.js 的 BForm 在戰鬥結束時恢復
+      if (this.trainer) this.restoreMon(m, ['item']);
+      Mon.ovr.delete(m);
+    }
+    this._orig = null;
+  },
+  setStat(m, i, val) { const o = Mon.ovr.get(m) || {}; o[i] = val; Mon.ovr.set(m, o); },
+
+  // 外觀：變身後是變身對象，幻覺是隊伍最後一隻還能戰鬥的寶可夢
+  illusionOf(m) {
+    if (!m || m.ability !== 'illusion' || !this.volOf) return null;
+    const v = this.volOf(m);
+    if (!v || v.illusionBroken) return null;
+    if (v.illusion === undefined) {
+      const party = this.sideKey(m) === 'me' ? G.party : this.foeParty;
+      v.illusion = [...party].reverse().find(p => p !== m && p.hp > 0) || null;
+    }
+    return v.illusion;
+  },
+  shownMon(m) { return this.illusionOf(m) || m; },
+  lookOf(m) { const v = this.volOf(m); return (v && v.look) || this.illusionOf(m) || m; },
+  refreshSprite(m) {
+    if (!this.el || !this.setSprite || !this.activeMons().includes(m)) return;
+    const restore = this.focusOn(m);
+    try { this.setSprite(this.sideKey(m), m); this.draw(); } finally { restore(); }
+  },
+  // 雙打：讓 a 和 b 成為目前運算的一對（回傳還原的函式）
+  pairUp(a, b) {
+    if (!this.pair) return () => { };
+    const keep = [this.me, this.foe];
+    this.pair(a, b);
+    return () => this.ctx(keep[0], keep[1]);
+  },
+
+  // ---------- 形態 ----------
+  baseForm(m) { return m._bfFrom !== undefined ? (m._bfFrom || null) : (m.form || null); },
+  // 改變形態（js/late.js 的 BForm 記住原本的形態，戰鬥結束時恢復）；HP 上限改變時維持比例
+  async setForm(m, form, txt) {
+    if ((m.form || null) === (form || null)) return;
+    const before = Mon.maxHp(m);
+    if ((form || null) === this.baseForm(m)) BForm.revert(m); else BForm.set(m, form);
+    const after = Mon.maxHp(m);
+    if (after !== before && m.hp > 0) m.hp = Math.max(1, Math.min(after, Math.round(m.hp * after / before)));
+    this.refreshSprite(m);
+    if (txt) await this.abilityMsg(m, txt);
+  },
+  // 依特性改變形態：登場（entry）、每次行動後（move）、回合結束（end）；HP 相關的形態在 js/late.js
+  async formCheck(m, when) {
+    if (!m || m.hp <= 0) return;
+    const a = this.ab(m), base = this.baseForm(m), name = this.label(m);
+    const to = async (f, txt) => { if ((m.form || null) !== (f || null)) await this.setForm(m, f, txt); };
+    // 陰晴不定（飄浮泡泡）：依天氣改變屬性
+    if (m.sp === 351) {
+      const f = a === 'forecast' ? ({ sunnyday: 'castform-sunny', raindance: 'castform-rainy', snowscape: 'castform-snowy', hail: 'castform-snowy' }[this.wx()] || base) : base;
+      await to(f, a === 'forecast' ? `${name} 變化了樣子！` : null);
+    }
+    if (when !== 'end') return;
+    // 結凍頭：下雪時冰臉恢復
+    if (m.sp === 875 && a === 'ice-face' && m.form === 'eiscue-noice' && ['snowscape', 'hail'].includes(this.wx())) await to(base, `${name} 的冰臉恢復了！`);
+    // 飽了又餓：每回合切換滿腹花紋與空腹花紋
+    if (m.sp === 877 && a === 'hunger-switch') await to(m.form === 'morpeko-hangry' ? base : 'morpeko-hangry', null);
+  },
+
+  // ---------- 道具 ----------
+  async moveItem(from, to, txt) {
+    this.keep(from, 'item'); this.keep(to, 'item');
+    const it = from.item;
+    from.item = null; to.item = it;
+    if (from.ability === 'unburden') this.volOf(from).unburden = true;
+    if (txt) await this.msg(txt.replace('{i}', Held.name(it)));
+    return it;
+  },
+  // 緊張感、人馬一體：對手不能吃樹果
+  unnerved(m) { return this.activeMons().some(o => this.sideKey(o) !== this.sideKey(m) && ['unnerve', 'as-one-glastrier', 'as-one-spectrier'].includes(this.ab(o))); },
+  // 吃下樹果的效果（熟成：效果加倍；反芻：下一回合結束時再吃一次）
+  async berryEffect(m, b, again = false) {
+    if (!b || m.hp <= 0) return;
+    const r = this.ab(m) === 'ripen' ? 2 : 1, max = Mon.maxHp(m), v = this.volOf(m), name = this.label(m);
+    if (b === 'sitrus-berry') await this.healMon(m, Math.floor(max / 4) * r);
+    else if (b === 'oran-berry') await this.healMon(m, 10 * r);
+    else if (b === 'leppa-berry') { const s = m.moves.find(x => x.pp === 0) || m.moves.find(x => MOVES[x.id] && x.pp < MOVES[x.id].pp); if (s) s.pp = Math.min(MOVES[s.id].pp, s.pp + 10 * r); }
+    if ((b === 'lum-berry' || (STATUS_BERRY[b] || []).includes(m.st)) && m.st) { m.st = null; this.draw(); await this.msg(`${name} 的異常狀態治好了！`); }
+    if ((b === 'lum-berry' || b === 'persim-berry') && v.conf) { v.conf = 0; await this.msg(`${name} 的混亂解除了！`); }
+    if (!again && this.ab(m) === 'cud-chew') v.cudChew = { b, t: 2 };
+  },
+  // 用掉蓄力（噴出、吞下）：蓄力提高的防禦、特防恢復
+  async clearStockpile(m) {
+    const v = this.volOf(m);
+    if (!v.stockpile) return;
+    v.stg.def = U.clamp(v.stg.def - (v.stockDef || 0), -6, 6); v.stg.spd = U.clamp(v.stg.spd - (v.stockSpd || 0), -6, 6);
+    v.stockpile = 0; v.stockDef = 0; v.stockSpd = 0;
+    await this.msg(`${this.label(m)} 的蓄力效果消失了！`);
+  },
+
+  // ---------- 招式 ----------
+  async transformInto(user, t) {
+    const vU = this.volOf(user), vT = this.volOf(t);
+    const ts = Mon.stats(t);
+    Mon.ovr.set(user, { 1: ts[1], 2: ts[2], 3: ts[3], 4: ts[4], 5: ts[5] });
+    vU.types = [...(vT.types || Mon.types(t))];
+    vU.stg = { ...vT.stg };
+    this.keep(user, 'ability'); user.ability = t.ability;
+    this.keep(user, 'moves'); user.moves = t.moves.map(s => ({ id: s.id, pp: Math.min(5, MOVES[s.id] ? MOVES[s.id].pp : 5) }));
+    vU.transformed = true;
+    vU.look = { sp: t.sp, form: t.form, shiny: user.shiny };
+    this.refreshSprite(user);
+    await this.msg(`${this.label(user)} 變身成了 ${this.label(t)}！`);
+  },
+  // 忍耐：兩回合承受攻擊，第三回合把受到的傷害加倍奉還給最後攻擊自己的寶可夢
+  async bide(user, target, mv) {
+    const v = this.volOf(user), name = this.label(user);
+    if (!v.bide) { v.bide = { n: 2, dmg: 0, by: null }; v.locked = { id: mv.num, turns: 99 }; await this.msg(`${name} 開始忍耐了！`); return true; }
+    if (--v.bide.n > 0) { await this.msg(`${name} 正在忍耐攻擊。`); return true; }
+    const { dmg, by } = v.bide;
+    v.bide = null; v.locked = null;
+    await this.msg(`${name} 釋放了忍耐的力量！`);
+    const t = by && by.hp > 0 && this.activeMons().includes(by) ? by : target;
+    if (!dmg || !t || t.hp <= 0) { await this.msg('但是失敗了！'); return false; }
+    const vT = this.volOf(t);
+    if (vT.protect) { await this.msg(`${this.label(t)} 保護住了自己！`); return false; }
+    const restore = this.pairUp(user, t);
+    try {
+      await this.moveAnim(user, t, this.viewMove(mv));
+      const d = Math.min(t.hp, dmg * 2);
+      await this.hurt(t, d);
+      vT.hitBy.push({ by: this.sideKey(user), dmg: d, cat: 'Physical' }); vT.damagedThisTurn = true;
+    } finally { restore(); }
+    return true;
+  },
+  // 危險迴避、躍躍欲逃：退場（野生寶可夢逃走）
+  async emergencyExit(m) {
+    if (this.doubles) return;
+    const side = this.sideKey(m);
+    if (this.wildMon && side === 'foe') { await this.abilityMsg(m, `${this.label(m)} 逃走了！`); this.fled = true; return; }
+    const party = side === 'me' ? G.party : this.foeParty;
+    if (!party.some(p => p !== m && p.hp > 0)) return;
+    await this.abilityMsg(m, `${this.label(m)} 退了回去！`);
+    await this.selfSwitchOut(m, {});
+  },
+  // 舞者：跟著使出別人的舞蹈招式
+  async dancers(user, target, mv) {
+    for (const d of this.activeMons()) {
+      if (d === user || d.hp <= 0 || this.ab(d) !== 'dancer') continue;
+      const opp = o => o && o.hp > 0 && this.sideKey(o) !== this.sideKey(d);
+      const t = opp(user) ? user : opp(target) ? target : this.activeMons().find(opp);
+      if (!t) continue;
+      await this.abilityMsg(d, `${this.label(d)} 跟著跳起舞來！`);
+      const restore = this.pairUp(d, t);
+      try { await this.runMove(d, t, { mv, slot: null, dancer: true, cont: true }); } finally { restore(); }
+    }
+  },
+  // 先行一步、延後：調整這回合的行動順序（雙打由 DoubleBattle 覆寫；單打只判斷成功與否）
+  reorder(m) { return !this.volOf(m).movedThisTurn && !!this.queuedMoveOf(m); },
 });
 
 function fixedType(mv) { return mv.damage !== undefined || mv.ohko || ['superfang', 'naturesmadness', 'ruination', 'psywave', 'endeavor', 'finalgambit', 'counter', 'mirrorcoat', 'metalburst', 'comeuppance'].includes(mv.id) ? 'fixed' : null; }

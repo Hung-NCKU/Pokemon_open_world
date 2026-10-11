@@ -42,6 +42,23 @@ const AB_IMPL = new Set([
   // 其他（野外效果或不影響單打）
   'pickup', 'honey-gather', 'illuminate', 'stench', 'ball-fetch', 'friend-guard', 'healer', 'telepathy', 'plus', 'minus', 'symbiosis',
   'flower-gift', 'receiver', 'power-of-alchemy', 'battery', 'power-spot', 'steely-spirit', 'curious-medicine', 'costar', 'commander',
+  // 威力與能力修正
+  'aura-break', 'dark-aura', 'fairy-aura', 'beads-of-ruin', 'sword-of-ruin', 'tablets-of-ruin', 'vessel-of-ruin', 'liquid-voice', 'merciless', 'slow-start',
+  // 受到攻擊時
+  'color-change', 'cotton-down', 'electromorphosis', 'wind-power', 'steam-engine', 'water-compaction', 'sand-spit', 'seed-sower', 'toxic-debris',
+  'innards-out', 'mummy', 'lingering-aroma', 'wandering-spirit', 'perish-body', 'pickpocket', 'emergency-exit', 'wimp-out', 'gulp-missile',
+  // 登場
+  'intrepid-sword', 'dauntless-shield', 'supersweet-syrup', 'screen-cleaner', 'hospitality', 'imposter', 'neutralizing-gas', 'unnerve',
+  // 防守與免疫
+  'armor-tail', 'dazzling', 'queenly-majesty', 'good-as-gold', 'guard-dog', 'mirror-armor', 'flower-veil', 'disguise', 'ice-face',
+  // 異常狀態與能力
+  'corrosion', 'poison-puppeteer', 'toxic-chain', 'opportunist', 'bad-dreams',
+  // 行動
+  'truant', 'dancer', 'mycelium-might', 'unseen-fist', 'propeller-tail', 'stalwart', 'magician',
+  // 樹果
+  'cud-chew', 'ripen',
+  // 形態與屬性
+  'forecast', 'multitype', 'rks-system', 'schooling', 'shields-down', 'stance-change', 'zen-mode', 'zero-to-hero', 'tera-shift', 'hunger-switch', 'illusion',
 ]);
 
 // 已實作效果的持有道具
