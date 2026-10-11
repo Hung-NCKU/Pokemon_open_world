@@ -241,6 +241,25 @@ def build_storage():
         else:
             im.save(os.path.join(OUT, name + ".png"))
     os.remove(tb)
+    # 選箱子的小視窗（box_selection_popup_center 64×64＋左右兩側 8 像素，調色盤取自 png 內建）：寄放時選要放進哪個箱子
+    def tiles(path):
+        im = Image.open(path)
+        pal = _png_pal(path)
+        o = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        px, op = im.load(), o.load()
+        for y in range(im.size[1]):
+            for x in range(im.size[0]):
+                c = px[x, y] & 15
+                if c:
+                    op[x, y] = pal[c] + (255,)
+        return o
+    c, sd = tiles(os.path.join(S, "box_selection_popup_center.png")), tiles(os.path.join(S, "box_selection_popup_sides.png"))
+    side = lambda a, b: sd.crop((0, a * 8, 8, b * 8))
+    pk = Image.new("RGBA", (80, 64), (0, 0, 0, 0))
+    pk.alpha_composite(c, (8, 0))
+    pk.alpha_composite(side(0, 4), (4, 0)); pk.alpha_composite(side(4, 6), (4, 32))
+    pk.alpha_composite(side(6, 10), (68, 0)); pk.alpha_composite(side(10, 12), (68, 32))
+    pk.save(os.path.join(OUT, "pc_boxpick.png"))
     png_rgba(os.path.join(S, "hand_cursor.png")).save(os.path.join(OUT, "pc_hand.png"))
     png_rgba(os.path.join(S, "arrow.png")).save(os.path.join(OUT, "pc_arrow.png"))
     os.remove(tmp)

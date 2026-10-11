@@ -61,6 +61,7 @@
     st_withdraw: async () => { StorageUI.open({ option: 'withdraw' }); await sleep(400); await keys('ArrowRight'); },
     st_withdraw_menu: async () => { StorageUI.open({ option: 'withdraw' }); await sleep(400); await keys('z'); },
     st_deposit: async () => { StorageUI.open({ option: 'deposit' }); await sleep(400); await keys('ArrowRight', 'ArrowDown'); },
+    st_deposit_pick: async () => { StorageUI.open({ option: 'deposit' }); await sleep(400); await keys('ArrowRight', 'z', 'z', 'ArrowRight'); },
     st_move_party: async () => { StorageUI.open({ option: 'move' }); await sleep(400); await keys('p'); },
     pc: async () => { Game.pcMenu(); await sleep(300); await keys('z'); },
     pc_storage: async () => { Game.pcMenu(); await sleep(300); await keys('z', 'z', 'z', 'z', 'ArrowDown'); },

@@ -35,3 +35,12 @@
 #storage .st-pslot .micon { position: absolute; left: 0; top: 0; }
 #storage .st-pcancel { position: absolute; left: 168px; top: 408px; width: 96px; height: 48px; cursor: pointer; }
 #storage .st-hint { left: 0; right: 0; bottom: -2px; text-align: center; font-size: 13px; color: #f8f8f8; text-shadow: 1px 1px 0 #404040; display: none; }
+/* 寄放時選箱子的小視窗（box_selection_popup）：畫面中間 (120,64)，80×64，左右箭頭在 (124,88)、(196,88) */
+#storage .st-pick { left: 360px; top: 192px; width: 240px; height: 192px; background: 0 0 / 240px 192px no-repeat; image-rendering: pixelated; z-index: 6; cursor: pointer;
+  text-align: center; color: #e03838; text-shadow: 2px 2px 0 #f8b8b8; }
+#storage .st-pick b { display: block; margin-top: 36px; font-size: 24px; font-weight: normal; white-space: nowrap; }
+#storage .st-pick span { display: block; margin-top: 12px; font-size: 22px; color: #505058; text-shadow: 2px 2px 0 #d0d0c8; }
+#storage .st-pick span.full { color: #e03838; }
+#storage .st-pick i { position: absolute; top: 60px; width: 24px; height: 24px; background-size: 24px auto; image-rendering: pixelated; cursor: pointer; }
+#storage .st-pick .l { left: -6px; transform: scaleX(-1); }
+#storage .st-pick .r { right: -6px; }

@@ -132,9 +132,11 @@
         press('ArrowRight'); press('ArrowUp'); press('ArrowUp'); press('ArrowUp'); press('ArrowUp'); press('ArrowUp');  // 右邊最下面的寶可夢（剛領取的）
         const target = G.party[G.party.length - 1];
         await new Promise(r => setTimeout(r, 20));
-        press('z'); await new Promise(r => setTimeout(r, 50)); press('x'); await st;
+        press('z'); await new Promise(r => setTimeout(r, 50));
+        const picking = !!document.querySelector('#storage .st-pick');
+        press('ArrowRight'); press('z'); await new Promise(r => setTimeout(r, 50)); press('x'); await st;
         UI.choose = realChoose2;
-        check('箱子：寄放模式選隊伍的寶可夢 →「寄放」→ 放進選的箱子', !G.party.includes(target) && G.state.box.includes(target) && target.boxPos && target.boxPos.b === 0, `${G.party.length} ${G.state.box.length}`);
+        check('箱子：寄放模式選隊伍的寶可夢 →「寄放」→ 拎起來、出現選箱子的視窗 → → 換到箱子 2 → 放下', picking && !G.party.includes(target) && G.state.box.includes(target) && target.boxPos && target.boxPos.b === 1, `${picking} ${G.party.length} ${target.boxPos && target.boxPos.b}`);
       }
 
       // 8. 畫面提示：野外顯示下一步
