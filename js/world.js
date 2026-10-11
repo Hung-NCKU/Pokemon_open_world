@@ -101,7 +101,45 @@ const World = {
     this.placeLegends(rng);
     this.alignTrees();
     if (this.worldVer >= 4) this.placeRouteTrainers();
+    this.placeTrainingGrounds();
     this.buildPools();
+  },
+
+  // 鯉魚王訓練場：每個地區的初始城鎮旁邊一塊 7×5 的草叢，只會遇到和隊伍平均等級相同的鯉魚王
+  // 不改變地形（只把一塊草地「當成」訓練場來畫與遇敵），所以所有世界版本、舊存檔都有，也不會擋住路
+  placeTrainingGrounds() {
+    this.training = [];
+    this.trainingSet = new Set();
+    const rng = mulberry32((this.seed ^ 0x3a9c1) >>> 0);
+    // 可以走的地面（不含道路、城鎮）：訓練場只是疊在上面畫，底下必須本來就走得過去
+    const okTile = t => t === T.GRASS || t === T.FLOWER || t === T.TALL || t === T.SNOW || t === T.SNOWTALL || t === T.SAND || t === T.DESERT;
+    const taken = k => this.trainers.has(k) || (this.landmarks && this.landmarks.has(k)) || (this.legends && this.legends.has(k));
+    const fits = (x0, y0, W, H, region) => {
+      if (!this.inside(x0, y0) || !this.inside(x0 + W - 1, y0 + H - 1)) return false;
+      for (let y = y0; y < y0 + H; y++) for (let x = x0; x < x0 + W; x++) {
+        if (!okTile(this.tile(x, y)) || this.regionAt(x, y) !== region || this.townAt(x, y) || taken(x + ',' + y)) return false;
+      }
+      return true;
+    };
+    for (const town of this.towns.filter(t => t.kind === 'home')) {
+      let best = null;
+      // 先找 7×5，找不到再找 5×4；由近到遠
+      for (const [W, H] of [[7, 5], [5, 4]]) {
+        for (let tries = 0; tries < 3000 && !best; tries++) {
+          const ang = rng() * Math.PI * 2, r = 7 + (tries / 3000) * 20;
+          const x0 = Math.round(town.cx + Math.cos(ang) * r - W / 2), y0 = Math.round(town.cy + Math.sin(ang) * r - H / 2);
+          if (fits(x0, y0, W, H, town.region)) best = { x: x0, y: y0, w: W, h: H, region: town.region, town: town.name };
+        }
+        if (best) break;
+      }
+      if (!best) continue;
+      this.training.push(best);
+      for (let y = best.y; y < best.y + best.h; y++) for (let x = best.x; x < best.x + best.w; x++) this.trainingSet.add(x + ',' + y);
+    }
+  },
+  trainingAt(x, y) {
+    if (!this.trainingSet || !this.trainingSet.has(x + ',' + y)) return null;
+    return this.training.find(a => x >= a.x && x < a.x + a.w && y >= a.y && y < a.y + a.h) || null;
   },
 
   // 道路旁的訓練家（第 4 版）：每個地區約每 8 格道路 1 位，彼此相隔 7 格以上，站在路邊面向道路
@@ -891,6 +929,15 @@ const World = {
       g.beginPath(); g.ellipse(px + 8 * s, py + 9 * s, 6 * s, 6 * s, 0, Math.PI, 0); g.rect(px + 2 * s, py + 9 * s, 12 * s, 7 * s); g.fill();
       g.fillStyle = '#100808';
       g.beginPath(); g.ellipse(px + 8 * s, py + 10 * s, 4.5 * s, 4.5 * s, 0, Math.PI, 0); g.rect(px + 3.5 * s, py + 10 * s, 9 * s, 6 * s); g.fill();
+      return;
+    }
+    // 鯉魚王訓練場：帶金色的草叢（和一般草叢分得出來）
+    if (this.trainingSet && this.trainingSet.has(x + ',' + y)) {
+      const im = Gen3.on && Gen3.recolor(Gen3.single('tall'), 'training');
+      if (im) { g.drawImage(im, px, py); return; }
+      const arr = this.tileCache[T.TALL];
+      g.drawImage(arr[Math.floor(hash2(x, y, 7) * arr.length)], px, py);
+      g.fillStyle = 'rgba(248,200,72,.32)'; g.fillRect(px, py, TILE, TILE);
       return;
     }
     if (Gen3.on) {

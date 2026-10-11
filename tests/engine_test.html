@@ -2481,6 +2481,27 @@ async function run() {
     Game.partyMenu = realPick;
     G.state = keep;
   }
+  // 鯉魚王訓練場：每個地區的初始城鎮旁邊都有一塊，不改變地形、只遇到隊伍平均等級的鯉魚王
+  {
+    const keep = G.state;
+    for (const seed of [12345, 777]) {
+      World.generate(seed, 'kanto', WORLD_VER);
+      const homes = World.towns.filter(t => t.kind === 'home');
+      const walk = [T.GRASS, T.FLOWER, T.TALL, T.SNOW, T.SNOWTALL, T.SAND, T.DESERT];
+      const bad = World.training.filter(a => {
+        for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (!walk.includes(World.tile(x, y)) || World.townAt(x, y) || World.trainers.has(x + ',' + y)) return true;
+        const home = homes.find(t => t.region === a.region);
+        return !home || Math.hypot(a.x + a.w / 2 - home.cx, a.y + a.h / 2 - home.cy) > 30;
+      });
+      check(`鯉魚王訓練場：每個初始城鎮旁邊都有一塊，都是可以走的草地（種子 ${seed}）`, World.training.length === homes.length && homes.length >= 9 && !bad.length,
+        `${World.training.length}/${homes.length} ${bad.map(a => a.region).join(',')}`);
+    }
+    G.state = Game.newState('T', 'kanto', 1);
+    G.state.party = [Mon.create(25, 10), Mon.create(4, 31), Mon.create(7, 20)];
+    const w = Game.trainingWild();
+    check('鯉魚王訓練場：遇到的是隊伍平均等級的鯉魚王', w.sp === 129 && w.lv === 20, `${w.sp} Lv${w.lv}`);
+    G.state = keep;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;
