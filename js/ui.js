@@ -16,9 +16,13 @@ const UI = (() => {
   }
   function active() { return stack.length > 0; }
 
+  // 選單的提示文字（不能翻頁）：依文字框寬度換行；超過 2 行時用小一點的字擠進文字框
   function showText(text) {
-    $('dialog').classList.remove('hidden');
-    $('dialog-text').textContent = text;
+    const d = $('dialog');
+    d.classList.remove('hidden', 'dense');
+    const pages = paginate(text);
+    if (pages.length > 1) d.classList.add('dense');
+    $('dialog-text').textContent = d.classList.contains('dense') ? paginate(text).join('\n') : pages.join('\n');
     $('dialog-more').classList.add('hidden');
   }
   function hideDialog() { $('dialog').classList.add('hidden'); }
@@ -52,7 +56,7 @@ const UI = (() => {
   function sayPage(text, { auto = 0 } = {}) {
     return new Promise(res => {
       const dlg = $('dialog'), tx = $('dialog-text'), more = $('dialog-more');
-      dlg.classList.remove('hidden');
+      dlg.classList.remove('hidden', 'dense');
       more.classList.add('hidden');
       let i = 0, done = false, closed = false, autoT = null;
       const speed = G.settings?.textSpeed ?? 22;
@@ -207,7 +211,9 @@ const UI = (() => {
   }
 
   // cancel: true 時可按 Esc 或「返回」取消，回傳 null
-  function input(prompt, def = '', { cancel = false, password = false, maxLength = 0 } = {}) {
+  // 綠寶石素材時，密碼以外都用綠寶石的取名字畫面（js/emerald_ui.js）
+  function input(prompt, def = '', { cancel = false, password = false, maxLength = 0, icon = null } = {}) {
+    if (!password && typeof EmeraldUI !== 'undefined' && typeof Gen3 !== 'undefined' && Gen3.on) return EmeraldUI.naming(prompt, def, { cancel, maxLength: maxLength || 12, icon });
     return new Promise(res => {
       const m = document.createElement('div');
       m.className = 'modal input-modal';

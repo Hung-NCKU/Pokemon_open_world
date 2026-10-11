@@ -20,11 +20,13 @@
 #party .pslot.sel .micon:not(.g3) { animation: pbob .3s steps(1) infinite; }
 @keyframes iconframe { 0% { background-position: var(--x) var(--y); } 50% { background-position: var(--x) calc(var(--y) - 96px); } }
 @keyframes pbob { 50% { transform: translateY(-6px); } }
-#party .pname { position: absolute; font-size: 24px; white-space: nowrap; }
-#party .main .pname { left: 72px; top: 24px; }
-#party .wide .pname { left: 66px; top: 3px; }
-#party .plv { position: absolute; font-size: 20px; white-space: nowrap; }
-#party .main .plv { left: 96px; top: 56px; }
+/* 文字位置：src/data/party_menu.h 的 sPartyBoxInfoRects（相對於格子，GBA 座標 ×3）
+   左邊大格：名字 (24,11)、等級 (32,20)、性別 (64,20)、HP (38,37)／(53,37)；右邊長格：名字 (22,3)、等級 (30,12)、性別 (62,12)、HP (102,12)／(117,12) */
+#party .pname { position: absolute; font-size: 24px; line-height: 27px; white-space: nowrap; }
+#party .main .pname { left: 72px; top: 33px; }
+#party .wide .pname { left: 66px; top: 8px; }
+#party .plv { position: absolute; font-size: 21px; line-height: 24px; white-space: nowrap; }
+#party .main .plv { left: 96px; top: 60px; }
 #party .wide .plv { left: 90px; top: 36px; }
 #party .plv .gm { color: #80c8f8; font-style: normal; margin-left: 12px; text-shadow: 2px 2px 0 #305080; }
 #party .plv .gf { color: #f8a0a0; font-style: normal; margin-left: 12px; text-shadow: 2px 2px 0 #804040; }
@@ -35,10 +37,11 @@
 #party .phpbar .g { background: #70f8a8; box-shadow: inset 0 -3px 0 #58d080; }
 #party .phpbar .y { background: #f8e038; box-shadow: inset 0 -3px 0 #c8a808; }
 #party .phpbar .r { background: #f85838; box-shadow: inset 0 -3px 0 #a84048; }
-#party .php { position: absolute; font-size: 20px; text-align: right; width: 150px; }
-#party .php span { margin: 0 2px; }
-#party .main .php { left: 66px; top: 116px; }
-#party .wide .php { left: 246px; top: 40px; }
+#party .php { position: absolute; font-size: 21px; line-height: 24px; width: 117px; display: flex; justify-content: flex-end; white-space: nowrap; }
+#party .php b { font-weight: normal; }
+#party .php span { margin: 0 3px; }
+#party .main .php { left: 114px; top: 111px; }
+#party .wide .php { left: 306px; top: 36px; }
 #party .ptag, #party .pdesc { position: absolute; font-size: 18px; color: #f8f8a0; }
 #party .main .ptag, #party .main .pdesc { left: 150px; top: 56px; }
 #party .wide .ptag, #party .wide .pdesc { left: 180px; top: 36px; }

@@ -1,0 +1,149 @@
+<!doctype html>
+<!-- 由 index.html 產生：介面巡覽（tools/ui_shots.sh） -->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#10131c">
+<title>寶可夢 開放世界</title>
+<link rel="preload" href="../fonts/Cubic_11_game.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/menus.css">
+<link rel="stylesheet" href="../css/summary.css">
+<link rel="stylesheet" href="../css/storage.css">
+<link rel="stylesheet" href="../css/emerald.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="game">
+    <canvas id="world" width="720" height="480"></canvas>
+    <div id="battle" class="hidden"></div>
+    <div id="title">
+      <!-- 標題標誌：assets/title_logo.png 存在時使用該圖，否則用下面的 SVG -->
+      <img class="logo-img" src="../assets/title_logo.png" alt="" onload="this.nextElementSibling.remove()" onerror="this.remove()">
+      <svg class="logo-svg" viewBox="0 0 960 430" aria-label="Pokémon THE WORLD OPEN-WORLD GAME">
+        <defs>
+          <linearGradient id="lg-world" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0" stop-color="#4cc8f4"/><stop offset=".3" stop-color="#1e8ee6"/><stop offset=".55" stop-color="#5a4fd6"/>
+            <stop offset=".78" stop-color="#b0359e"/><stop offset="1" stop-color="#ec0a46"/>
+          </linearGradient>
+          <linearGradient id="lg-shine" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <radialGradient id="lg-glow"><stop offset="0" stop-color="#bff0ff"/><stop offset="1" stop-color="#bff0ff" stop-opacity="0"/></radialGradient>
+        </defs>
+        <!-- 光束 -->
+        <polygon points="100,170 900,163 900,167 100,176" fill="url(#lg-world)"/>
+        <!-- 精靈球星芒 -->
+        <circle cx="230" cy="168" r="70" fill="url(#lg-glow)"/>
+        <g fill="#3fb6ee">
+          <polygon points="230,70 240,140 230,150 220,140"/><polygon points="230,266 240,196 230,186 220,196"/>
+          <polygon points="150,120 205,158 200,170"/><polygon points="310,120 255,158 260,170"/>
+          <polygon points="160,215 205,180 200,170"/><polygon points="300,215 255,180 260,170"/>
+        </g>
+        <circle cx="230" cy="168" r="30" fill="#fff" stroke="#2a8fe0" stroke-width="7"/>
+        <line x1="203" y1="168" x2="257" y2="168" stroke="#2a8fe0" stroke-width="7"/>
+        <circle cx="230" cy="168" r="10" fill="#fff" stroke="#2a8fe0" stroke-width="6"/>
+        <!-- Pokémon -->
+        <text x="600" y="140" text-anchor="middle" transform="rotate(-4 600 110)" class="lg-poke">Pokémon</text>
+        <!-- THE WORLD -->
+        <text x="480" y="330" text-anchor="middle" class="lg-world" textLength="860" lengthAdjust="spacingAndGlyphs">THE WORLD</text>
+        <text x="480" y="330" text-anchor="middle" class="lg-world-shine" textLength="860" lengthAdjust="spacingAndGlyphs">THE WORLD</text>
+        <!-- OPEN-WORLD GAME -->
+        <text x="480" y="405" text-anchor="middle" class="lg-sub" textLength="620" lengthAdjust="spacing">OPEN-WORLD GAME</text>
+      </svg>
+      <div class="sub">九大地區・全 1025 種寶可夢</div>
+      <div id="loading"><i></i>讀取中……第一次開啟需要下載遊戲資料，之後會快很多</div>
+      <div class="keys">鍵盤：Z／Enter 確定　X／Esc 返回　方向鍵 移動　Shift 奔跑</div>
+      <div class="note">非營利同人研究作品。寶可夢相關名稱與圖像版權屬於任天堂／Creatures／GAME FREAK／The Pokémon Company。</div>
+    </div>
+    <div id="banner"></div>
+    <div id="choices" class="hidden"></div>
+    <div id="choice-info" class="hidden"></div>
+    <div id="dialog" class="hidden"><div id="dialog-text"></div><div id="dialog-more" class="hidden">▼</div></div>
+  </div>
+</div>
+<div id="touch">
+  <div class="pad">
+    <button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="right">▶</button><button data-dir="down">▼</button>
+  </div>
+  <div class="mid"><button class="sm" data-key="m">SELECT</button><button class="sm" data-key="x" data-start="1">START</button></div>
+  <div class="ab"><button class="fast" data-fast="1">▶▶</button><button class="b" data-b="1">B</button><button class="a" data-key="z">A</button></div>
+</div>
+<script src="../data/pokedex.js"></script>
+<script src="../data/moves.js"></script>
+<script src="../data/showdown.js"></script>
+<script src="../data/items.js"></script>
+<script src="../data/abilities.js"></script>
+<script src="../data/tms.js"></script>
+<script src="../data/forms.js"></script>
+<script src="../data/late.js"></script>
+<script src="../data/zmoves.js"></script>
+<script src="../data/breeding.js"></script>
+<script src="../js/util.js"></script>
+<script src="../js/telemetry.js"></script>
+<script src="../js/data.js"></script>
+<script src="../js/abilities.js"></script>
+<script src="../js/mon.js"></script>
+<script src="../js/forms.js"></script>
+<script src="../js/tm.js"></script>
+<script>window.GEN3_BASE = "../assets/gen3/";</script>
+<script src="../assets/gen3/manifest.js"></script>
+<script src="../js/gen3.js"></script>
+<script src="../js/sprites.js"></script>
+<script src="../js/audio.js"></script>
+<script src="../js/world.js"></script>
+<script src="../js/ecology.js"></script>
+<script src="../js/overworld_mons.js"></script>
+<script src="../js/story.js"></script>
+<script src="../js/events.js"></script>
+<script src="../js/regions.js"></script>
+<script src="../js/regions2.js"></script>
+<script src="../js/battletower.js"></script>
+<script src="../data/towns.js"></script>
+<script src="../js/town_events.js"></script>
+<script src="../js/weather.js"></script>
+<script src="../js/hidden.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/search.js"></script>
+<script src="../js/bagui.js"></script>
+<script src="../js/menus.js"></script>
+<script src="../js/emerald_ui.js"></script>
+<script src="../js/mapui.js"></script>
+<script src="../js/summaryui.js"></script>
+<script src="../js/storageui.js"></script>
+<script src="../js/shopui.js"></script>
+<script src="../js/battle.js"></script>
+<script src="../js/engine.js"></script>
+<script src="../js/battle_view.js"></script>
+<script src="../js/move_anims.js"></script>
+<script src="../js/mega.js"></script>
+<script src="../js/zmove.js"></script>
+<script src="../js/picnic.js"></script>
+<script src="../js/doubles.js"></script>
+<script src="../js/late.js"></script>
+<script src="../js/ai.js"></script>
+<script src="../assets/gen3/interiors.js"></script>
+<script src="../js/fieldmove.js"></script>
+<script src="../js/interior.js"></script>
+<script src="../js/cloud_config.js"></script>
+<script src="../js/cloud.js"></script>
+<script src="../js/gist_cloud.js"></script>
+<script src="../js/account.js"></script>
+<script src="../js/game.js"></script>
+<script src="../js/hud.js"></script>
+<script>
+// 音樂與音效的資料（約 400 KB）不影響開始畫面，等頁面載入完成後才下載；瀏覽器本來也要等玩家第一次點擊才能播放聲音
+window.addEventListener('load', () => {
+  const add = (src, done) => { const s = document.createElement('script'); s.src = src; s.onload = done || null; document.body.appendChild(s); };
+  add('../assets/gen3/midi.js', () => { if (window.Sound && Sound.reload) Sound.reload(); });
+  add('../assets/gen3/se_bank.js');
+  // 線上版：用 Service Worker 把檔案存在裝置上，之後開啟幾乎不用等待
+  if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+});
+</script>
+<script src="ui_tour.js"></script>
+</body>
+</html>

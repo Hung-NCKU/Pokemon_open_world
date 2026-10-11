@@ -224,7 +224,7 @@ const Game = {
     while (true) {
       const c = await UI.choose(['查看能力', '取名', '繼續'], { prompt: `捕捉到了 ${Mon.name(m)}！要做什麼？`, cancel: false });
       if (c === 0) await Game.summary(m);
-      else if (c === 1) { const n = await UI.input(`要幫 ${POKEDEX[m.sp].n} 取什麼名字？（留空用原名）`, ''); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
+      else if (c === 1) { const n = await UI.input(`要幫 ${POKEDEX[m.sp].n} 取什麼名字？`, '', { cancel: true, icon: m.sp }); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
       else break;
     }
     m.happy = Math.max(m.happy, 70);
@@ -247,6 +247,7 @@ const Game = {
       if (battle) battle.draw();
       Sound.jingle('levelup');
       await say(`${Mon.name(m)} 升到了 Lv.${m.lv}！`);
+      if (typeof EmeraldUI !== 'undefined' && Gen3.on && !G.skipLevelWindow) await EmeraldUI.levelUp(before, after); // 綠寶石的升級能力視窗
       for (const [lv, mid] of s.l) if (lv === m.lv) await Game.learnMove(m, mid, battle);
     }
     if (m.lv >= 100) m.exp = Math.min(m.exp, Mon.expFor(s.gr, 100));
@@ -307,31 +308,34 @@ const Game = {
     box.className = 'evolve';
     box.innerHTML = `<img class="a" src="${Mon.sprite(m.sp, { shiny: m.shiny })}"><img class="b" src="${Mon.sprite(to, { shiny: m.shiny })}">`;
     document.getElementById('game').appendChild(box);
-    await UI.say(`咦？${from} 的樣子……！`);
-    box.classList.add('go');
-    Sound.play('evolution');
-    let cancelled = false;
-    const pop = UI.pushKey(e => { if (UI.isNo(e)) cancelled = true; });
-    await U.sleep(3200);
-    pop();
-    if (cancelled) {
+    document.body.classList.add('evo-scene');
+    try {
+      await UI.say(`咦？${from} 的樣子……！`);
+      box.classList.add('go');
+      Sound.play('evolution');
+      let cancelled = false;
+      const pop = UI.pushKey(e => { if (UI.isNo(e)) cancelled = true; });
+      await U.sleep(3200);
+      pop();
+      if (cancelled) {
+        box.remove();
+        await UI.say(`咦？${from} 停止進化了。`);
+        return;
+      }
+      box.classList.add('done');
+      const before = Mon.stats(m);
+      const fromSp = m.sp;
+      const nf = Forms.evolvedForm(m, to, World.regionAt(G.state.x, G.state.y));
+      m.sp = to;
+      if (nf) m.form = nf; else delete m.form;
+      Abil.afterEvolve(m, fromSp, to);
+      const after = Mon.stats(m);
+      m.hp = Math.max(m.hp > 0 ? 1 : 0, m.hp + after[0] - before[0]);
+      Game.markCaught(to);
+      Sound.jingle('evolve');
+      await UI.say(`恭喜！${from} 進化成了 ${Forms.data(m).n}！`);
       box.remove();
-      await UI.say(`咦？${from} 停止進化了。`);
-      return;
-    }
-    box.classList.add('done');
-    const before = Mon.stats(m);
-    const fromSp = m.sp;
-    const nf = Forms.evolvedForm(m, to, World.regionAt(G.state.x, G.state.y));
-    m.sp = to;
-    if (nf) m.form = nf; else delete m.form;
-    Abil.afterEvolve(m, fromSp, to);
-    const after = Mon.stats(m);
-    m.hp = Math.max(m.hp > 0 ? 1 : 0, m.hp + after[0] - before[0]);
-    Game.markCaught(to);
-    Sound.jingle('evolve');
-    await UI.say(`恭喜！${from} 進化成了 ${Forms.data(m).n}！`);
-    box.remove();
+    } finally { document.body.classList.remove('evo-scene'); box.remove(); }
     if (G.mode === 'world') Game.updateMusic(true);
     for (const [lv, mid] of Forms.data(m).l) if (lv === m.lv) await Game.learnMove(m, mid);
     // 鬼斯通→耿鬼這類多段即時進化不處理；脫殼忍者特例
@@ -470,7 +474,7 @@ const Game = {
       else if (c === 1) await Game.heldMenu(m);
       else if (c === 2) await Game.moveReminder(m);
       else if (c === 3 && i > 0) { G.party.splice(i, 1); G.party.unshift(m); start = 0; }
-      else if (c === 4) { const n = await UI.input('要幫牠取什麼名字？（留空恢復原名）', ''); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
+      else if (c === 4) { const n = await UI.input('要幫牠取什麼名字？', '', { cancel: true, icon: m.sp }); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
       UI.hideDialog();
     }
   },
@@ -683,16 +687,7 @@ const Game = {
   async shopMenu() {
     let start = 0;
     // 綠寶石的購買畫面（有素材時）
-    if (Gen3.on && typeof ShopUI !== 'undefined') {
-      while (true) {
-        const c = await UI.choose(['購買', '離開'], { prompt: '歡迎光臨！\n請問需要什麼呢？' });
-        if (c !== 0) break;
-        UI.hideDialog();
-        await ShopUI.open(SHOP_LIST);
-      }
-      await UI.say('歡迎再次光臨！');
-      return;
-    }
+    if (Gen3.on && typeof ShopUI !== 'undefined') return EmeraldUI.shop(SHOP_LIST); // 購買／賣出／不用了（js/emerald_ui.js）
     await UI.say('歡迎光臨！請問需要什麼呢？');
     while (true) {
       const rows = SHOP_LIST.map(id => `<div class="grow"><b>${U.esc(ITEMS[id].n)}</b><div class="dim small">${U.esc(ITEMS[id].d)}</div></div><div class="dim">持有 ${G.state.bag[id] || 0}</div><div class="price">${ITEMS[id].price} 元</div>`);
@@ -715,7 +710,7 @@ const Game = {
 
   async pcMenu() {
     // 綠寶石版寄放系統：箱子畫面
-    if (Game.emeraldUI('storage')) { await StorageUI.open(); return; }
+    if (Game.emeraldUI('storage')) return EmeraldUI.pc(); // 選電腦 → 寶可夢寄放系統的選單 → 箱子
     while (true) {
       const c = await UI.choose(['寄放寶可夢', '領取寶可夢', '離開'], { prompt: `已連接到寶可夢寄放系統。（箱子裡有 ${G.state.box.length} 隻）` });
       if (c === 0) {
@@ -860,6 +855,7 @@ const Game = {
     else Game.warp(t.cx, t.cy, 'down');
   },
   async mainMenu() {
+    if (typeof EmeraldUI !== 'undefined' && Gen3.on) return EmeraldUI.startMenu(); // 綠寶石的開始選單（js/emerald_ui.js）
     const items = ['寶可夢', '圖鑑', '背包', '野餐', '任務', '地圖', '訓練家卡片', '存檔', '設定', '返回標題', '關閉'];
     while (true) {
       const c = items[await UI.choose(items, { cls: 'side-menu' })];
@@ -908,6 +904,7 @@ const Game = {
 
   // 設定：音樂與音效音量（0～10，左右鍵調整）、文字速度、戰鬥訊息
   async settingsMenu() {
+    if (typeof EmeraldUI !== 'undefined' && Gen3.on) return EmeraldUI.optionMenu(); // 綠寶石的設定畫面
     const st = G.settings;
     if (st.musicVol === undefined) st.musicVol = st.music === false ? 0 : 7;
     if (st.sfxVol === undefined) st.sfxVol = st.sfx === false ? 0 : 7;
@@ -1249,10 +1246,10 @@ const Game = {
       if (town) {
         if (typeof Interior !== 'undefined' && Interior.prefetch) Interior.prefetch(town);
         s.visited[town.id] = 1;
-        UI.banner(`${REGIONS[town.region].n}地區・${town.name}`);
+        if (typeof EmeraldUI !== 'undefined') EmeraldUI.mapPopup(town.name, EmeraldUI.themeFor(town)); else UI.banner(`${REGIONS[town.region].n}地區・${town.name}`);
         await Story.onEnterTown(town);
       } else {
-        UI.banner(`${REGIONS[World.regionAt(s.x, s.y)].n}地區・野外（約 Lv.${World.levelAt(s.x, s.y)}）`);
+        if (typeof EmeraldUI !== 'undefined') EmeraldUI.mapPopup(`${REGIONS[World.regionAt(s.x, s.y)].n}的野外`, 'wood'); else UI.banner(`${REGIONS[World.regionAt(s.x, s.y)].n}地區・野外（約 Lv.${World.levelAt(s.x, s.y)}）`);
       }
     }
     // 訓練家視線
@@ -1591,9 +1588,12 @@ const Game = {
       }
       UI.hideDialog();
     }
+    // 綠寶石：標題畫面先「按任意鍵開始」，再進主選單（js/emerald_ui.js）
+    const emerald = typeof EmeraldUI !== 'undefined' && Gen3.on;
+    if (emerald) await EmeraldUI.pressStart();
     while (true) {
-      const opts = save ? ['繼續遊戲', '新遊戲', '匯入存檔', '帳號'] : ['新遊戲', '匯入存檔', '帳號'];
-      const c = await UI.choose(opts, { cancel: false, cls: 'title-menu' });
+      const opts = save ? ['繼續遊戲', '新遊戲', '匯入存檔', '匯出存檔', '帳號'] : ['新遊戲', '匯入存檔', '帳號'];
+      const c = emerald ? await EmeraldUI.mainMenu(opts, save) : await UI.choose(opts, { cancel: false, cls: 'title-menu' });
       // 背景的雲端同步還沒完成：等它完成；下載了比較新的存檔就改用它
       if (syncP) {
         const p = syncP; syncP = null;
@@ -1601,6 +1601,14 @@ const Game = {
         const r = await p;
         UI.hideDialog();
         if (r === 'downloaded') { const l = Game.loadSave(); if (l && l.state) save = l.state; }
+      }
+      if (opts[c] === '匯出存檔') {
+        const keepState = G.state; G.state = save;
+        Game.exportSave();
+        G.state = keepState;
+        await UI.say('已下載存檔檔案。可以在主選單選擇「匯入存檔」讀回。');
+        UI.hideDialog();
+        continue;
       }
       if (opts[c] === '繼續遊戲') { scr.classList.add('hidden'); return Game.start(save); }
       // 帳號：登入、註冊、登出之後重新讀取該帳號的存檔
@@ -1637,7 +1645,7 @@ const Game = {
     while (step < 4) {
       if (step === 1) {
         UI.hideDialog();
-        const v = await UI.input('首先，請告訴我你的名字。', name, { cancel: true });
+        const v = await UI.input('你的名字是？', name, { cancel: true, icon: 'player' });
         if (v === null) return false;
         name = v; step = 2;
       } else if (step === 2) {
@@ -1702,7 +1710,8 @@ const Game = {
     UI.hideDialog();
     if (Gen3.on) document.body.classList.add('gen3');
     Game.updateMusic(true);
-    UI.banner(`${REGIONS[World.regionAt(state.x, state.y)].n}地區・${G.lastTown ? G.lastTown.name : '野外'}`);
+    if (typeof EmeraldUI !== 'undefined') EmeraldUI.mapPopup(EmeraldUI.placeName(), EmeraldUI.themeFor(G.lastTown));
+    else UI.banner(`${REGIONS[World.regionAt(state.x, state.y)].n}地區・${G.lastTown ? G.lastTown.name : '野外'}`);
   },
 };
 

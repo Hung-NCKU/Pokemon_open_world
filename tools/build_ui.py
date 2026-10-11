@@ -243,8 +243,120 @@ def build_shop():
     return True
 
 
+def _tiles_rgba(path, pal_from=None):
+    """索引色 PNG 切成 8×8 的格子（RGBA，索引 0 透明）；調色盤取自 pal_from（另一張 PNG）或自己。"""
+    img = Image.open(path)
+    pal = _png_pal(pal_from or path)
+    w, h = img.size
+    px = img.load()
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    op = out.load()
+    for y in range(h):
+        for x in range(w):
+            c = px[x, y] & 15
+            if c:
+                op[x, y] = pal[c] + (255,)
+    cols = w // 8
+    return [out.crop(((i % cols) * 8, (i // cols) * 8, (i % cols) * 8 + 8, (i // cols) * 8 + 8)) for i in range(cols * (h // 8))], out, pal
+
+
+def build_msgbox():
+    """野外的對話框（src/menu.c 的 WindowFunc_DrawDialogueFrame，graphics/text_window/message_box.png）：
+    視窗在 (2,15) 寬 27 高 4 格，外框從第 0 欄到第 29 欄、第 14 列到第 19 列 → 240×48 的整張圖"""
+    p = os.path.join(EM, "graphics/text_window/message_box.png")
+    if not os.path.exists(p):
+        return False
+    t, _, _ = _tiles_rgba(p)
+    W, H = 30, 6
+    o = Image.new("RGBA", (W * 8, H * 8), (0, 0, 0, 0))
+    def put(i, x, y, vf=False):
+        im = t[i].transpose(Image.FLIP_TOP_BOTTOM) if vf else t[i]
+        o.alpha_composite(im, (x * 8, y * 8))
+    for row, vf in ((0, False), (H - 1, True)):
+        put(1, 0, row, vf); put(3, 1, row, vf)
+        for x in range(2, 28):
+            put(4, x, row, vf)
+        put(5, 28, row, vf); put(6, 29, row, vf)
+    for y in range(1, H - 1):
+        put(7, 0, y)
+        for x in range(1, 29):
+            put(9, x, y)
+        put(10, 29, y)
+    o.save(os.path.join(OUT, "ui_msgbox.png"))
+    return True
+
+
+POPUP_THEMES = ["wood", "marble", "stone", "brick", "underwater", "stone2"]
+
+
+def build_popups():
+    """地名看板（src/map_name_popup.c）：外框 12×5 格（上緣 12 格、左右各 3 格、下緣 12 格）＋中間 80×24 的底圖。
+    調色盤：木頭用 wood.png 的，其他用外框圖的；文字顏色是調色盤第 2（字）、第 3（陰影）色"""
+    D = os.path.join(EM, "graphics/map_popup")
+    if not os.path.exists(D):
+        return False
+    colors = {}
+    for th in POPUP_THEMES:
+        pal_src = os.path.join(D, "wood.png" if th == "wood" else th + "_outline.png")
+        frame, _, pal = _tiles_rgba(os.path.join(D, th + "_outline.png"), pal_src)
+        _, inner, _ = _tiles_rgba(os.path.join(D, th + ".png"), pal_src)
+        o = Image.new("RGBA", (96, 40), (0, 0, 0, 0))
+        for i in range(12):
+            o.alpha_composite(frame[i], (i * 8, 0))
+            o.alpha_composite(frame[18 + i], (i * 8, 32))
+        for k in range(3):
+            o.alpha_composite(frame[12 + k * 2], (0, 8 + k * 8))
+            o.alpha_composite(frame[13 + k * 2], (88, 8 + k * 8))
+        o.alpha_composite(inner, (8, 8))
+        o.save(os.path.join(OUT, f"popup_{th}.png"))
+        colors[th] = ["#%02x%02x%02x" % pal[2], "#%02x%02x%02x" % pal[3]]
+    return colors
+
+
+def build_naming():
+    """取名字的畫面（src/naming_screen.c）：背景（background.bin）＋三頁鍵盤（大寫藍、小寫橘、符號綠，keyboard_*.bin），
+    調色盤＝menu／page_swap_upper／page_swap_lower／page_swap_others／buttons／cursor 六組，keyboard.pal 在第 10 組；
+    右邊的按鈕（換頁、刪除、確定）與游標是精靈圖，各自用 buttons.pal、page_swap_*.pal、cursor.pal"""
+    D = os.path.join(EM, "graphics/naming_screen")
+    if not os.path.exists(D):
+        return False
+    pad = lambda p: (p + [(0, 0, 0)] * 16)[:16]
+    pal = []
+    for f in ["menu", "page_swap_upper", "page_swap_lower", "page_swap_others", "buttons", "cursor"]:
+        pal += pad(read_pal(os.path.join(D, f + ".pal")))
+    pal += [(0, 0, 0)] * 64 + pad(read_pal(os.path.join(D, "keyboard.pal"))) + [(0, 0, 0)] * 80
+    tmp = os.path.join(OUT, "_ns.pal")
+    _write_pal(tmp, pal)
+    bg = render_tilemap(os.path.join(D, "menu.png"), os.path.join(D, "background.bin"), tmp, 32).crop((0, 0, 240, 160))
+    for page in ("upper", "lower", "symbols"):
+        o = Image.new("RGBA", (240, 160), (0, 0, 0, 255))
+        o.alpha_composite(bg)
+        o.paste(o.crop((0, 144, 240, 160)), (0, 0))  # 最上面兩列在原作是空的（底下的條紋層），用最下面的條紋補上
+        o.alpha_composite(render_tilemap(os.path.join(D, "menu.png"), os.path.join(D, f"keyboard_{page}.bin"), tmp, 32).crop((0, 0, 240, 160)))
+        o.save(os.path.join(OUT, f"ns_{page}.png"))
+    os.remove(tmp)
+    # 精靈圖：依各自的調色盤上色（索引 0 透明）
+    def sprite(name, palname):
+        im = Image.open(os.path.join(D, name + ".png"))
+        sp = pad(read_pal(os.path.join(D, palname + ".pal")))
+        o = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        px, op = im.load(), o.load()
+        for y in range(im.size[1]):
+            for x in range(im.size[0]):
+                c = px[x, y] & 15
+                if c:
+                    op[x, y] = sp[c] + (255,)
+        o.save(os.path.join(OUT, f"ns_{name}.png"))
+    for name, palname in [("page_swap_frame", "buttons"), ("ok_button", "buttons"), ("back_button", "buttons"), ("page_swap_upper", "page_swap_upper"),
+                          ("page_swap_lower", "page_swap_lower"), ("page_swap_others", "page_swap_others"), ("cursor", "cursor"), ("input_arrow", "cursor"), ("underscore", "cursor")]:
+        if os.path.exists(os.path.join(D, name + ".png")):
+            sprite(name, palname)
+    return True
+
+
 def build_all():
-    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary(), "storage": build_storage(), "shop": build_shop()}
+    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary(), "storage": build_storage(), "shop": build_shop(),
+            "msgbox": build_msgbox(), "popups": build_popups(), "naming": build_naming()}
 
 
 if __name__ == "__main__":

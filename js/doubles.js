@@ -83,7 +83,8 @@ class DoubleBattle extends Battle {
     // 複製出第二格（位置用 inline style，兩格都保留 .me／.foe 的樣式）
     const pos = {
       bmon: { foe: [{ left: '360px', top: '-6px' }, { left: '516px', top: '6px' }], me: [{ left: '30px', top: '96px' }, { left: '210px', top: '102px' }] },
-      hbox: { foe: [{ left: '6px', top: '12px' }, { left: '6px', top: '96px' }], me: [{ left: '444px', top: '178px' }, { left: '444px', top: '256px' }] },
+      // 體力框：src/battle_interface.c 的 InitBattlerHealthboxCoords（雙打：我方左 (159,76)、右 (171,101)，對手左 (44,19)、右 (32,44)），雙打專用的框
+      hbox: { foe: [{ left: '24px', top: '15px' }, { left: '-12px', top: '90px' }], me: [{ left: '381px', top: '186px' }, { left: '417px', top: '261px' }] },
     };
     this.slotEls = { me: { bmon: [], hbox: [] }, foe: { bmon: [], hbox: [] } };
     this.curSlot = { me: 0, foe: 0 };
@@ -95,7 +96,7 @@ class DoubleBattle extends Battle {
       [a, b].forEach((x, k) => {
         Object.assign(x.style, pos[kind][side][k]);
         x.dataset.slot = k;
-        if (kind === 'hbox') { x.style.transform = `scale(${side === 'me' ? .72 : .82})`; x.style.transformOrigin = 'top left'; x.style.zIndex = 8; }
+        if (kind === 'hbox') { x.classList.add('dbl'); x.style.zIndex = 8; }
         if (kind === 'bmon') x.style.zIndex = side === 'me' ? 3 + k : 1 + k;
       });
       this.slotEls[side][kind] = [a, b];

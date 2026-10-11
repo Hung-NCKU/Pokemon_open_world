@@ -55,7 +55,7 @@ const TownEvents = (() => {
       const i = await pick(() => true);
       if (i < 0) return;
       const m = G.party[i];
-      const n = await UI.input(`要幫 ${Mon.name(m)} 取什麼名字？（留空用原名）`, '', { cancel: true });
+      const n = await UI.input(`要幫 ${Mon.name(m)} 取什麼名字？`, '', { cancel: true, icon: m.sp });
       if (n === null) return;
       m.nick = n && n !== Forms.data(m).n ? n.slice(0, 10) : undefined;
       await say('namerater', `${Mon.name(m)}……真是個好名字！`);

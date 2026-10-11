@@ -42,10 +42,9 @@ const PartyUI = (() => {
           ${m.item ? '<div class="pitem"></div>' : ''}
           <div class="pname">${U.esc(Mon.name(m))}</div>
           <div class="plv">${m.st ? UI.statusTag(m.st) : 'Lv' + m.lv}${g}</div>
-          ${k === active ? '<div class="ptag">戰鬥中</div>' : ''}
           ${dis ? '<div class="pdesc">不能使用</div>' : ''}
           <div class="phpbar"><div class="${hpColor(r)}" style="width:${r * 100}%"></div></div>
-          <div class="php">${hp}<span>/</span>${max}</div>
+          <div class="php"><b>${hp}</b><span>/</span><b>${max}</b></div>
         </div>`;
       };
       const draw = () => {

@@ -17,6 +17,7 @@
   UI.list = async () => 0;
   UI.choose = async opts => { const i = opts.findIndex(x => !(x && x.disabled)); return i < 0 ? 0 : i; };
   Game.dexEntry = async () => { };
+  G.skipLevelWindow = true; // 升級的能力視窗要按鍵才關，這裡不等
   Sound.sfx = () => { }; Sound.play = () => { }; Sound.jingle = async () => { };
   for (const k of ['moveAnim', 'anim', 'trainerIntro', 'trainerLeave', 'wildIntro']) Battle.prototype[k] = async () => { };
   Battle.prototype.catchAnim = async function () { return null; };
@@ -93,7 +94,35 @@
       Cloud.logout();
       window.fetch = realFetch; window.CLOUD_CONFIG = { url: '', anonKey: '', github: false };
 
-      // 7. 畫面提示：野外顯示下一步
+      // 7. 綠寶石介面：取名字、設定畫面、商店賣出、電腦
+      if (typeof EmeraldUI !== 'undefined' && Gen3.on) {
+        const press = k => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+        const p = EmeraldUI.naming('你的名字是？', '', { icon: 'player' });
+        press('z'); press('ArrowRight'); press('z'); press('Enter');   // 輸入 A、B 後確定
+        check('綠寶石取名字：用鍵盤輸入 AB 後確定', (await p) === 'AB' && !document.getElementById('naming'));
+        const speed0 = G.settings.textSpeed ?? 22;
+        const o = EmeraldUI.optionMenu();
+        press('ArrowRight'); press('x');
+        await o;
+        check('綠寶石設定畫面：←→ 改文字速度，B 關閉', (G.settings.textSpeed ?? 22) !== speed0 && !document.getElementById('option'));
+        G.settings.textSpeed = speed0;
+        const realPick = BagUI.pick, money0 = G.state.money;
+        G.state.bag.potion = 3;
+        let picks = ['potion', null];
+        BagUI.pick = async () => picks.shift();
+        await EmeraldUI.sell();
+        BagUI.pick = realPick;
+        check('綠寶石商店：賣出傷藥得到一半的價錢', G.state.money - money0 === Math.floor(ITEMS.potion.price / 2) && G.state.bag.potion === 2, `${G.state.money - money0}`);
+        const realOpen = StorageUI.open; let opened = null;
+        StorageUI.open = async o => { opened = o; };
+        let answers = [0, 0, 3, 2];
+        const realChoose = UI.choose; UI.choose = async () => answers.shift();
+        await EmeraldUI.pc();
+        UI.choose = realChoose; StorageUI.open = realOpen;
+        check('綠寶石電腦：某人的電腦 → 領取寶可夢 → 打開箱子', opened && opened.start === 'box');
+      }
+
+      // 8. 畫面提示：野外顯示下一步
       Hud.update();
       const goal = document.getElementById('goal');
       check('畫面提示：野外顯示任務的下一步', goal && /下一步：/.test(goal.textContent), goal && goal.textContent);

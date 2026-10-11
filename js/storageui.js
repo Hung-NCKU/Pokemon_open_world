@@ -25,11 +25,12 @@ const StorageUI = (() => {
     return grid;
   }
 
-  function open() {
+  // start：'party' 從隊伍開始（寄放寶可夢），其他從箱子開始
+  function open({ start = 'box' } = {}) {
     return new Promise(res => {
       const s = G.state;
       let grid = layout();
-      let box = 0, cur = 0, mode = 'box', pslot = 0; // mode: box | title | party
+      let box = 0, cur = 0, mode = start === 'party' ? 'party' : 'box', pslot = 0; // mode: box | title | party
       let held = null; // { m, from: { kind, b, i } }
       const root = document.createElement('div');
       root.id = 'storage';
