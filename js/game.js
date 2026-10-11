@@ -263,25 +263,42 @@ const Game = {
       await say(`${name} 學會了 ${mv.n}！`);
       return;
     }
+    // 綠寶石的流程：想學 → 已經 4 個 → 要忘記一個嗎？ → 能力頁的招式頁選要忘記的（新招式在第 5 列）
+    //   → 「1、2、3……噗！」；選新招式或按 B → 要放棄學習嗎？（否就回到招式頁）
     if (md(mid).support !== 'full') await say(`提醒：${mv.n} ${SUPPORT_ZH[md(mid).support]}。`);
-    await say(`${name} 想要學習新招式 ${mv.n}，但是 ${name} 已經學會 4 個招式了。`);
+    await say(`${name} 想要學習新招式 ${mv.n}。`);
+    await say(`但是 ${name} 已經學會 4 個招式了。`);
+    const yesNo = async prompt => (await UI.choose(['是', '否'], { prompt, cancel: true })) === 0;
+    let ask = true;
     while (true) {
-      const c = await UI.choose(['忘記一個招式', '放棄學習'], { prompt: `要忘記一個招式來學習 ${mv.n} 嗎？`, cancel: false });
-      if (c === 0) {
-        const sup = id => `<small>${SUPPORT_ZH[md(id).support]}</small>`;
-        const opts = m.moves.map(x => ({ html: `${typeTag(MOVES[x.id].t)} ${U.esc(MOVES[x.id].n)} <small>威力 ${MOVES[x.id].p || '—'}</small>${sup(x.id)}` }));
-        opts.push({ html: `<b>${typeTag(mv.t)} ${U.esc(mv.n)} <small>威力 ${mv.p || '—'}</small>${sup(mid)}（不學）</b>` });
-        const i = await UI.choose(opts, { prompt: `要忘記哪一個招式？\n新招式：${mv.n}　${mv.d || ''}` });
-        if (i >= 0 && i < 4) {
-          const old = MOVES[m.moves[i].id].n;
-          m.moves[i] = { id: mid, pp: mv.pp };
-          await say(`1、2、3……噗！${name} 忘記了 ${old}，並學會了 ${mv.n}！`);
-          return;
-        }
+      if (ask && !(await yesNo(`要忘記一個招式來學習 ${mv.n} 嗎？`))) {
+        if (await yesNo(`要放棄學習 ${mv.n} 嗎？`)) { UI.hideDialog(); await say(`${name} 沒有學習 ${mv.n}。`); return; }
+        continue;
       }
-      const c2 = await UI.choose(['是', '否'], { prompt: `要放棄學習 ${mv.n} 嗎？`, cancel: false });
-      if (c2 === 0) { await say(`${name} 沒有學習 ${mv.n}。`); return; }
+      UI.hideDialog();
+      await say('要忘記哪一個招式呢？');
+      const i = typeof SummaryUI !== 'undefined' && Gen3.on ? await SummaryUI.forget(m, mid) : await Game.forgetList(m, mid);
+      if (i >= 0 && i < 4) {
+        const old = MOVES[m.moves[i].id].n;
+        m.moves[i] = { id: mid, pp: mv.pp };
+        await say('1、2、3……噗！');
+        await say(`${name} 忘記了 ${old}。`);
+        await say('然後……');
+        await say(`${name} 學會了 ${mv.n}！`);
+        return;
+      }
+      if (await yesNo(`要放棄學習 ${mv.n} 嗎？`)) { UI.hideDialog(); await say(`${name} 沒有學習 ${mv.n}。`); return; }
+      ask = false; // 否：回到招式頁重新選
     }
+  },
+
+  // 沒有綠寶石素材時：用清單選要忘記的招式（第 5 項是新招式＝不學）
+  async forgetList(m, mid) {
+    const mv = MOVES[mid], sup = id => `<small>${SUPPORT_ZH[md(id).support]}</small>`;
+    const opts = m.moves.map(x => ({ html: `${typeTag(MOVES[x.id].t)} ${U.esc(MOVES[x.id].n)} <small>威力 ${MOVES[x.id].p || '—'}</small>${sup(x.id)}` }));
+    opts.push({ html: `<b>${typeTag(mv.t)} ${U.esc(mv.n)} <small>威力 ${mv.p || '—'}</small>${sup(mid)}（不學）</b>` });
+    const i = await UI.choose(opts, { prompt: `要忘記哪一個招式？\n新招式：${mv.n}　${mv.d || ''}` });
+    return i >= 0 && i < 4 ? i : -1;
   },
 
   async evolve(m, to) {

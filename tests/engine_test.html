@@ -2613,6 +2613,30 @@ async function run() {
       fights.map(w => w.sp + ':' + w.lv).join());
     G.state = keep;
   }
+  // 學習新招式（綠寶石流程）：要忘記嗎 → 選要忘記的招式（新招式在第 5 列）→ 放棄時再確認，否就回到選擇
+  {
+    const keep = G.state, real = { choose: UI.choose, say: UI.say, forget: SummaryUI.forget, list: Game.forgetList };
+    const mk = () => { const m = Mon.create(25, 30); m.moves = [85, 98, 86, 104].map(id => ({ id, pp: 5 })); return m; };
+    const run = async (answers, picks) => {
+      const m = mk(), said = [];
+      UI.choose = async () => answers.shift() ?? 1;
+      UI.say = async t => { said.push(t); };
+      SummaryUI.forget = Game.forgetList = async () => picks.shift() ?? -1;
+      await Game.learnMove(m, 87);
+      return { m, said: said.join('|') };
+    };
+    // 是 → 忘記第 3 個（電磁波）
+    const a = await run([0], [2]);
+    check('學習招式：選要忘記的招式後學會新招式（1、2、3……噗！）', a.m.moves[2].id === 87 && a.m.moves.length === 4 && /噗/.test(a.said) && /忘記了 電磁波/.test(a.said), a.said);
+    // 是 → 選新招式（不學）→ 放棄？是
+    const b = await run([0, 0], [-1]);
+    check('學習招式：選新招式（第 5 列）再確認放棄，就不學', !b.m.moves.some(x => x.id === 87) && /沒有學習/.test(b.said), b.said);
+    // 是 → 選新招式 → 放棄？否 → 回到選擇 → 忘記第 1 個
+    const c = await run([0, 1], [-1, 0]);
+    check('學習招式：放棄時選「否」會回到招式頁重新選', c.m.moves[0].id === 87, c.said);
+    Object.assign(UI, { choose: real.choose, say: real.say }); SummaryUI.forget = real.forget; Game.forgetList = real.list;
+    G.state = keep;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

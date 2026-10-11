@@ -87,5 +87,42 @@ const SummaryUI = (() => {
       draw();
     });
   }
-  return { show };
+  // 學習新招式時選擇要忘記的招式（綠寶石：能力頁的招式頁，新招式排在第 5 列）
+  // 回傳要忘記的招式位置 0～3；選新招式或按 B 回傳 -1（不學）
+  function forget(m, mid) {
+    return new Promise(res => {
+      const ids = [...m.moves.map(x => x.id), mid];
+      let sel = 0;
+      const root = document.createElement('div');
+      root.id = 'summary';
+      root.className = 'sm-forget';
+      document.getElementById('game').appendChild(root);
+      const draw = () => {
+        const rows = ids.map((id, i) => {
+          const d = MOVES[id], pp = i < 4 ? `${m.moves[i].pp}/${d.pp}` : `${d.pp}/${d.pp}`;
+          return `<div class="sm-mv${i === sel ? ' sel' : ''}${i === 4 ? ' new' : ''}" style="top:${(33 + i * 16) * 3}px" data-i="${i}">
+            <span class="t">${typeTag(d.t)}</span><span class="n">${U.esc(d.n)}${SUPPORT_ZH[md(id).support]}</span><span class="pp">PP ${pp}</span></div>`;
+        }).join('');
+        const d = MOVES[ids[sel]];
+        root.innerHTML = `<div class="sm-bg" style="background-image:url(${Gen3.base}sum_moves.png)"></div>
+          <div class="sm-title">戰鬥招式</div>${[285, 330, 378].map((x, i) => `<i class="sm-dot${i === 2 ? ' on' : ''}" style="left:${x}px"></i>`).join('')}
+          <div class="sm-pic"><img src="${monSprite(m, false).url}" onerror="this.onerror=null;this.src='${Mon.spriteOf(m, { shiny: m.shiny })}'"></div>
+          <div class="sm-lv">Lv${m.lv}</div><div class="sm-newbox"></div>${rows}
+          <div class="sm-pw">威力<b>${d.p || '－'}</b></div><div class="sm-ac">命中<b>${d.a || '－'}</b></div>
+          <div class="sm-desc"><b>${CAT[d.c] || ''}</b>　${U.esc(d.d || '')}</div>`;
+        root.querySelectorAll('.sm-mv').forEach(el => { el.onclick = ev => { ev.stopPropagation(); const i = +el.dataset.i; if (i === sel) done(i); else { sel = i; Sound.sfx('select'); draw(); } }; });
+      };
+      const done = i => { pop(); root.remove(); Sound.sfx('select'); res(i < 4 ? i : -1); };
+      const onKey = e => {
+        const key = e.key;
+        if (key === 'ArrowUp' || key === 'w') { sel = (sel + 4) % 5; Sound.sfx('select'); draw(); }
+        else if (key === 'ArrowDown' || key === 's') { sel = (sel + 1) % 5; Sound.sfx('select'); draw(); }
+        else if (UI.isOk(e)) { if (!e.repeat) done(sel); }
+        else if (UI.isNo(e)) { if (!e.repeat) done(4); }
+      };
+      const pop = UI.pushKey(onKey);
+      draw();
+    });
+  }
+  return { show, forget };
 })();
