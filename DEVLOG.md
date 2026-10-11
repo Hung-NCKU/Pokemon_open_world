@@ -17,6 +17,7 @@
 - PROGRESS.md 過期的內容更新（招式全部完整、特性 284/284、太晶化等已完成）。
 - CI 加上 `npm run build`（打包壞掉也會被抓到）；沒有素材時打包也會成功（只有警告）。`.gitignore` 已經有 dist／node_modules／test-results。
 - 新增 23 個測試。引擎 565/565、冒煙 17/17。
+- 線上版實測（`npm run test:live`，`tools/live_check.mjs`）：發布後打開 GitHub Pages 的網站，注入實際遊玩測試跑情境一（新遊戲 → 研究所 → 10 場野生戰鬥、捕捉 7 種 → 商店 → 寶可夢中心 → 記錄與讀檔）11/11；重新整理後 Service Worker 已註冊並控制頁面，快取裡有打包後的程式與 63 個綠寶石素材，沒有素材 404、沒有頁面錯誤。
 
 ### 使用者要求：`vite-esm` 分支取代 main，線上版改用這個版本
 - `vite-esm` 合併進 main（沒有改寫歷史）；原本傳統腳本版本的 main 保留在 `classic` 分支（要退回時：`git checkout classic`，或把 main 重設到 `classic`）。

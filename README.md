@@ -76,6 +76,7 @@ python tools/build_assets.py
 | `npm test` | 引擎＋冒煙測試（Playwright 透過 Vite 開發伺服器打開下面的測試頁，等結果，列出失敗的項目；約 1 分鐘） |
 | `npm run test:engine`／`test:smoke` | 只跑其中一個 |
 | `npm run test:natural` | 實際遊玩測試（真實時間，約 10～30 分鐘；`SCENARIO=1` 或 `2` 只跑一段） |
+| `npm run test:live` | 線上版實測：打開 GitHub Pages 的網站跑實際遊玩（新遊戲 → 戰鬥 → 商店 → 寶可夢中心 → 存檔），再檢查 Service Worker 與素材路徑；發布後執行 |
 | `docker compose up web` | 在 Docker 裡打包（Vite），由 nginx 提供 http://localhost:8080/ |
 | `docker compose run --rm test` | 在 Playwright 的 Docker 映像檔裡跑 `npm test`（本機不用裝 Node 與瀏覽器） |
 
