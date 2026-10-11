@@ -3363,6 +3363,66 @@ async function run() {
     check('新招式與新特性：60 場隨機對戰（含雙打）沒有例外', !err, err || '');
     check('新招式與新特性：戰鬥結束後招式、特性恢復原狀', G.party.every(m => m.moves.every(s => !s.mimicOf) && !Mon.ovr.has(m)));
   }
+  // 危機樹果、貪吃鬼；雙打的急速折返與危險迴避
+  {
+    const keepRand = U.rand;
+    U.rand = () => .99;
+    {
+      const b = setup(143, 50, 68, 50);
+      b.me.item = 'liechi-berry'; b.me.hp = Math.floor(Mon.maxHp(b.me) / 3);
+      await b.checkBerry(b.me);
+      check('枝荔果：體力 1/3 時不發動', b.me.item === 'liechi-berry');
+      b.me.ability = 'gluttony';
+      await b.checkBerry(b.me);
+      check('貪吃鬼：體力一半以下就吃危機樹果', !b.me.item && b.vMe.stg.atk === 1);
+      const c = setup(143, 50, 68, 50);
+      c.me.item = 'figy-berry'; c.me.nat = 5; c.me.ability = 'thick-fat'; // 大膽：攻擊降低，討厭辣
+      c.me.hp = Math.floor(Mon.maxHp(c.me) / 4);
+      const h = c.me.hp;
+      await c.checkBerry(c.me);
+      check('勿花果：體力 1/4 以下回復 1/3，討厭辣味的性格會混亂', c.me.hp === h + Math.floor(Mon.maxHp(c.me) / 3) && c.vMe.conf > 0);
+      const d = setup(143, 50, 68, 50);
+      d.me.item = 'salac-berry'; d.me.ability = 'ripen'; d.me.hp = 5;
+      await d.checkBerry(d.me);
+      check('熟成：危機樹果的能力提高加倍', d.vMe.stg.spe === 2);
+    }
+    const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+    Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+    const keepPM = Game.partyMenu;
+    Game.partyMenu = async o => { const b = o && o.battle; return G.party.findIndex((m, i) => m.hp > 0 && !(b && b.mySlots && b.mySlots.includes(i))); };
+    const slot = sd => ({ id: moveId(sd), pp: 20 });
+    const mkD = (mine, foes) => {
+      G.state = Game.newState('T', 'kanto', 1);
+      G.state.party = mine;
+      const b = new DoubleBattle({ trainer: { title: '雙胞胎', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+      b.setup();
+      for (const m of [...mine, ...foes]) b.volOf(m).lockOn = 5;
+      return b;
+    };
+    {
+      const a = Mon.create(123, 50), c = Mon.create(143, 50), r = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50), f3 = Mon.create(68, 50);
+      a.moves = [slot('uturn')]; c.moves = [slot('splash')]; r.moves = [slot('splash')];
+      f1.moves = [slot('splash')]; f2.moves = [slot('splash')]; f3.moves = [slot('splash')];
+      const b = mkD([a, c, r], [f1, f2, f3]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      await b.doubleTurn();
+      check('雙打：急速折返後換上後備，換下的不在場上', b.actives('me').includes(r) && !b.actives('me').includes(a) && b.slotOf(r) === 0, b.mySlots.join());
+      const x = Mon.create(143, 50), y = Mon.create(143, 50), g1 = Mon.create(68, 70), g2 = Mon.create(767, 50), g3 = Mon.create(143, 50);
+      x.moves = [slot('seismictoss')]; y.moves = [slot('splash')];
+      g1.moves = [slot('splash')]; g2.moves = [slot('splash')]; g3.moves = [slot('splash')];
+      g2.ability = 'wimp-out'; g2.hp = Math.floor(Mon.maxHp(g2) * .55);
+      const b2 = mkD([x, y], [g1, g2, g3]);
+      b2.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: g2 });
+      b2.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: x, foe: true });
+      x.lv = 10; // 地球上投：固定 10 點傷害，體力降到一半以下但不會倒下
+      await b2.doubleTurn();
+      check('雙打：躍躍欲逃體力降到一半以下時換上後備', g2.hp > 0 && !b2.actives('foe').includes(g2) && b2.actives('foe').includes(g3), `${g2.hp} ${b2.foeSlots.join()} flag=${b2.volOf(g2).emergencyExit} ab=${g2.ability} max=${Mon.maxHp(g2)}`);
+    }
+    Game.partyMenu = keepPM;
+    [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
+    U.rand = keepRand;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

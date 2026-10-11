@@ -56,7 +56,7 @@ const AB_IMPL = new Set([
   // 行動
   'truant', 'dancer', 'mycelium-might', 'unseen-fist', 'propeller-tail', 'stalwart', 'magician',
   // 樹果
-  'cud-chew', 'ripen',
+  'cud-chew', 'ripen', 'gluttony',
   // 形態與屬性
   'forecast', 'multitype', 'rks-system', 'schooling', 'shields-down', 'stance-change', 'zen-mode', 'zero-to-hero', 'tera-shift', 'hunger-switch', 'illusion',
 ]);
@@ -70,20 +70,25 @@ const IT_IMPL = new Set(['leftovers', 'life-orb', 'choice-band', 'choice-specs',
   'scope-lens', 'razor-claw', 'quick-claw', 'shell-bell', 'air-balloon', 'heavy-duty-boots', 'light-clay', 'damp-rock', 'heat-rock',
   'smooth-rock', 'icy-rock', 'lucky-egg', 'amulet-coin', 'everstone', 'soothe-bell', 'bright-powder', 'wide-lens', 'zoom-lens', 'toxic-orb',
   'flame-orb', 'white-herb', 'mental-herb', 'power-herb', 'weakness-policy', 'clear-amulet', 'covert-cloak', 'loaded-dice',
-  'punching-glove', 'protective-pads', 'safety-goggles', 'big-root', 'binding-band', 'grip-claw', 'shed-shell', 'metronome', 'throat-spray']);
+  'punching-glove', 'protective-pads', 'safety-goggles', 'big-root', 'binding-band', 'grip-claw', 'shed-shell', 'metronome', 'throat-spray',
+  'figy-berry', 'wiki-berry', 'mago-berry', 'aguav-berry', 'iapapa-berry', 'liechi-berry', 'ganlon-berry', 'salac-berry', 'petaya-berry', 'apicot-berry']);
 
 const TYPE_ITEM = {
   charcoal: 'fire', 'mystic-water': 'water', 'miracle-seed': 'grass', magnet: 'electric', 'never-melt-ice': 'ice', 'black-belt': 'fighting',
   'poison-barb': 'poison', 'soft-sand': 'ground', 'sharp-beak': 'flying', 'twisted-spoon': 'psychic', 'silver-powder': 'bug', 'hard-stone': 'rock',
   'spell-tag': 'ghost', 'dragon-fang': 'dragon', 'black-glasses': 'dark', 'metal-coat': 'steel', 'silk-scarf': 'normal', 'fairy-feather': 'fairy',
 };
+// 危機時（體力 1/4 以下，貪吃鬼 1/2 以下）發動的樹果：回復 1/3 體力（性格討厭的味道會混亂）或提高能力
+const PINCH_HEAL = { 'figy-berry': 1, 'wiki-berry': 3, 'mago-berry': 5, 'aguav-berry': 4, 'iapapa-berry': 2 }; // 討厭這個味道的性格：降低的能力
+const PINCH_STAT = { 'liechi-berry': 'atk', 'ganlon-berry': 'def', 'salac-berry': 'spe', 'petaya-berry': 'spa', 'apicot-berry': 'spd' };
 const STATUS_BERRY = { 'cheri-berry': ['par'], 'chesto-berry': ['slp'], 'pecha-berry': ['psn', 'tox'], 'rawst-berry': ['brn'], 'aspear-berry': ['frz'] };
 const CONSUMABLE = new Set(['focus-sash', 'sitrus-berry', 'oran-berry', 'lum-berry', 'chesto-berry', 'cheri-berry', 'pecha-berry', 'rawst-berry',
-  'aspear-berry', 'persim-berry', 'leppa-berry', 'air-balloon', 'white-herb', 'mental-herb', 'power-herb', 'weakness-policy', 'throat-spray']);
+  'aspear-berry', 'persim-berry', 'leppa-berry', ...Object.keys(PINCH_HEAL), ...Object.keys(PINCH_STAT), 'air-balloon', 'white-herb', 'mental-herb', 'power-herb', 'weakness-policy', 'throat-spray']);
 // 商店販售的持有道具（價格參考最新世代）
 const HELD_PRICE = {
   'oran-berry': 100, 'sitrus-berry': 300, 'lum-berry': 500, 'chesto-berry': 200, 'cheri-berry': 200, 'pecha-berry': 200, 'rawst-berry': 200,
   'aspear-berry': 200, 'persim-berry': 200, 'leppa-berry': 300,
+  ...Object.fromEntries([...Object.keys(PINCH_HEAL), ...Object.keys(PINCH_STAT)].map(b => [b, PINCH_HEAL[b] ? 300 : 1000])),
 };
 
 const Abil = {

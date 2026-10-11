@@ -72,6 +72,33 @@ class DoubleBattle extends Battle {
     if (how === 'first') a.afterYou = true; else a.quash = true;
     return true;
   }
+  // 自己換下（急速折返、伏特替換、危險迴避……）：換上後備，放進同一個格位
+  async selfSwitchOut(user, mv) {
+    const side = this.sideKey(user), mine = side === 'me';
+    const party = mine ? G.party : this.foeParty, slots = mine ? this.mySlots : this.foeSlots;
+    const k = this.slotOf(user);
+    const opts = party.map((m, i) => i).filter(i => party[i].hp > 0 && !slots.includes(i));
+    if (k < 0 || !opts.length) return;
+    let i = -1;
+    if (mine) { while (i < 0 || slots.includes(i) || G.party[i].hp <= 0) i = await Game.partyMenu({ battle: this, forced: true }); }
+    else i = U.pick(opts);
+    const v0 = this.volOf(user);
+    const keep = mv && mv.selfSwitch === 'copyvolatile' ? { stg: { ...v0.stg }, sub: v0.sub } : null;
+    if (mine) this.ctx(user, null); else this.ctx(null, user);
+    await this.msg(mine ? `回來吧，${Mon.name(user)}！` : `${this.trainer.name} 收回了 ${Mon.name(user)}！`);
+    await this.recall(side);
+    await this.onSwitchOut(user);
+    this.vols.delete(user);
+    slots[k] = i;
+    const m = party[i], v = this.volOf(m);
+    if (keep) Object.assign(v, keep);
+    if (mine) { this.myIdx = i; this.vMe = v; this.participants.add(i); } else { this.foeIdx = i; this.vFoe = v; Game.markSeen(m.sp); }
+    this.front(side, k);
+    await this.msg(mine ? `去吧！${Mon.name(m)}！` : `${this.trainer.name} 派出了 ${Mon.name(this.shownMon(m))}！`);
+    await this.sendOut(side, m);
+    await this.onEntry(m);
+    this.drawAll();
+  }
   // 交換場地：和隊友交換位置
   async swapAlly(user) {
     const ally = this.allyOf(user);
@@ -303,7 +330,7 @@ class DoubleBattle extends Battle {
       pending.sort((x, y) => (y.afterYou ? 1 : 0) - (x.afterYou ? 1 : 0) || (x.quash ? 1 : 0) - (y.quash ? 1 : 0) || y.pri - x.pri || y.spe - x.spe || x.rnd - y.rnd);
       const a = pending.shift();
       const user = a.user;
-      if (!user || user.hp <= 0) continue;
+      if (!user || user.hp <= 0 || !this.activeMons().includes(user)) continue; // 倒下或已經換下
       const oppSide = this.sideKey(user) === 'me' ? 'foe' : 'me';
       const opps = this.actives(oppSide);
       if (!opps.length) break;

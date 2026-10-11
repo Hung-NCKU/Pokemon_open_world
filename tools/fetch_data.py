@@ -75,7 +75,7 @@ def zh_text(entries, key):
 # 遊戲中可以讓寶可夢攜帶、在對戰中有效果的道具
 HELD_ITEMS = [
     "leftovers", "life-orb", "choice-band", "choice-specs", "choice-scarf", "focus-sash", "focus-band",
-    "sitrus-berry", "oran-berry", "lum-berry", "chesto-berry", "cheri-berry", "pecha-berry", "rawst-berry",
+    "sitrus-berry", "oran-berry", "lum-berry", "figy-berry", "wiki-berry", "mago-berry", "aguav-berry", "iapapa-berry", "liechi-berry", "ganlon-berry", "salac-berry", "petaya-berry", "apicot-berry", "chesto-berry", "cheri-berry", "pecha-berry", "rawst-berry",
     "aspear-berry", "persim-berry", "leppa-berry", "expert-belt", "muscle-band", "wise-glasses",
     "charcoal", "mystic-water", "miracle-seed", "magnet", "never-melt-ice", "black-belt", "poison-barb",
     "soft-sand", "sharp-beak", "twisted-spoon", "silver-powder", "hard-stone", "spell-tag", "dragon-fang",

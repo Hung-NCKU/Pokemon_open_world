@@ -1196,8 +1196,12 @@ Object.assign(Battle.prototype, {
   async checkBerry(m) {
     if (!m || m.hp <= 0) return;
     const it = this.itm(m), max = Mon.maxHp(m);
-    if (!['sitrus-berry', 'oran-berry'].includes(it) || m.hp * 2 > max || this.unnerved(m)) return;
-    await this.consume(m, `${this.label(m)} 吃掉了{i}，回復了體力！`);
+    if (!it || this.unnerved(m)) return;
+    // 危機樹果：體力 1/4 以下（貪吃鬼 1/2 以下）
+    const pinch = PINCH_HEAL[it] || PINCH_STAT[it];
+    const at = pinch ? (this.ab(m) === 'gluttony' ? 2 : 4) : 2;
+    if (!(pinch || ['sitrus-berry', 'oran-berry'].includes(it)) || m.hp * at > max) return;
+    await this.consume(m, PINCH_STAT[it] ? `${this.label(m)} 吃掉了{i}！` : `${this.label(m)} 吃掉了{i}，回復了體力！`);
     await this.berryEffect(m, it);
   },
   // 異常狀態樹果、木子果
@@ -2457,6 +2461,13 @@ Object.assign(Battle.prototype, {
     const r = this.ab(m) === 'ripen' ? 2 : 1, max = Mon.maxHp(m), v = this.volOf(m), name = this.label(m);
     if (b === 'sitrus-berry') await this.healMon(m, Math.floor(max / 4) * r);
     else if (b === 'oran-berry') await this.healMon(m, 10 * r);
+    else if (PINCH_HEAL[b]) {
+      await this.healMon(m, Math.floor(max / 3) * r);
+      // 性格討厭這個味道（降低的能力對應）就會混亂
+      const nat = m.nat, down = NAT_STAT[nat % 5];
+      if (NAT_STAT[Math.floor(nat / 5)] !== down && down === PINCH_HEAL[b]) await this.addVolatile(m, 'confusion', m, null, true);
+    }
+    else if (PINCH_STAT[b]) await this.boost(m, { [PINCH_STAT[b]]: r }, m);
     else if (b === 'leppa-berry') { const s = m.moves.find(x => x.pp === 0) || m.moves.find(x => MOVES[x.id] && x.pp < MOVES[x.id].pp); if (s) s.pp = Math.min(MOVES[s.id].pp, s.pp + 10 * r); }
     if ((b === 'lum-berry' || (STATUS_BERRY[b] || []).includes(m.st)) && m.st) { m.st = null; this.draw(); await this.msg(`${name} 的異常狀態治好了！`); }
     if ((b === 'lum-berry' || b === 'persim-berry') && v.conf) { v.conf = 0; await this.msg(`${name} 的混亂解除了！`); }
@@ -2508,7 +2519,6 @@ Object.assign(Battle.prototype, {
   },
   // 危險迴避、躍躍欲逃：退場（野生寶可夢逃走）
   async emergencyExit(m) {
-    if (this.doubles) return;
     const side = this.sideKey(m);
     if (this.wildMon && side === 'foe') { await this.abilityMsg(m, `${this.label(m)} 逃走了！`); this.fled = true; return; }
     const party = side === 'me' ? G.party : this.foeParty;
