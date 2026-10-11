@@ -32,6 +32,18 @@ class DoubleBattle extends Battle {
   // 守住類：佇列裡沒有其他還能行動的寶可夢時，就是最後行動
   isLastMover() { return !this._pending || !this._pending.some(a => a.user && a.user.hp > 0); }
   activeMons() { return [...this.actives('me'), ...this.actives('foe')]; }
+  // 四隻寶可夢各自的行動（突襲、迅雷查的是目標那一隻，不是「那一邊」）
+  queuedMoveOf(m) { const a = this.queuedBy && this.queuedBy.get(m); return a && a.type === 'move' && a.mv ? a.mv : null; }
+  // 未來攻擊：打施放時選的格位目前在場的寶可夢
+  futureTarget(fu) {
+    const list = fu.side === 'me' ? this.mySlots.map(i => G.party[i]) : this.foeSlots.map(i => this.foeParty[i]);
+    return list[fu.slot || 0] || null;
+  }
+  focusOn(m) {
+    const [me, foe] = [this.me, this.foe];
+    if (this.sideKey(m) === 'foe') this.ctx(null, m); else this.ctx(m, null);
+    return () => this.ctx(me, foe);
+  }
   label(m) { return this.foeParty.includes(m) ? this.foeName(m) : Mon.name(m); }
   actives(side) { return (side === 'me' ? this.mySlots.map(i => G.party[i]) : this.foeSlots.map(i => this.foeParty[i])).filter(m => m && m.hp > 0); }
   allyOf(m) {
@@ -241,6 +253,8 @@ class DoubleBattle extends Battle {
     // 行動順序：每次行動後用當下的速度重新排序（第八世代起）
     const pending = [...moves];
     this._pending = pending;
+    this.queuedBy = new Map(acts.filter(a => a.user).map(a => [a.user, a]));
+    for (const a of moves) a._once = {}; // 整個招式只結算一次的效果（生命寶珠、自身能力變化）
     let first = true;
     while (pending.length) {
       for (const a of pending) a.spe = a.user && a.user.hp > 0 ? this.speedOf(a.user, this.volOf(a.user)) * (this.field.trickRoom ? -1 : 1) : -1e9;
@@ -300,6 +314,7 @@ class DoubleBattle extends Battle {
       if (r) return r;
     }
     this._pending = null;
+    this.queuedBy = null;
     // 回合結束：每一對各處理一次殘留效果，場地計時只算一次
     const ms = this.actives('me'), fs = this.actives('foe');
     const done = new Set();

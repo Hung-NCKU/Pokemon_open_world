@@ -151,6 +151,16 @@ Object.assign(Battle.prototype, {
   },
   // 這隻寶可夢是不是本回合最後行動的（守住類招式最後行動時失敗）；雙打由 DoubleBattle 依行動佇列覆寫
   isLastMover(m) { return !!(this.order && this.order[this.order.length - 1] === this.sideKey(m)); },
+  // 目標本回合要使用的招式（突襲、迅雷用）；換人、用道具、還沒選招式時是 null。雙打由 DoubleBattle 依每隻寶可夢的行動覆寫
+  queuedMoveOf(m) {
+    const a = this.queued && this.queued[this.sideKey(m)];
+    if (!a || (a.type && a.type !== 'move') || a.idx === undefined || a.idx < 0 || !m.moves[a.idx]) return null;
+    return md(m.moves[a.idx].id);
+  },
+  // 未來攻擊（預知未來、破滅之願）命中的對象：那一邊目前在場的寶可夢（雙打依格位覆寫）
+  futureTarget(fu) { return fu.side === 'me' ? this.me : this.foe; },
+  // 結算時把運算配對切到目標（雙打覆寫），回傳還原的函式
+  focusOn() { return () => { }; },
   // 場上的寶可夢（雙打由 DoubleBattle 覆寫為四隻）
   activeMons() { return [this.me, this.foe].filter(m => m && m.hp > 0); },
   otherOf(m) { return m === this.me ? this.foe : this.me; },
@@ -540,9 +550,10 @@ Object.assign(Battle.prototype, {
     }
     // 預知未來、破滅之願：兩回合後才攻擊（同一邊只能有一個）
     if ((mv.id === 'futuresight' || mv.id === 'doomdesire') && !act.futureHit) {
-      const side = this.sideKey(target);
-      if (this.futures.some(f => f.side === side)) { await this.msg('但是失敗了！'); return false; }
-      this.futures.push({ turns: 3, side, user, mv, act: { ...act } });
+      // 綁定「邊＋格位」：命中時打那個格位當時在場的寶可夢（換人也一樣）；同一個格位只能有一個
+      const side = this.sideKey(target), slot = this.slotOf ? Math.max(0, this.slotOf(target)) : 0;
+      if (this.futures.some(f => f.side === side && (f.slot || 0) === slot)) { await this.msg('但是失敗了！'); return false; }
+      this.futures.push({ turns: 3, side, slot, user, mv, act: { ...act } });
       await this.msg(mv.id === 'futuresight' ? `${this.label(user)} 預知了未來的攻擊！` : `${this.label(user)} 把破滅之願託付給了未來！`);
       return true;
     }
@@ -556,8 +567,7 @@ Object.assign(Battle.prototype, {
     if ((mv.id === 'fakeout' || mv.id === 'firstimpression' || mv.id === 'matblock') && vU.turnsOut > 0) { await this.msg('但是失敗了！'); return false; }
     // 突襲：目標本回合沒有要用攻擊招式或已行動
     if (mv.id === 'suckerpunch' || mv.id === 'thunderclap') {
-      const tAct = this.queued[this.sideKey(target)];
-      const tmv = tAct && tAct.idx !== undefined && target.moves[tAct.idx] ? md(target.moves[tAct.idx].id) : null;
+      const tmv = this.queuedMoveOf(target);
       if (vT.movedThisTurn || !tmv || tmv.cat === 'Status') { await this.msg('但是失敗了！'); return false; }
     }
     if (mv.id === 'focuspunch' && vU.damagedThisTurn) { await this.msg(`${name} 失去了集中力，無法使出招式！`); return false; }
@@ -907,10 +917,12 @@ Object.assign(Battle.prototype, {
       if ((ui === 'kings-rock' || ui === 'razor-fang') && target.hp > 0 && !shielded && !secs.some(s => s.volatileStatus === 'flinch') && U.rand() < .1) vT.flinch = true;
     }
     // 生命寶珠的反作用力、貝殼之鈴、打倒對手時的特性
+    // 雙打的全體招式：生命寶珠、爽喉噴霧、自身的能力變化是「整個招式一次」，不是每個目標各一次（act._once 記錄已結算的項目）
+    const once = k => { const o = act && act._once; if (!o) return true; if (o[k]) return false; o[k] = true; return true; };
     if (user.hp > 0 && total > 0) {
-      if (ui === 'life-orb' && ua !== 'magic-guard' && !sheer) { await this.selfDamage(user, Math.max(1, Math.floor(Mon.maxHp(user) / 10))); await this.msg(`${this.label(user)} 的體力被削減了！`); }
+      if (ui === 'life-orb' && ua !== 'magic-guard' && !sheer && !this._futureSrcOut && once('lifeOrb')) { await this.selfDamage(user, Math.max(1, Math.floor(Mon.maxHp(user) / 10))); await this.msg(`${this.label(user)} 的體力被削減了！`); }
       if (ui === 'shell-bell' && user.hp > 0 && user.hp < Mon.maxHp(user)) { await this.healMon(user, Math.max(1, Math.floor(total / 8))); await this.msg(`${this.label(user)} 用貝殼之鈴回復了少許體力！`); }
-      if (ui === 'throat-spray' && mv.flags.sound && user.hp > 0) { await this.consume(user, `${this.label(user)} 使用了{i}！`); await this.boost(user, { spa: 1 }, user); }
+      if (ui === 'throat-spray' && mv.flags.sound && user.hp > 0 && once('throatSpray')) { await this.consume(user, `${this.label(user)} 使用了{i}！`); await this.boost(user, { spa: 1 }, user); }
     }
     if (target.hp <= 0 && user.hp > 0) {
       if (ua === 'moxie' || ua === 'chilling-neigh') await this.boost(user, { atk: 1 }, user);
@@ -925,9 +937,9 @@ Object.assign(Battle.prototype, {
     // 對目標的揮發狀態（束縛類）
     if (mv.volatileStatus && target.hp > 0 && !subHit) await this.addVolatile(target, mv.volatileStatus, user, mv);
     // 自身效果
-    if (mv.self && mv.self.boosts && user.hp > 0 && (!mv.self.chance || U.rand() * 100 < mv.self.chance)) await this.boost(user, mv.self.boosts, user);
+    if (mv.self && mv.self.boosts && user.hp > 0 && once('self') && (!mv.self.chance || U.rand() * 100 < mv.self.chance)) await this.boost(user, mv.self.boosts, user);
     if (mv.self && mv.self.volatileStatus === 'roost') vU.roost = true;
-    if (mv.selfBoost && mv.selfBoost.boosts && user.hp > 0) await this.boost(user, mv.selfBoost.boosts, user);
+    if (mv.selfBoost && mv.selfBoost.boosts && user.hp > 0 && once('selfBoost')) await this.boost(user, mv.selfBoost.boosts, user);
     // 解凍
     if (mv.thawsTarget && target.st === 'frz' && target.hp > 0) { target.st = null; this.draw(); await this.msg(`${tname} 的冰凍融化了！`); }
     if (mv.id === 'sparklingaria' && target.st === 'brn') { target.st = null; this.draw(); }
@@ -1155,7 +1167,7 @@ Object.assign(Battle.prototype, {
     if (ta === 'ice-scales' && !phys) fMod *= .5;
     if (ta === 'punk-rock' && mv.flags.sound) fMod *= .5;
     if (ui === 'expert-belt' && eff > 1) fMod *= 1.2;
-    if (ui === 'life-orb') fMod *= 1.3;
+    if (ui === 'life-orb' && !this._futureSrcOut) fMod *= 1.3;
     if (ui === 'metronome') fMod *= 1 + Math.min(1, .2 * (vU.metronomeN || 0));
     base = Math.floor(base * fMod);
     if (vT.minimize && mv.flags.minimize) base *= 2;
@@ -1739,10 +1751,15 @@ Object.assign(Battle.prototype, {
     // 未來攻擊
     for (const fu of this.futures.splice(0)) {
       if (--fu.turns > 0) { this.futures.push(fu); continue; }
-      const target = fu.side === 'me' ? this.me : this.foe;
+      const target = this.futureTarget(fu);
       if (!target || target.hp <= 0) continue;
-      await this.msg(`${this.label(target)} 受到了${fu.mv.n}的攻擊！`);
-      await this.useMoveOn(fu.user, target, fu.mv, { ...fu.act, futureHit: true });
+      const restore = this.focusOn(target);
+      // 施術者不在場時，持有道具（生命寶珠）不影響未來攻擊：不加傷害、也不扣後備的體力
+      this._futureSrcOut = !this.activeMons().includes(fu.user);
+      try {
+        await this.msg(`${this.label(target)} 受到了${fu.mv.n}的攻擊！`);
+        await this.useMoveOn(fu.user, target, fu.mv, { ...fu.act, futureHit: true });
+      } finally { this._futureSrcOut = false; restore(); }
     }
     for (const key of ['me', 'foe']) {
       const s = this.sides[key];

@@ -2481,6 +2481,111 @@ async function run() {
     Game.partyMenu = realPick;
     G.state = keep;
   }
+  // 第四輪審查：全體招式「整個招式一次」的效果、雙打的突襲、未來攻擊的格位、換下的施術者不受生命寶珠影響
+  {
+    const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+    Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+    const slot = sd => ({ id: moveId(sd), pp: 10 });
+    const mkD = (mine, foes) => {
+      G.state = Game.newState('T', 'kanto', 1);
+      G.state.party = mine;
+      const b = new DoubleBattle({ trainer: { title: '雙胞胎', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+      b.setup();
+      for (const m of [...mine, ...foes]) b.volOf(m).lockOn = 5;
+      return b;
+    };
+    // 1. 生命寶珠：地震打到兩隻對手與隊友，只扣一次
+    {
+      const a = Mon.create(76, 50), c = Mon.create(68, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('earthquake')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      a.item = 'life-orb'; a.ability = 'sturdy'; c.ability = 'guts'; f1.ability = f2.ability = 'thick-fat';
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      const h = a.hp, hc = c.hp, h1 = f1.hp, h2 = f2.hp;
+      await b.doubleTurn();
+      const lo = Math.max(1, Math.floor(Mon.maxHp(a) / 10));
+      check('雙打：全體招式打到三個目標，生命寶珠只扣一次體力', h - a.hp === lo && c.hp < hc && f1.hp < h1 && f2.hp < h2, `${h - a.hp} vs ${lo}`);
+    }
+    // 2. 鱗片噪音打到兩隻對手：自己的防禦只降一級
+    {
+      const a = Mon.create(784, 60), c = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('clangingscales')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      f1.ability = f2.ability = 'thick-fat';
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      const h1 = f1.hp, h2 = f2.hp;
+      await b.doubleTurn();
+      check('雙打：鱗片噪音打到兩隻對手，自己的防禦只降一級', b.volOf(a).stg.def === -1 && f1.hp < h1 && f2.hp < h2, `def ${b.volOf(a).stg.def}`);
+    }
+    // 3. 雙打的突襲：目標選了攻擊招式、還沒行動 → 成功；目標選變化招式 → 失敗
+    {
+      const run = async foeMove => {
+        const a = Mon.create(359, 50), c = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+        a.moves = [slot('suckerpunch')]; c.moves = [slot('splash')]; f1.moves = [slot(foeMove)]; f2.moves = [slot('splash')];
+        f1.ability = f2.ability = 'thick-fat';
+        const b = mkD([a, c], [f1, f2]);
+        b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+        b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: c, foe: true });
+        const h1 = f1.hp;
+        await b.doubleTurn();
+        return h1 - f1.hp;
+      };
+      const hit = await run('tackle'), miss = await run('growl');
+      check('雙打：突襲讀得到目標這回合的招式（攻擊招式成功、變化招式失敗）', hit > 0 && miss === 0, `${hit} / ${miss}`);
+    }
+    // 4. 雙打的預知未來：綁定格位；兩隻各對不同格位使用都成功
+    {
+      const a = Mon.create(65, 50), c = Mon.create(65, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('futuresight'), slot('splash')]; c.moves = [slot('splash')];
+      f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      f1.ability = f2.ability = 'thick-fat';
+      const b = mkD([a, c], [f1, f2]);
+      let turn = 0;
+      b.chooseDouble = async m => ({ type: 'move', idx: turn === 0 && m === a ? 0 : m === a ? 1 : 0, user: m, target: f2 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      const h1 = f1.hp, h2 = f2.hp;
+      await b.doubleTurn(); turn++;
+      const one = b.futures.length;
+      await b.doubleTurn(); await b.doubleTurn();
+      check('雙打：預知未來命中施放時選的格位（第二隻），第一隻不受傷', one === 1 && f2.hp < h2 && f1.hp === h1, `${h1 - f1.hp} / ${h2 - f2.hp}`);
+      const x = Mon.create(65, 50), y = Mon.create(65, 50), g1 = Mon.create(143, 50), g2 = Mon.create(143, 50);
+      x.moves = [slot('futuresight')]; y.moves = [slot('futuresight')]; g1.moves = [slot('splash')]; g2.moves = [slot('splash')];
+      const b2 = mkD([x, y], [g1, g2]);
+      b2.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: m === x ? g1 : g2 });
+      b2.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: x, foe: true });
+      await b2.doubleTurn();
+      check('雙打：兩隻對不同格位使用預知未來都會成功', b2.futures.length === 2 && new Set(b2.futures.map(f => f.slot)).size === 2, JSON.stringify(b2.futures.map(f => [f.side, f.slot])));
+    }
+    // 5. 換下的施術者：生命寶珠不扣後備的體力
+    {
+      G.state = Game.newState('T', 'kanto', 1);
+      const ala = Mon.create(65, 50), sq = Mon.create(7, 50);
+      ala.moves = [slot('futuresight')]; sq.moves = [slot('splash')]; ala.item = 'life-orb';
+      G.state.party = [ala, sq];
+      const foe = Mon.create(143, 50); foe.moves = [slot('splash')];
+      const b = new Battle({ trainer: { title: 'T', name: 'T', party: [foe], kind: 'trainer', money: 1 } });
+      b.setup(); b.aiChoose = () => ({ idx: 0 });
+      await b.doTurn({ type: 'move', idx: 0 });
+      await b.doTurn({ type: 'switch', idx: 1 });
+      const h = ala.hp, fh = foe.hp;
+      await b.doTurn({ type: 'move', idx: 0 });
+      check('預知未來：施術者換下後命中，生命寶珠不扣後備的體力', foe.hp < fh && ala.hp === h, `${h} → ${ala.hp}`);
+    }
+    // 6. 單打的突襲：對手選了換人時讀不到招式（換人的編號不是招式編號）
+    {
+      G.state = Game.newState('T', 'kanto', 1);
+      const me = Mon.create(359, 50); me.moves = [slot('suckerpunch')]; G.state.party = [me];
+      const f1 = Mon.create(143, 50), f2 = Mon.create(143, 50); f1.moves = [slot('tackle')]; f2.moves = [slot('tackle')];
+      const b = new Battle({ trainer: { title: 'T', name: 'T', party: [f1, f2], kind: 'trainer', money: 1 } });
+      b.setup();
+      b.queued = { me: { type: 'move', idx: 0 }, foe: { type: 'switch', idx: 0 } };
+      const mine = b.queuedMoveOf ? b.queuedMoveOf(me) : null;
+      check('突襲：對手選了換人時讀不到招式', b.queuedMoveOf && b.queuedMoveOf(f1) === null && mine && mine.id === 'suckerpunch');
+    }
+    [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
+  }
   // 鯉魚王訓練場：每個地區的初始城鎮旁邊都有一塊，不改變地形、只遇到隊伍平均等級的鯉魚王
   {
     const keep = G.state;
