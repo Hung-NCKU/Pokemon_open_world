@@ -25,54 +25,64 @@ const StorageUI = (() => {
     return grid;
   }
 
-  // start：'party' 從隊伍開始（寄放寶可夢），其他從箱子開始
-  function open({ start = 'box' } = {}) {
+  // 寶可夢寄放系統（src/pokemon_storage_system.c）的三種用法：
+  //   withdraw 領取：在箱子選寶可夢 →「領取」→ 加入隊伍
+  //   deposit 寄放：隊伍面板打開 → 選寶可夢 →「寄放」→ 選箱子
+  //   move 移動：抓起來放到別的位置（箱子、隊伍都可以），左上的「PARTY POKéMON」打開隊伍面板
+  // 畫面：左邊資料欄、右邊箱子；上方「PARTY POKéMON」按鈕（打開隊伍面板）與「CLOSE BOX」按鈕
+  // 隊伍面板（party_menu.bin）在 x=80 滑出：左邊第 1 隻，右邊 5 格，最下面 CANCEL；圖示位置 (104,64)、(152,16+24k)
+  const OPTION_ZH = { withdraw: '領取寶可夢', deposit: '寄放寶可夢', move: '移動寶可夢' };
+  function open({ start = 'box', option = null } = {}) {
+    option = option || (start === 'party' ? 'deposit' : 'move');
     return new Promise(res => {
       const s = G.state;
       let grid = layout();
-      let box = 0, cur = 0, mode = start === 'party' ? 'party' : 'box', pslot = 0; // mode: box | title | party
-      let held = null; // { m, from: { kind, b, i } }
+      // mode：box 箱子格子、title 箱子名稱、buttons 上方按鈕、party 隊伍面板
+      let box = 0, cur = 0, mode = option === 'deposit' ? 'party' : 'box', pslot = 0, bsel = 0;
+      let partyOpen = option === 'deposit';
+      let held = null; // { m, from: { kind, b, i } }（只有移動模式會抓起來）
       const root = document.createElement('div');
       root.id = 'storage';
       document.getElementById('game').appendChild(root);
       Sound.sfx('pc');
       const iconHtml = m => monIcon(m.sp, m.shiny, m.form);
       const focused = () => mode === 'party' ? G.party[pslot] : mode === 'box' ? grid[box][cur] : null;
+      // 隊伍面板裡各格的位置（GBA 座標）：0 是左邊的大格，1～5 是右邊，6 是 CANCEL
+      const PSLOT = [[104, 64], [152, 16], [152, 40], [152, 64], [152, 88], [152, 112], [152, 140]];
       const draw = () => {
         const meta = s.boxMeta[box], m = held ? held.m : focused();
-        const cx = mode === 'box' ? (cur % COLS) : 0, cy = mode === 'box' ? Math.floor(cur / COLS) : 0;
+        const cx = cur % COLS, cy = Math.floor(cur / COLS);
         let html = `<div class="st-scroll"></div><div class="st-panel"></div>
           <div class="st-pic">${m ? `<img src="${monSprite(m, false).url}" onerror="this.onerror=null;this.src='${Mon.spriteOf(m, { shiny: m.shiny })}'">` : ''}</div>
           <div class="st-info">${m ? `<b>${U.esc(Mon.name(m))}</b>${m.gender === 'm' ? ' <i class="gm">♂</i>' : m.gender === 'f' ? ' <i class="gf">♀</i>' : ''}<br>Lv${m.lv}　${Mon.types(m).map(typeTag).join('')}<br><small>${m.item ? U.esc(Held.name(m.item)) : ''}${(m.marks || []).length ? '　' + m.marks.join('') : ''}</small>` : ''}</div>
-          <div class="st-btn party${mode === 'party' ? ' on' : ''}">隊伍寶可夢</div><div class="st-btn close">關閉箱子</div>
           <div class="st-wall" style="background-image:url(${Gen3.base}pc_wp_${meta.wp}.png)"></div>
           <div class="st-title${mode === 'title' ? ' on' : ''}"><i class="l"></i><span>${U.esc(meta.n)}</span><i class="r"></i></div>
           <div class="st-grid">${grid[box].map((x, i) => `<div class="st-cell" data-i="${i}">${x && (!held || held.m !== x) ? iconHtml(x) : ''}</div>`).join('')}</div>
-          <div class="st-count">${box + 1}／${grid.length}</div>`;
-        if (mode === 'party') {
-          html += `<div class="st-party">${Array.from({ length: 6 }, (_, k) => { const p = G.party[k]; return `<div class="st-pslot${k === pslot ? ' sel' : ''}" data-k="${k}">${p && (!held || held.m !== p) ? iconHtml(p) : ''}</div>`; }).join('')}<div class="st-pclose">返回</div></div>`;
+          <div class="st-count">${box + 1}／${grid.length}</div>
+          <div class="st-tab${mode === 'buttons' && bsel === 0 ? ' on' : ''}"></div>
+          <div class="st-close${mode === 'buttons' && bsel === 1 ? ' on' : ''}"></div>`;
+        if (partyOpen) {
+          html += `<div class="st-party">${[1, 2, 3, 4, 5].map(k => `<i class="st-pslotbg" style="top:${(8 + 24 * (k - 1)) * 3}px;background-image:url(${Gen3.base}pc_slot_${G.party[k] ? 'filled' : 'empty'}.png)"></i>`).join('')}
+            ${PSLOT.slice(0, 6).map(([x, y], k) => { const p = G.party[k]; return `<div class="st-pslot" data-k="${k}" style="left:${(x - 80 - 16) * 3}px;top:${(y - 16) * 3}px">${p && (!held || held.m !== p) ? iconHtml(p) : ''}</div>`; }).join('')}
+            <div class="st-pcancel" data-k="6"></div></div>`;
         }
-        // 手形游標（抓著寶可夢時顯示圖示）
-        const hx = mode === 'box' ? 264 + cx * 72 + 18 : mode === 'title' ? 456 : 60;
-        const hy = mode === 'box' ? 120 + cy * 72 - 54 : mode === 'title' ? 30 : 96 + pslot * 54 - 30;
+        // 手形游標（抓著寶可夢時是握拳，並顯示抓著的寶可夢）
+        let hx, hy;
+        if (mode === 'box') { hx = 264 + cx * 72 + 18; hy = 120 + cy * 72 - 54; }
+        else if (mode === 'title') { hx = 456; hy = 30; }
+        else if (mode === 'buttons') { hx = bsel === 0 ? 300 : 552; hy = -30; }
+        else { const [x, y] = PSLOT[pslot]; hx = (x - 8) * 3; hy = (y - 24) * 3; }
         html += `<div class="st-hand" style="left:${hx}px;top:${hy}px;background-image:url(${Gen3.base}pc_hand.png);background-position:0 ${held ? -192 : 0}px"></div>`;
         if (held) html += `<div class="st-held" style="left:${hx - 30}px;top:${hy + 36}px">${iconHtml(held.m)}</div>`;
-        html += `<div class="st-hint">方向鍵 移動　Z ${held ? '放下／交換' : '選擇'}　P 隊伍　Q／E 換箱子　F 搜尋　X ${held ? '放回' : '關閉'}</div>`;
         root.innerHTML = html;
         root.querySelectorAll('.st-cell').forEach(el => { el.onclick = () => { mode = 'box'; cur = +el.dataset.i; act(); }; });
-        root.querySelectorAll('.st-pslot').forEach(el => { el.onclick = () => { mode = 'party'; pslot = +el.dataset.k; act(); }; });
-        root.querySelector('.st-btn.party').onclick = () => { mode = mode === 'party' ? 'box' : 'party'; draw(); };
-        root.querySelector('.st-btn.close').onclick = () => tryClose();
+        root.querySelectorAll('.st-pslot, .st-pcancel').forEach(el => { el.onclick = () => { mode = 'party'; pslot = +el.dataset.k; act(); }; });
+        root.querySelector('.st-tab').onclick = () => { mode = 'buttons'; bsel = 0; act(); };
+        root.querySelector('.st-close').onclick = () => { mode = 'buttons'; bsel = 1; act(); };
         root.querySelector('.st-title .l').onclick = () => switchBox(-1);
         root.querySelector('.st-title .r').onclick = () => switchBox(1);
-        const pc = root.querySelector('.st-pclose'); if (pc) pc.onclick = () => { mode = 'box'; draw(); };
       };
       const switchBox = d => { box = (box + d + grid.length) % grid.length; Sound.sfx('select'); draw(); };
-      // 從某個位置拿起／放下
-      const take = where => {
-        if (where.kind === 'party') return G.party[where.k];
-        return grid[where.b][where.i];
-      };
       const put = (where, m) => {
         if (where.kind === 'party') {
           if (m) G.party[where.k] = m; else G.party.splice(where.k, 1);
@@ -84,29 +94,65 @@ const StorageUI = (() => {
       };
       const here = () => mode === 'party' ? { kind: 'party', k: pslot } : { kind: 'box', b: box, i: cur };
       const ableAfter = (removed, added) => G.party.filter(p => p !== removed && p.hp > 0).length + (added && added.hp > 0 ? 1 : 0) > 0;
+      const say = async t => { await UI.say(t); UI.hideDialog(); draw(); };
+      // 領取：箱子 → 隊伍最後
+      async function withdraw(m) {
+        if (G.party.length >= 6) return say('隊伍已經滿了！');
+        grid[m.boxPos.b][m.boxPos.i] = null;
+        const j = s.box.indexOf(m); if (j >= 0) s.box.splice(j, 1);
+        delete m.boxPos;
+        G.party.push(m);
+        Sound.sfx('select');
+        grid = layout();
+        await say(`領取了 ${Mon.name(m)}。`);
+      }
+      // 寄放：選箱子（原作的「要寄放到哪個箱子？」），放進那個箱子的第一個空格
+      async function deposit(m) {
+        if (G.party.length <= 1 || !ableAfter(m, null)) return say('隊伍裡至少要留一隻能戰鬥的寶可夢！');
+        const opts = grid.map((g, b) => `${s.boxMeta[b].n}（${g.filter(Boolean).length}／${PER}）`);
+        const b = await UI.choose(opts.map((o, i) => ({ label: o, disabled: !grid[i].includes(null) })), { prompt: `要把 ${Mon.name(m)} 寄放到哪個箱子？`, start: box });
+        UI.hideDialog();
+        if (b < 0) return draw();
+        const i = grid[b].indexOf(null);
+        Mon.heal(m);
+        put({ kind: 'box', b, i }, m);
+        G.state.party = G.state.party.filter(Boolean);
+        if (pslot >= G.party.length) pslot = Math.max(0, G.party.length - 1);
+        grid = layout();
+        Sound.sfx('select');
+        await say(`把 ${Mon.name(m)} 寄放到了 ${s.boxMeta[b].n}。`);
+      }
       async function act() {
+        if (mode === 'buttons') {
+          if (bsel === 1) return tryClose();
+          if (held && held.from.kind === 'party') return; // 抓著隊伍的寶可夢時不能收起隊伍面板
+          partyOpen = !partyOpen;
+          mode = partyOpen ? 'party' : 'buttons';
+          Sound.sfx('select');
+          return draw();
+        }
         if (mode === 'title') {
           const c = await UI.choose(['換桌布', '改箱子名稱', '取消'], { prompt: `${s.boxMeta[box].n}` });
           if (c === 0) { const i = await UI.list({ title: '桌布', rows: WALLS.map(w => WALL_ZH[w]) }); if (i >= 0) s.boxMeta[box].wp = WALLS[i]; }
           if (c === 1) { const n = await UI.input('箱子的名稱：', s.boxMeta[box].n, { cancel: true }); if (n) s.boxMeta[box].n = n.slice(0, 8); }
           UI.hideDialog(); draw(); return;
         }
+        if (mode === 'party' && pslot === 6) { // CANCEL
+          if (option === 'deposit') return tryClose();
+          partyOpen = false; mode = 'buttons'; bsel = 0; Sound.sfx('select'); return draw();
+        }
         const w = here();
         const target = mode === 'party' ? G.party[pslot] : grid[box][cur];
         if (held) {
-          // 放下或交換
-          if (mode === 'party' && pslot >= G.party.length && !target) { // 隊伍的空位：放在最後
-            if (held.from.kind === 'party') { await say('已經在隊伍裡了。'); return; }
-            if (G.party.length >= 6) { await say('隊伍已經滿了！'); return; }
+          if (mode === 'party' && !target) { // 隊伍的空位：放在最後
+            if (held.from.kind === 'party') { held = null; draw(); return; }
+            if (G.party.length >= 6) return say('隊伍已經滿了！');
             grid[held.from.b][held.from.i] = null;
             const j = s.box.indexOf(held.m); if (j >= 0) s.box.splice(j, 1);
             delete held.m.boxPos; G.party.push(held.m);
           } else {
-            // 從隊伍拿出、放進箱子時，隊伍至少要留一隻能戰鬥的
-            if (held.from.kind === 'party' && w.kind === 'box' && !ableAfter(held.m, target)) { await say('隊伍裡至少要留一隻能戰鬥的寶可夢！'); return; }
-            const a = held.from;
-            const other = target;
-            // 原位置先清空，再放到新位置，其他寶可夢移到原位置
+            if (held.from.kind === 'party' && w.kind === 'box' && !ableAfter(held.m, target)) return say('隊伍裡至少要留一隻能戰鬥的寶可夢！');
+            const a = held.from, other = target;
             if (a.kind === 'party') G.party[a.k] = null; else grid[a.b][a.i] = null;
             put(w, held.m);
             if (other && other !== held.m) put(a, other);
@@ -119,10 +165,14 @@ const StorageUI = (() => {
           return;
         }
         if (!target) return;
-        const c = await UI.choose(['移動', '查看能力', '標記', '取消'], { prompt: `要對 ${Mon.name(target)} 做什麼？` });
+        // 選單：依用法不同（原作：領取時「領取／查看能力／標記／取消」，寄放時「寄放／……」，移動時「移動／……」）
+        const first = option === 'withdraw' && w.kind === 'box' ? '領取' : option === 'deposit' && w.kind === 'party' ? '寄放' : '移動';
+        const c = await UI.choose([first, '查看能力', '標記', '取消'], { prompt: `要對 ${Mon.name(target)} 做什麼？` });
         UI.hideDialog();
         if (c === 0) {
-          if (w.kind === 'party' && G.party.length <= 1) { await say('隊伍裡至少要有一隻寶可夢！'); return; }
+          if (first === '領取') return withdraw(target);
+          if (first === '寄放') return deposit(target);
+          if (w.kind === 'party' && G.party.length <= 1) return say('隊伍裡至少要有一隻寶可夢！');
           held = { m: target, from: w };
           Sound.sfx('select');
         } else if (c === 1) {
@@ -140,32 +190,43 @@ const StorageUI = (() => {
         }
         draw();
       }
-      const say = async t => { await UI.say(t); UI.hideDialog(); draw(); };
       const tryClose = () => {
         if (held) { held = null; draw(); return; }
         clearInterval(scroll);
         pop(); root.remove(); res();
       };
       const onKey = e => {
-        const k = e.key;
+        const k = { w: 'ArrowUp', s: 'ArrowDown', a: 'ArrowLeft', d: 'ArrowRight' }[e.key] || e.key;
         if (e.repeat && !k.startsWith('Arrow')) return;
-        if (k === 'ArrowLeft' || k === 'a') {
+        if (mode === 'party') {
+          if (k === 'ArrowUp') pslot = pslot === 0 ? 0 : pslot === 1 ? 6 : pslot - 1;
+          else if (k === 'ArrowDown') pslot = pslot === 0 ? 0 : pslot === 6 ? 1 : pslot + 1;
+          else if (k === 'ArrowLeft') pslot = 0;
+          else if (k === 'ArrowRight') { if (pslot === 0) pslot = 1; else if (option !== 'deposit') { mode = 'box'; cur = 0; } }
+          else if (UI.isOk(e)) { act(); return; }
+          else if (UI.isNo(e)) { if (held) { held = null; draw(); } else if (option === 'deposit') tryClose(); else { partyOpen = false; mode = 'buttons'; bsel = 0; draw(); } return; }
+          else return;
+          draw(); return;
+        }
+        if (k === 'ArrowLeft') {
           if (mode === 'title') switchBox(-1);
+          else if (mode === 'buttons') bsel = 0;
           else if (mode === 'box') { if (cur % COLS === 0) { switchBox(-1); cur += COLS - 1; } else cur--; }
-        } else if (k === 'ArrowRight' || k === 'd') {
+        } else if (k === 'ArrowRight') {
           if (mode === 'title') switchBox(1);
-          else if (mode === 'party') mode = 'box';
+          else if (mode === 'buttons') bsel = 1;
           else if (cur % COLS === COLS - 1) { switchBox(1); cur -= COLS - 1; } else cur++;
-        } else if (k === 'ArrowUp' || k === 'w') {
+        } else if (k === 'ArrowUp') {
           if (mode === 'box') { if (cur < COLS) mode = 'title'; else cur -= COLS; }
-          else if (mode === 'party') pslot = (pslot + 5) % 6;
-        } else if (k === 'ArrowDown' || k === 's') {
+          else if (mode === 'title') { mode = 'buttons'; bsel = 0; }
+          else if (mode === 'buttons') { mode = 'box'; cur = PER - COLS + (bsel ? COLS - 1 : 0); }
+        } else if (k === 'ArrowDown') {
           if (mode === 'title') { mode = 'box'; cur = cur % COLS; }
-          else if (mode === 'box') { if (cur + COLS < PER) cur += COLS; }
-          else if (mode === 'party') pslot = (pslot + 1) % 6;
+          else if (mode === 'buttons') { mode = 'title'; }
+          else if (mode === 'box') { if (cur + COLS < PER) cur += COLS; else { mode = 'buttons'; bsel = cur % COLS < 3 ? 0 : 1; } }
         } else if (k === 'q' || k === 'Q' || k === 'PageUp') { switchBox(-1); return; }
         else if (k === 'e' || k === 'E' || k === 'PageDown') { switchBox(1); return; }
-        else if (k === 'p' || k === 'P') { mode = mode === 'party' ? 'box' : 'party'; }
+        else if (k === 'p' || k === 'P') { mode = 'buttons'; bsel = 0; act(); return; }
         else if (k === 'f' || k === 'F') {
           if (held) return;
           pop(); root.style.display = 'none';

@@ -9,10 +9,6 @@
 #storage .st-info small { font-size: 17px; }
 #storage .st-info .gm { color: #88c0f8; font-style: normal; }
 #storage .st-info .gf { color: #f8a0a0; font-style: normal; }
-#storage .st-btn { top: 6px; height: 36px; line-height: 36px; padding: 0 12px; font-size: 18px; border-radius: 10px; background: #f8f8f8; border: 3px solid #6878a8; cursor: pointer; }
-#storage .st-btn.party { left: 258px; }
-#storage .st-btn.close { left: 480px; }
-#storage .st-btn.on { background: #f8e070; }
 #storage .st-wall { left: 240px; top: 48px; width: 480px; height: 432px; background-size: 480px 432px; image-rendering: pixelated; }
 #storage .st-title { left: 252px; top: 54px; width: 456px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 24px;
   color: #303030; text-shadow: 2px 2px 0 rgba(255, 255, 255, .6); }
@@ -27,10 +23,15 @@
 #storage .st-count { right: 24px; top: 14px; font-size: 16px; color: #f8f8f8; text-shadow: 2px 2px 0 #404040; }
 #storage .st-hand { width: 96px; height: 96px; background-size: 96px 384px; image-rendering: pixelated; pointer-events: none; z-index: 5; }
 #storage .st-held { width: 72px; height: 72px; pointer-events: none; z-index: 4; }
-#storage .st-party { left: 12px; top: 54px; width: 216px; height: 408px; background: #6878a8; border: 4px solid #f8f8f8; border-radius: 12px; z-index: 3; }
-#storage .st-pslot { position: absolute; left: 60px; width: 96px; height: 54px; cursor: pointer; border-radius: 8px; }
-#storage .st-pslot:nth-child(1) { top: 12px; } #storage .st-pslot:nth-child(2) { top: 66px; } #storage .st-pslot:nth-child(3) { top: 120px; }
-#storage .st-pslot:nth-child(4) { top: 174px; } #storage .st-pslot:nth-child(5) { top: 228px; } #storage .st-pslot:nth-child(6) { top: 282px; }
-#storage .st-pslot.sel { background: rgba(248, 224, 112, .5); }
-#storage .st-pclose { position: absolute; left: 48px; bottom: 12px; width: 120px; height: 42px; line-height: 42px; text-align: center; background: #f8f8f8; border-radius: 10px; cursor: pointer; }
+/* 上方的按鈕：「PARTY POKéMON」（x=80）與「CLOSE BOX」（x=168，選到時換成第二列的樣子） */
+#storage .st-tab { left: 240px; top: 0; width: 288px; height: 48px; background: url("../assets/gen3/pc_party_tab.png") 0 0 / 288px 48px; image-rendering: pixelated; cursor: pointer; z-index: 2; }
+#storage .st-close { left: 504px; top: 0; width: 216px; height: 48px; background: url("../assets/gen3/pc_closebox.png") 0 0 / 216px 96px; image-rendering: pixelated; cursor: pointer; z-index: 2; }
+#storage .st-close.on { background-position: 0 -48px; }
+#storage .st-tab.on { filter: brightness(1.15) drop-shadow(0 0 3px #f8f8a0); }
+/* 隊伍面板（party_menu.bin）：x=80 起、96×160；右邊 5 格依有沒有寶可夢換圖；最下面是 CANCEL */
+#storage .st-party { left: 240px; top: 0; width: 288px; height: 480px; background: url("../assets/gen3/pc_party.png") 0 0 / 288px 480px; image-rendering: pixelated; z-index: 3; }
+#storage .st-pslotbg { position: absolute; left: 168px; width: 96px; height: 72px; background: 0 0 / 96px 72px no-repeat; image-rendering: pixelated; }
+#storage .st-pslot { position: absolute; width: 96px; height: 96px; cursor: pointer; }
+#storage .st-pslot .micon { position: absolute; left: 0; top: 0; }
+#storage .st-pcancel { position: absolute; left: 168px; top: 408px; width: 96px; height: 48px; cursor: pointer; }
 #storage .st-hint { left: 0; right: 0; bottom: -2px; text-align: center; font-size: 13px; color: #f8f8f8; text-shadow: 1px 1px 0 #404040; display: none; }

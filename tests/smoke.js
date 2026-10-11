@@ -119,7 +119,22 @@
         const realChoose = UI.choose; UI.choose = async () => answers.shift();
         await EmeraldUI.pc();
         UI.choose = realChoose; StorageUI.open = realOpen;
-        check('綠寶石電腦：某人的電腦 → 領取寶可夢 → 打開箱子', opened && opened.start === 'box');
+        check('綠寶石電腦：某人的電腦 → 領取寶可夢 → 以領取模式打開箱子', opened && opened.option === 'withdraw');
+        // 箱子：領取（箱子 → 隊伍）與寄放（隊伍 → 選的箱子）
+        const boxed = Mon.create(41, 10);
+        G.state.box = [boxed]; delete boxed.boxPos;
+        const n0 = G.party.length;
+        const realChoose2 = UI.choose; UI.choose = async () => 0;
+        let st = StorageUI.open({ option: 'withdraw' });
+        press('z'); await new Promise(r => setTimeout(r, 50)); press('x'); await st;
+        check('箱子：領取模式選箱子裡的寶可夢 →「領取」→ 加入隊伍', G.party.includes(boxed) && !G.state.box.includes(boxed) && G.party.length === n0 + 1);
+        st = StorageUI.open({ option: 'deposit' });
+        press('ArrowRight'); press('ArrowUp'); press('ArrowUp'); press('ArrowUp'); press('ArrowUp'); press('ArrowUp');  // 右邊最下面的寶可夢（剛領取的）
+        const target = G.party[G.party.length - 1];
+        await new Promise(r => setTimeout(r, 20));
+        press('z'); await new Promise(r => setTimeout(r, 50)); press('x'); await st;
+        UI.choose = realChoose2;
+        check('箱子：寄放模式選隊伍的寶可夢 →「寄放」→ 放進選的箱子', !G.party.includes(target) && G.state.box.includes(target) && target.boxPos && target.boxPos.b === 0, `${G.party.length} ${G.state.box.length}`);
       }
 
       // 8. 畫面提示：野外顯示下一步

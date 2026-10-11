@@ -224,9 +224,26 @@ def build_storage():
         im.save(os.path.join(OUT, f"pc_wp_{name}.png"))
         os.remove(sp)
         names.append(name)
-    os.remove(tmp)
+    # 隊伍面板（party_menu.bin，12×22 格，調色盤 1＝party_menu.pal）：上面 20 列是面板、最下面 2 列是「PARTY POKéMON」按鈕；
+    # 右邊 5 格依有沒有寶可夢換成 party_slot_filled／empty（4×3 格）；右上角的 CLOSE BOX 按鈕（close_box_button.bin，9×4 格，上下兩列是一般與閃爍）
+    def fixbin(src, dst):
+        raw = open(src, "rb").read()
+        v = struct.unpack("<%dH" % (len(raw) // 2), raw)
+        open(dst, "wb").write(b"".join(struct.pack("<H", (e & 0xFC00) | max(0, (e & 0x3FF) - 256)) for e in v))
+    _write_pal(tmp, read_pal(os.path.join(S, "interface.pal"))[:16] + read_pal(os.path.join(S, "party_menu.pal"))[:16])
+    tb = os.path.join(OUT, "_pt.bin")
+    for name, f, w, h in [("pc_party", "party_menu.bin", 12, 22), ("pc_slot_filled", "party_slot_filled.bin", 4, 3), ("pc_slot_empty", "party_slot_empty.bin", 4, 3), ("pc_closebox", "close_box_button.bin", 9, 4)]:
+        fixbin(os.path.join(S, f), tb)
+        im = render_tilemap(os.path.join(S, "menu.png"), tb, tmp, w, h)
+        if name == "pc_party":
+            im.crop((0, 0, 96, 160)).save(os.path.join(OUT, "pc_party.png"))
+            im.crop((0, 160, 96, 176)).save(os.path.join(OUT, "pc_party_tab.png"))
+        else:
+            im.save(os.path.join(OUT, name + ".png"))
+    os.remove(tb)
     png_rgba(os.path.join(S, "hand_cursor.png")).save(os.path.join(OUT, "pc_hand.png"))
     png_rgba(os.path.join(S, "arrow.png")).save(os.path.join(OUT, "pc_arrow.png"))
+    os.remove(tmp)
     return names
 
 

@@ -20,6 +20,7 @@
       mk(334, 36, [225, 337, 19, 97]), mk(25, 30, [85, 98, 86, 104]), mk(306, 37, [231, 157, 89, 442])];
     st.party[3].hp = Math.floor(Mon.maxHp(st.party[3]) * .3); st.party[4].st = 'par'; st.party[5].hp = 0;
     st.money = 123456;
+    st.box = [mk(41, 20), mk(19, 18), mk(263, 15), mk(270, 12), mk(129, 25)];
     Object.assign(st.bag, { 'potion': 12, 'super-potion': 5, 'hyper-potion': 3, 'full-heal': 4, 'revive': 2, 'rare-candy': 7, 'escape-rope': 1,
       'great-ball': 20, 'ultra-ball': 8, 'master-ball': 1, 'repel': 6, 'fire-stone': 1, 'oran-berry': 9, 'sitrus-berry': 3 });
     st.badges.hoenn = [0, 1, 2, 3, 4];
@@ -57,6 +58,10 @@
     settings: async () => { Game.settingsMenu(); },
     shop: async () => { Game.shopMenu(); },
     shop_sell: async () => { Game.shopMenu(); await sleep(400); await keys('ArrowDown', 'z'); },
+    st_withdraw: async () => { StorageUI.open({ option: 'withdraw' }); await sleep(400); await keys('ArrowRight'); },
+    st_withdraw_menu: async () => { StorageUI.open({ option: 'withdraw' }); await sleep(400); await keys('z'); },
+    st_deposit: async () => { StorageUI.open({ option: 'deposit' }); await sleep(400); await keys('ArrowRight', 'ArrowDown'); },
+    st_move_party: async () => { StorageUI.open({ option: 'move' }); await sleep(400); await keys('p'); },
     pc: async () => { Game.pcMenu(); await sleep(300); await keys('z'); },
     pc_storage: async () => { Game.pcMenu(); await sleep(300); await keys('z', 'z', 'z', 'z', 'ArrowDown'); },
     box: async () => { Game.boxMenu(); },

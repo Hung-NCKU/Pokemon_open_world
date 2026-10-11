@@ -6,7 +6,7 @@ const EmeraldUI = (() => {
 
   // ---------- 開始選單（start_menu.c 的 sStartMenuItems：圖鑑、寶可夢、背包、寶可導航、玩家名字、記錄、設定、離開） ----------
   async function startMenu() {
-    const items = [['圖鑑', 'dex'], ['寶可夢', 'party'], ['背包', 'bag'], ['寶可導航', 'nav'], [G.state.name, 'card'], ['記錄', 'save'], ['設定', 'option'], ['離開', 'exit']];
+    const items = [['圖鑑', 'dex'], ['寶可夢', 'party'], ['背包', 'bag'], ['寶可導航', 'nav'], [G.state.name, 'card'], ['記錄', 'save'], ['設定', 'option'], ['回到標題', 'title'], ['離開', 'exit']];
     while (true) {
       const c = await UI.choose(items.map(i => i[0]), { cls: 'start-menu', start: G.startMenuIdx || 0 });
       if (c < 0 || items[c][1] === 'exit') { UI.hideDialog(); return; }
@@ -19,8 +19,19 @@ const EmeraldUI = (() => {
       if (k === 'nav' && (await pokeNav()) === 'close') return;
       if (k === 'save' && (await saveScreen())) return; // 記錄完成後選單關閉（和原作一樣）
       if (k === 'option' && (await optionMenu()) === 'title') return;
+      if (k === 'title' && (await toTitle())) return;
       UI.hideDialog();
     }
+  }
+
+  // 回到標題畫面（原作的開始選單沒有這一項；使用者要求加回來）
+  async function toTitle() {
+    const c = await UI.choose(['記錄後回去', '不記錄直接回去', '取消'], { prompt: '要回到標題畫面嗎？' });
+    UI.hideDialog();
+    if (c !== 0 && c !== 1) return false;
+    if (c === 0) Game.save(true);
+    Game.toTitle();
+    return true;
   }
 
   // 寶可導航：這個遊戲的地圖、任務、野餐放在這裡（原作的寶可導航有地圖、比賽資料、通話……）
@@ -268,7 +279,7 @@ const EmeraldUI = (() => {
             ['把箱子裡的寶可夢\n移到自己的隊伍。', '把隊伍裡的寶可夢\n寄放到箱子裡。', '整理箱子裡和隊伍裡的寶可夢。', '回到上一個選單。']);
           if (k < 0 || k === 3) break;
           UI.hideDialog();
-          await StorageUI.open({ start: k === 1 ? 'party' : 'box' });
+          await StorageUI.open({ option: ['withdraw', 'deposit', 'move'][k] });
         }
       } else if (c === 1) {
         await UI.say(`連接到了 ${name} 的電腦。`);
