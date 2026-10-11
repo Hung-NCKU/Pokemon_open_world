@@ -1,5 +1,9 @@
 // 城都、豐緣、神奧：比照關都標準的招牌隊伍、四天王、冠軍、傳說地標
 // 隊伍參考原作（心金魂銀、綠寶石／歐米加紅寶石阿爾法藍寶石、白金）；名稱依神奇寶貝百科（52poke）
+import { ELITE_FOUR, G, Game, LANDMARKS, LEAGUE_TOWN, SIGNATURE, Story, UI } from './core.js';
+import { ITEMS, REGIONS } from './data.js';
+import { Mon } from './mon.js';
+import { EVENT_LEGENDS } from './story.js';
 Object.assign(SIGNATURE, {
   johto: {
     gyms: [
@@ -140,3 +144,5 @@ Story.landmark = async function (lm) {
     Game.save(true);
   }
 };
+
+export { LegendGate, _storyLegend, _storyLandmarkR };

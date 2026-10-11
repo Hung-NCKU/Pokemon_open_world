@@ -5,7 +5,7 @@
 //   小寫字母：小屋（house_s）的左上角，ev 是屋裡兩個人的事件（js/town_events.js）
 //   數字：告示牌
 // 建築尺寸見 world.js 的 BUILDING_SIZE；每扇門的下一格必須能走，tests/engine_test.html 會檢查所有門都走得到
-const TOWN_DESIGNS = {
+window.TOWN_DESIGNS = {
   真新鎮: {
     rows: [
       '................',

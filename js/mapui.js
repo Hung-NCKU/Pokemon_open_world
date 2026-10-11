@@ -1,5 +1,10 @@
 // 城鎮地圖（綠寶石的飛翔畫面格式）：外框、條紋海面、由海岸向內漸亮的陸地、橘色道路、城鎮膠囊、游標
 // 世界每 3×3 格對應地圖上 1 點（320×200），畫面顯示 224×128 並隨游標捲動，放大 3 倍；素材由 tools/build_ui.py 從 graphics/pokenav/region_map 產生
+import { G, Sound, Story, T, UI } from './core.js';
+import { U } from './util.js';
+import { REGIONS } from './data.js';
+import { Gen3 } from './gen3.js';
+import { WH, WW, World } from './world.js';
 const MapUI = (() => {
   const CELL = 3, MW = WW / CELL, MH = WH / CELL, CW = 224, CH = 128, EDGE = 4;
   // 顏色取自 pokeemerald 的 region_map/map.png
@@ -183,3 +188,5 @@ const MapUI = (() => {
   }
   return { show, base, at, toMap };
 })();
+
+export { MapUI };

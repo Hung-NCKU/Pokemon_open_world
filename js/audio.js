@@ -2,6 +2,8 @@
 // 若 assets/bgm、assets/sfx 內有同名音檔（自備官方素材），會優先播放音檔。
 // 自備音檔要先登記：在 index.html 加上 <script>window.CUSTOM_AUDIO = { bgm: ['title', ...], sfx: ['select', ...] };</script>
 // （沒有登記就不去找，避免每次開啟都對不存在的檔案發出上百個請求，拖慢第一次載入）
+import { G, Sound, define } from './core.js';
+import { Midi } from './gen3.js';
 
 // ---------- 自備素材載入 ----------
 const Assets = {
@@ -67,7 +69,7 @@ const Assets = {
 };
 
 // ---------- 音源 ----------
-const Sound = (() => {
+define(Sound, (() => {
   let ctx = null, master, musicGain, sfxGain, noiseBuf, waves = {};
   let current = null, currentName = null, fileAudio = null;
   const settings = () => G.settings;
@@ -578,4 +580,6 @@ const Sound = (() => {
   // 音樂資料晚一點才載入完成時：用新的資料重新播放目前的曲子（原本可能退回內建的晶片音樂）
   function reload() { const n = currentName; if (n) { stopMusic(); play(n); } }
   return { init, play, reload, stop: stopMusic, sfx, jingle, applyVolume, get current() { return currentName; } };
-})();
+})());
+
+export { Assets };

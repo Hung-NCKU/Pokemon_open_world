@@ -162,3 +162,5 @@ const LEADER_SPRITES = {
 };
 const CHAMP_SPRITES = { kanto: 'blue', johto: 'lance', hoenn: 'wallace', sinnoh: 'cynthia', unova: 'alder', kalos: 'diantha', alola: 'kukui', galar: 'leon', paldea: 'geeta' };
 const TRAINER_SPRITE_URL = n => `https://play.pokemonshowdown.com/sprites/trainers/${n}.png`;
+
+export { TYPES, CHART, typeEff, typeTag, ITEMS, EVO_ITEMS, SHOP_LIST, REGIONS, REGION_POS, REGION_KEYS, REGION_LINKS, CLIMATE, LEADERS, TRAINER_CLASSES, TRAINER_NAMES, TOWN_A, TOWN_B, BIOME_TYPES, BIOME_ZH, TRAINER_BATTLE_SPRITES, LEADER_SPRITES, CHAMP_SPRITES, TRAINER_SPRITE_URL };

@@ -72,68 +72,11 @@
   <div class="mid"><button class="sm" data-key="m">SELECT</button><button class="sm" data-key="x" data-start="1">START</button></div>
   <div class="ab"><button class="fast" data-fast="1">▶▶</button><button class="b" data-b="1">B</button><button class="a" data-key="z">A</button></div>
 </div>
-<script src="../data/pokedex.js"></script>
-<script src="../data/moves.js"></script>
-<script src="../data/showdown.js"></script>
-<script src="../data/items.js"></script>
-<script src="../data/abilities.js"></script>
-<script src="../data/tms.js"></script>
-<script src="../data/forms.js"></script>
-<script src="../data/late.js"></script>
-<script src="../data/zmoves.js"></script>
-<script src="../data/breeding.js"></script>
-<script src="../js/util.js"></script>
-<script src="../js/telemetry.js"></script>
-<script src="../js/data.js"></script>
-<script src="../js/abilities.js"></script>
-<script src="../js/mon.js"></script>
-<script src="../js/forms.js"></script>
-<script src="../js/tm.js"></script>
 <script>window.GEN3_BASE = "../assets/gen3/";</script>
 <script src="../assets/gen3/manifest.js"></script>
-<script src="../js/gen3.js"></script>
-<script src="../js/sprites.js"></script>
-<script src="../js/audio.js"></script>
-<script src="../js/world.js"></script>
-<script src="../js/ecology.js"></script>
-<script src="../js/overworld_mons.js"></script>
-<script src="../js/story.js"></script>
-<script src="../js/events.js"></script>
-<script src="../js/regions.js"></script>
-<script src="../js/regions2.js"></script>
-<script src="../js/battletower.js"></script>
-<script src="../data/towns.js"></script>
-<script src="../js/town_events.js"></script>
-<script src="../js/weather.js"></script>
-<script src="../js/hidden.js"></script>
-<script src="../js/ui.js"></script>
-<script src="../js/search.js"></script>
-<script src="../js/bagui.js"></script>
-<script src="../js/menus.js"></script>
-<script src="../js/emerald_ui.js"></script>
-<script src="../js/mapui.js"></script>
-<script src="../js/summaryui.js"></script>
-<script src="../js/storageui.js"></script>
-<script src="../js/shopui.js"></script>
-<script src="../js/battle.js"></script>
-<script src="../js/engine.js"></script>
-<script src="../js/battle_view.js"></script>
-<script src="../js/move_anims.js"></script>
-<script src="../js/mega.js"></script>
-<script src="../js/zmove.js"></script>
-<script src="../js/picnic.js"></script>
-<script src="../js/doubles.js"></script>
-<script src="../js/late.js"></script>
-<script src="../js/ai.js"></script>
 <script src="../assets/gen3/interiors.js"></script>
-<script src="../js/fieldmove.js"></script>
-<script src="../js/interior.js"></script>
-<script src="../js/cloud_config.js"></script>
-<script src="../js/cloud.js"></script>
-<script src="../js/gist_cloud.js"></script>
-<script src="../js/account.js"></script>
-<script src="../js/game.js"></script>
-<script src="../js/hud.js"></script>
+<!-- 遊戲程式：ES module（js/main.js 依序載入資料與各個模組；開發時用 npm run dev，發布時由 Vite 打包） -->
+<script type="module" src="../js/main.js"></script>
 <script>
 // 音樂與音效的資料（約 400 KB）不影響開始畫面，等頁面載入完成後才下載；瀏覽器本來也要等玩家第一次點擊才能播放聲音
 window.addEventListener('load', () => {
@@ -144,6 +87,6 @@ window.addEventListener('load', () => {
   if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
 });
 </script>
-<script src="natural.js"></script>
+<script type="module" src="natural.js"></script>
 </body>
 </html>

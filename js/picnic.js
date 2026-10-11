@@ -6,12 +6,18 @@
 // 繁殖規則（第九世代）：蛋是非百變怪那方（或母方）的最初形態、地區形態會遺傳；
 //   個體值從雙親遺傳 3 項（紅線 5 項）；攜帶不變之石的一方遺傳性格；隱藏特性 60% 遺傳；孵化時 Lv.1
 // 蛋放在「蛋籃」（最多 6 顆），走路就會孵化（孵化週期 × 128 步，隊伍有火焰之軀時減半）
+import { Forms, G, Game, Picnic, Sound, T, UI, define } from './core.js';
+import { U } from './util.js';
+import { ITEMS, SHOP_LIST, TYPES, typeTag } from './data.js';
+import { Mon } from './mon.js';
+import { World } from './world.js';
+import { monIcon } from './menus.js';
 ITEMS['destiny-knot'] = ITEMS['destiny-knot'] || { n: '紅線', price: 0, kind: 'held', d: '讓寶可夢攜帶後，生蛋時會從雙親遺傳 5 項個體值。' };
 ITEMS['destiny-knot'].kind = ITEMS['destiny-knot'].kind || 'held';
 ITEMS.everstone = ITEMS.everstone || { n: '不變之石', price: 0, kind: 'held', d: '攜帶後不會進化。生蛋時會遺傳攜帶者的性格。' };
 if (typeof SHOP_LIST !== 'undefined' && !SHOP_LIST.includes('destiny-knot')) { ITEMS['destiny-knot'].price = 10000; SHOP_LIST.push('destiny-knot'); }
 
-const Picnic = {
+define(Picnic, {
   MEAL_MS: 30 * 60 * 1000,
   EGG_MS: 60 * 1000,
   groups(sp) { return (window.BREEDING && BREEDING[sp] ? BREEDING[sp][0] : []); },
@@ -144,7 +150,7 @@ const Picnic = {
   },
   // 遭遇力：遭遇表中這個屬性的權重 ×4
   mealType() { const m = G.state && G.state.meal; return m && m.until > G.state.playMs ? m.type : null; },
-};
+});
 
 // 遭遇力：重新抽一次，偏向三明治的屬性
 const _rollWildMeal = World.rollWild;
@@ -160,3 +166,5 @@ World.rollWild = function (x, y, biome) {
 // 經驗力：1.5 倍
 const _expGain = Mon.expGain;
 Mon.expGain = function (...a) { const e = _expGain.apply(this, a); return Picnic.mealType() ? Math.floor(e * 1.5) : e; };
+
+export { _rollWildMeal, _expGain };

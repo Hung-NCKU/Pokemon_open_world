@@ -2,6 +2,9 @@
 // - 招式學習器是消耗品；使用後寶可夢學會招式（相容名單：data/tms.js）
 // - 打倒野生寶可夢會掉落「素材」（依進化鏈最初形態，例如「小火龍的素材」）
 // - 寶可夢中心的招式機器：消耗與招式同屬性的寶可夢素材＋金錢製作；配方在第一次取得該招式學習器時解鎖
+import { G, Game, Sound, UI } from './core.js';
+import { U } from './util.js';
+import { ITEMS, TYPES, typeTag } from './data.js';
 const TM = (() => {
   const LIST = (window.TM_DATA || []).filter(t => MOVES[t.mv]);
   const BY_MOVE = {}, COMPAT = {};
@@ -115,3 +118,5 @@ const TM = (() => {
   }
   return { LIST, BY_MOVE, compatible, recipe, drop, give, forType, craft, machine, materials, use, base, matName, haveOfType };
 })();
+
+export { TM };

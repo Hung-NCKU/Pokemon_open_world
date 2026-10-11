@@ -1,6 +1,11 @@
 // 隱藏道具：散落在野外（每個地區 16 個，依世界種子決定位置），面向那一格按確認就能撿到
 // 走近 3 格以內時，地面偶爾會閃一下光；道具依地區的等級帶決定（越後面越好）
-const Hidden = (() => {
+import { G, Game, Hidden, Sound, T, UI, define } from './core.js';
+import { mulberry32 } from './util.js';
+import { Telemetry } from './telemetry.js';
+import { ITEMS, REGION_KEYS, REGION_POS } from './data.js';
+import { TILE, World } from './world.js';
+define(Hidden, (() => {
   const PER_REGION = 16;
   const POOL = [
     [0, ['potion', 'super-potion', 'poke-ball', 'great-ball', 'repel', 'full-heal', 'ether']],
@@ -65,4 +70,4 @@ const Hidden = (() => {
   const gen = World.generate;
   World.generate = function (...a) { const r = gen.apply(this, a); place(); return r; };
   return { at, pickUp, draw, count, place };
-})();
+})());

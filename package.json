@@ -5,7 +5,9 @@
   "description": "綠寶石畫面、朱／紫機制的寶可夢開放世界網頁遊戲（個人非營利）",
   "type": "module",
   "scripts": {
-    "serve": "node tools/serve.mjs 8080",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 8080",
     "test": "playwright test --project=unit",
     "test:engine": "playwright test tests/e2e/engine.spec.js",
     "test:smoke": "playwright test tests/e2e/smoke.spec.js",
@@ -13,6 +15,10 @@
     "test:install": "playwright install --with-deps chromium"
   },
   "devDependencies": {
-    "@playwright/test": "1.55.1"
+    "@playwright/test": "1.55.1",
+    "vite": "6.4.4"
+  },
+  "dependencies": {
+    "preact": "10.24.3"
   }
 }

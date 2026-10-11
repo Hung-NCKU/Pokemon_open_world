@@ -3,6 +3,12 @@
 // 2. 寶可夢塔（金黃市附近）：有檢視鏡才看得清幽靈 → 安撫嘎啦嘎啦的靈魂 → 富士老人送寶可夢之笛
 // 3. 卡比獸（兩隻，睡在道路上）：用寶可夢之笛叫醒後戰鬥（只放在有其他路可以繞過的地方）
 // 4. 古代石板（五片，散落在關都各地，靠近時會閃光）：集齊後解讀出夢幻的所在
+import { G, Game, LANDMARKS, Sound, Story, T, UI } from './core.js';
+import { mulberry32 } from './util.js';
+import { ITEMS, REGION_POS } from './data.js';
+import { Mon } from './mon.js';
+import { BLOCKED, WH, WW, World } from './world.js';
+import { LANDMARK_ECO } from './ecology.js';
 ITEMS['silph-scope'] = { n: '西爾佛檢視鏡', price: 0, kind: 'key', d: '能看穿幽靈真面目的檢視鏡。' };
 ITEMS['poke-flute'] = { n: '寶可夢之笛', price: 0, kind: 'key', d: '能叫醒睡著的寶可夢的笛子。' };
 ITEMS['ancient-tablet'] = { n: '古代石板', price: 0, kind: 'key', d: '刻著古代文字的石板碎片。集齊五片就能解讀。' };
@@ -273,3 +279,5 @@ Story.eventEntity = async function (e) {
   Sound.sfx('encounter');
   await Game.battle({ wild, biome: 'water' });
 };
+
+export { TABLETS, _evGenerate, _storyLandmark, _questSummary, _evGenerateK, _eventAtK, _eventEntityK };

@@ -1,5 +1,11 @@
 // 戰鬥流程：開場、選擇行動、倒下處理、經驗值、捕捉、結束
 // 回合處理與招式效果在 engine.js（參考 Pokémon Showdown），畫面在 battle_view.js。
+import { Dmax, G, Game, Mega, Sound, UI, ZMove } from './core.js';
+import { U } from './util.js';
+import { ITEMS, TYPES } from './data.js';
+import { Mon } from './mon.js';
+import { TM } from './tm.js';
+import { md, newVol } from './movedata.js';
 
 class Battle {
   constructor(opts) {
@@ -407,3 +413,5 @@ class Battle {
     return result;
   }
 }
+
+export { Battle };

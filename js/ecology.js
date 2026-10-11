@@ -2,6 +2,11 @@
 //   代表物種 4 種（合計約 60%）、少見 2 種（約 25%）、稀有 1 種（約 4%）、白天限定與夜晚限定各 1 種
 // 關都的地標周圍使用原作的代表物種（月見山的皮皮、無人發電廠的霹靂電球……）
 // 遭遇時依等級換成適合的進化階段；圖鑑的「分布」用同一份資料顯示棲息地
+import { Forms, G, T, Weather } from './core.js';
+import { U, mulberry32 } from './util.js';
+import { BIOME_TYPES, REGIONS } from './data.js';
+import { Mon } from './mon.js';
+import { WH, WW, World } from './world.js';
 const ZONE = 24;
 const ECO_SLOTS = [
   ['common', 22], ['common', 16], ['common', 12], ['common', 10],
@@ -141,3 +146,5 @@ Object.assign(World, {
     return false;
   },
 });
+
+export { ZONE, ECO_SLOTS, ECO_ZH, LANDMARK_ECO, HOME_ECO, _worldGenerate };

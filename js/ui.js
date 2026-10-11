@@ -1,5 +1,9 @@
 // 介面：對話框、選單、清單視窗
-const UI = (() => {
+import { EmeraldUI, G, Sound, UI, define } from './core.js';
+import { U } from './util.js';
+import { STATUS_C, STATUS_ZH } from './mon.js';
+import { Gen3 } from './gen3.js';
+define(UI, (() => {
   const $ = id => document.getElementById(id);
   const stack = [];
   const isOk = e => ['z', 'Z', 'Enter'].includes(e.key); // Space 是二倍速鍵
@@ -266,4 +270,4 @@ const UI = (() => {
   }
 
   return { say, choose, list, panel, input, banner, waitKey, handleKey, active, hideDialog, showText, hpBar, hpColor, statusTag, isOk, isNo, pushKey };
-})();
+})());

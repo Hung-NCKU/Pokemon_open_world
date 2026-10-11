@@ -2,6 +2,8 @@
 // - 帳號名稱對應成內部用的電子郵件（名稱@pokemon-openworld.app），玩家只需要記帳號名稱與密碼
 // - 登入後的 token 記在 localStorage（各網址各自記住登入狀態；存檔本身在雲端，所以兩邊看到同一份）
 // - 存檔：存檔時同時上傳（合併 2 秒內的多次存檔）；開啟標題畫面時下載雲端的存檔，比本機新就用雲端的
+import { UI } from './core.js';
+import { Telemetry } from './telemetry.js';
 const Cloud = (() => {
   const cfg = () => window.CLOUD_CONFIG || {};
   const enabled = () => !!(cfg().url && cfg().anonKey);
@@ -107,3 +109,5 @@ const Cloud = (() => {
   const identity = () => (session ? gen + ':' + session.user_id : null);
   return { enabled, register, login, logout, upload, flush, download, identity, get status() { return status; }, get name() { return session && session.name; }, get session() { return session; } };
 })();
+
+export { Cloud };

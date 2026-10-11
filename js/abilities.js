@@ -1,4 +1,6 @@
 // 特性與持有道具（名稱、說明取自 PokéAPI：data/abilities.js；效果參考 Pokémon Showdown 的 data/abilities.ts、data/items.ts）
+import { U } from './util.js';
+import { ITEMS, SHOP_LIST } from './data.js';
 
 // 已實作效果的特性
 const AB_IMPL = new Set([
@@ -146,3 +148,5 @@ if (window.HELDITEMS) {
   }
   SHOP_LIST.push(...Object.keys(HELDITEMS).filter(id => !SHOP_LIST.includes(id) && ITEMS[id].kind === 'held'));
 }
+
+export { AB_IMPL, IT_IMPL, TYPE_ITEM, PINCH_HEAL, PINCH_STAT, STATUS_BERRY, CONSUMABLE, HELD_PRICE, Abil, Held, NATURE_INDEX, VITAMIN, EXP_CANDY, TRAIN_PRICE };

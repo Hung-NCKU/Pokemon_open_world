@@ -8,7 +8,15 @@
 
 **線上遊玩：https://hung-ncku.github.io/Pokemon_open_world/** （電腦、手機都可以；手機建議加到主畫面全螢幕遊玩）。線上版是測試、教學用途，從 `gh-pages` 分支提供，含本機建置的綠寶石素材（`tools/deploy_pages.sh`）；`main` 分支不含原版素材，直接從 `main` 執行時使用內建的原創像素圖與晶片音樂。
 
-用瀏覽器（Chrome / Edge）直接開啟 `index.html`。寶可夢圖像從 PokéAPI 的公開圖庫線上載入，需要網路連線。
+程式是 ES module，由 [Vite](https://vitejs.dev/) 打包，不能再直接用瀏覽器開啟 `index.html`（瀏覽器不從 `file://` 載入模組）。需要 Node.js 18 以上：
+
+```
+npm install
+npm run dev        # 開發伺服器 http://localhost:5173/（修改後自動重新載入）
+npm run build      # 打包到 dist/（npm run preview 在 http://localhost:8080/ 預覽打包結果）
+```
+
+寶可夢圖像從 PokéAPI 的公開圖庫線上載入，需要網路連線。
 
 | 按鍵 | 功能 |
 |---|---|
@@ -63,18 +71,18 @@ python tools/build_assets.py
 
 | 指令 | 內容 |
 |---|---|
-| `npm run serve` | 本機伺服器 http://localhost:8080/（`tools/serve.mjs`，沒有相依套件） |
-| `npm test` | 引擎＋冒煙測試（Playwright 打開下面的測試頁，等結果，列出失敗的項目；約 1 分鐘） |
+| `npm run dev`／`build`／`preview` | Vite 開發伺服器、打包到 `dist/`、預覽打包結果 |
+| `npm test` | 引擎＋冒煙測試（Playwright 透過 Vite 開發伺服器打開下面的測試頁，等結果，列出失敗的項目；約 1 分鐘） |
 | `npm run test:engine`／`test:smoke` | 只跑其中一個 |
 | `npm run test:natural` | 實際遊玩測試（真實時間，約 10～30 分鐘；`SCENARIO=1` 或 `2` 只跑一段） |
-| `docker compose up web` | 用 nginx 提供遊戲 http://localhost:8080/ |
+| `docker compose up web` | 在 Docker 裡打包（Vite），由 nginx 提供 http://localhost:8080/ |
 | `docker compose run --rm test` | 在 Playwright 的 Docker 映像檔裡跑 `npm test`（本機不用裝 Node 與瀏覽器） |
 
 GitHub Actions（`.github/workflows/test.yml`）在每次 push 與 PR 自動執行 `npm test`。CI 沒有 pokeemerald 的素材（`assets/gen3` 不在版本庫裡），需要素材的少數測試會標成「略過」；本機有素材時全部都會跑。
 
-- `tests/engine_test.html`：引擎與系統的回歸測試（對戰機制、存檔、世界生成、城鎮、室內、洞窟解謎、AI、遊玩節奏……）。用瀏覽器開啟即可。
+- `tests/engine_test.html`：引擎與系統的回歸測試（對戰機制、存檔、世界生成、城鎮、室內、洞窟解謎、AI、遊玩節奏……）。`npm run dev` 後開啟 http://localhost:5173/tests/engine_test.html 也可以。
 - `tests/smoke.html`：冒煙測試，幾秒內用遊戲本身的流程走過新遊戲、進出室內、單打、雙打、存檔與讀檔、雲端同步失敗（模擬）、綠寶石的取名字／設定／商店賣出／電腦，每次修改後都可以跑（會備份並還原本機存檔）。
-- `tests/natural.html`（`bash tools/natural.sh`）：實際遊玩測試，不替換任何介面，只用按鍵操作：從標題畫面開新遊戲、走進研究所、草叢戰鬥（捕捉、用傷藥、升級視窗、忘記招式）、商店購買、寶可夢中心、記錄存檔；另一段用 Lv.70 的隊伍走進豐緣聯盟，房間之間用背包補血、打到冠軍。用真實時間執行（約 10～30 分鐘）。
+- `tests/natural.html`（`npm run test:natural` 或 `bash tools/natural.sh`）：實際遊玩測試，不替換任何介面，只用按鍵操作：從標題畫面開新遊戲、走進研究所、草叢戰鬥（捕捉、用傷藥、升級視窗、忘記招式）、商店購買、寶可夢中心、記錄存檔；另一段用 Lv.70 的隊伍走進豐緣聯盟，房間之間用背包補血、打到冠軍。用真實時間執行（約 10～30 分鐘）。
 - [docs/UNSUPPORTED.md](docs/UNSUPPORTED.md)（`bash tools/unsupported.sh` 產生）：已知還沒完成的招式與特性清單（戰鬥引擎自己判定），和錯誤回報分開。
 - `tools/ui_shots.sh`：介面巡覽截圖。產生 `tests/ui_tour.html`，用無頭 Chrome 把每個畫面（標題、主選單、開始選單、記錄、設定、地名看板、對話框、隊伍、能力、背包、圖鑑、商店、電腦、取名字、進化、升級、戰鬥的各個選單、雙打……）截成圖片，方便逐一和原作比對。
 - `tests/playthrough.html`：自動遊玩機器人從新遊戲打到關都冠軍，記錄每段的練等場數與失敗次數；`?seed=數字` 可以固定世界重現。
@@ -91,7 +99,11 @@ GitHub Actions（`.github/workflows/test.yml`）在每次 push 與 PR 自動執�
 ## 檔案結構
 
 ```
-index.html            入口
+index.html            入口（載入 js/main.js）
+js/main.js            模組的進入點：依序載入資料與各個模組（也把 export 放到 window，方便測試與除錯）
+js/core.js            最早載入的模組：比較早的模組會用到、比較晚才定義的單例物件（G、Game、UI……）先宣告在這裡
+js/movedata.js        招式描述與支援狀態（md、classify）
+js/ui/                Preact 介面元件（JSX）：option_menu.jsx（設定畫面）
 css/                  介面樣式（style、menus、summary、storage）
 data/                 自動產生的資料（寶可夢、招式、道具、形態、招式學習器、Z 招式……）與 towns.js（關都城鎮配置）
 js/util.js            亂數、雜訊        js/telemetry.js  遊玩紀錄
@@ -114,7 +126,7 @@ js/cloud.js、cloud_config.js   雲端帳號與存檔（Supabase）
 js/game.js            主程式、選單、存檔
 tools/                資料下載與素材建置
 tests/                回歸測試與自動遊玩（tests/e2e：Playwright 執行測試頁）
-package.json、playwright.config.js   npm 指令與測試設定
+package.json、vite.config.js、playwright.config.js   npm 指令、Vite 打包、測試設定
 Dockerfile、docker-compose.yml、docker/   Docker（nginx 提供遊戲、Playwright 跑測試）
 .github/workflows/    CI：每次 push 自動測試
 ```

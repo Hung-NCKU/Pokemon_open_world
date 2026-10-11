@@ -1,7 +1,16 @@
 // 綠寶石版寶可夢寄放系統（graphics/pokemon_storage）：一個一個箱子（6×5），方向鍵二維移動，抓起放下交換
 // 資料：G.state.box 仍是一個陣列（其他功能沿用），每隻寶可夢以 m.boxPos = { b, i } 記錄所在的箱子與格子
 //       G.state.boxMeta = [{ n: 箱子名稱, wp: 桌布 }]
-const StorageUI = (() => {
+import { G, Game, Sound, StorageUI, UI, define } from './core.js';
+import { U } from './util.js';
+import { typeTag } from './data.js';
+import { Held } from './abilities.js';
+import { Mon } from './mon.js';
+import { Gen3 } from './gen3.js';
+import { monSprite } from './sprites.js';
+import { MARKS } from './search.js';
+import { monIcon } from './menus.js';
+define(StorageUI, (() => {
   const COLS = 6, ROWS = 5, PER = COLS * ROWS;
   const WALLS = ['forest', 'city', 'desert', 'savanna', 'crag', 'volcano', 'snow', 'cave', 'beach', 'seafloor', 'river', 'sky', 'polkadot', 'pokecenter', 'machine', 'plain'];
   const WALL_ZH = { forest: '森林', city: '城市', desert: '沙漠', savanna: '草原', crag: '岩山', volcano: '火山', snow: '雪原', cave: '洞窟', beach: '海灘', seafloor: '海底', river: '河川', sky: '天空', polkadot: '圓點', pokecenter: '寶可夢中心', machine: '機械', plain: '素色' };
@@ -273,4 +282,4 @@ const StorageUI = (() => {
     });
   }
   return { open, layout, PER };
-})();
+})());

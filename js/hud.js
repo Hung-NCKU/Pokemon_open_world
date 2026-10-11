@@ -1,6 +1,8 @@
 // 畫面提示
 // - 野外左下角顯示「下一步」（任務線目前的目標），第一次玩的人也知道接下來要做什麼
 // - 手機直向：遊戲畫面和按鍵之間的空白放大字的提示——平常是下一步與操作說明，戰鬥選招式時是招式說明
+import { G, Story } from './core.js';
+import { U } from './util.js';
 const Hud = (() => {
   const $ = id => document.getElementById(id);
   let goalEl = null, sideEl = null, lastSide = '';
@@ -58,3 +60,5 @@ const Hud = (() => {
   window.addEventListener('load', init);
   return { update, goalText };
 })();
+
+export { Hud };

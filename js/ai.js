@@ -3,7 +3,14 @@
 //   第 2 層 道館館主、勁敵最終戰：＋被剋制時換人、異常狀態的時機與免疫、配合天氣與場地、回復道具
 //   第 3 層 四天王、冠軍：＋預測玩家最強的招式（換成抵抗的寶可夢）、安全時強化、太晶化的時機
 // 野生寶可夢維持隨機選招式。傷害估算不擲骰、不動到對戰狀態（和 calcDamage 分開）
-const AI = {
+import { AI, G, define } from './core.js';
+import { U } from './util.js';
+import { CHART } from './data.js';
+import { Mon } from './mon.js';
+import { boostMul, md } from './movedata.js';
+import { Battle } from './battle.js';
+import { DoubleBattle } from './doubles.js';
+define(AI, {
   tier(b) {
     if (b.wildMon || !b.trainer) return 0;
     const t = b.trainer;
@@ -62,7 +69,7 @@ const AI = {
     if (b.sides && b.sides.me && b.sides.me.safeguard) return false;
     return true;
   },
-};
+});
 
 Battle.prototype.aiChoose = function () {
   const tier = AI.tier(this);
@@ -171,3 +178,5 @@ Battle.prototype.aiTera = function () {
   const after = AI.est(this, this.me, this.foe, threat.mv, { vU: this.vMe, vT: this.vFoe, typesT: [tt] });
   return ace || (after < now * .6 && now > this.foe.hp * .5);
 };
+
+export { _aiTera };

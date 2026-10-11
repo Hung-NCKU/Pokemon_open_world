@@ -1,8 +1,31 @@
 // 主程式：標題、移動、建築物、選單、存檔
-const SAVE_KEY = 'pkmn_openworld_save_v1';
+// SAVE_KEY 搬到 js/core.js
+import { Account, ELITE_FOUR, EmeraldUI, Forms, G, Game, Hidden, Interior, Mega, Picnic, SAVE_KEY, ShopUI, Sound, Story, T, UI, Weather, define } from './core.js';
+import { U } from './util.js';
+import { Telemetry } from './telemetry.js';
+import { CHAMP_SPRITES, ITEMS, LEADERS, LEADER_SPRITES, REGIONS, REGION_KEYS, REGION_POS, SHOP_LIST, TRAINER_BATTLE_SPRITES, TRAINER_CLASSES, TYPES, typeTag } from './data.js';
+import { Abil, EXP_CANDY, Held, IT_IMPL, NATURE_INDEX, VITAMIN } from './abilities.js';
+import { Mon, NATURES, NAT_STAT, STATUS_ZH, STAT_ZH } from './mon.js';
+import { TM } from './tm.js';
+import { SUPPORT_ZH, md } from './movedata.js';
+import { Gen3 } from './gen3.js';
+import { Spr } from './sprites.js';
+import { Assets } from './audio.js';
+import { BLOCKED, SAVE_VER, TILE, TOWN_H, TOWN_W, WH, WORLD_VER, WW, World } from './world.js';
+import { OverworldMons } from './overworld_mons.js';
+import { TownEvents } from './town_events.js';
+import { MARKS, Search } from './search.js';
+import { BagUI } from './bagui.js';
+import { CardUI, DexUI, PartyUI } from './menus.js';
+import { MapUI } from './mapui.js';
+import { SummaryUI } from './summaryui.js';
+import { Battle } from './battle.js';
+import { DoubleBattle } from './doubles.js';
+import { FUSION, Fusion, drawRaidCrystal } from './late.js';
+import { FieldMove } from './fieldmove.js';
 const VW = 15, VH = 10;
 
-const G = {
+define(G, {
   mode: 'title',
   fast: false, // 按住 Space 時為二倍速
   state: null,
@@ -14,9 +37,9 @@ const G = {
   frame: 0,
   settings: { textSpeed: 22, battleAuto: 900 },
   lastTown: null,
-};
+});
 
-const Game = {
+define(Game, {
   // ---------- 存檔 ----------
   newState(name, region, starter) {
     const seed = Math.floor(Math.random() * 1e9);
@@ -1716,7 +1739,7 @@ const Game = {
     if (typeof EmeraldUI !== 'undefined') EmeraldUI.mapPopup(EmeraldUI.placeName(), EmeraldUI.themeFor(G.lastTown));
     else UI.banner(`${REGIONS[World.regionAt(state.x, state.y)].n}地區・${G.lastTown ? G.lastTown.name : '野外'}`);
   },
-};
+});
 
 // ---------- 啟動 ----------
 // 觸控裝置：直向時遊戲畫面在上、按鍵區在下；橫向時畫面填滿、按鍵疊在兩側
@@ -1846,3 +1869,5 @@ window.addEventListener('load', () => {
   // 每 2 分鐘自動存檔
   setInterval(() => { if (G.mode === 'world' && !G.busy) Game.save(true); }, 120000);
 });
+
+export { VW, VH, isTouch, fit };

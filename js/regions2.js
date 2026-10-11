@@ -5,6 +5,13 @@
 //   伽勒爾：冠軍盃（瑪俐 → 赫普 → 露璃娜 → 奇巴納）之後才是冠軍丹帝
 //   帕底亞：三條主線——冠軍之路（道館）、傳說之路（5 隻寶主寶可夢）、星塵大道（5 個天星隊據點）
 // 名稱依神奇寶貝百科（52poke）；隊伍參考原作。新的地標只在世界配置第 5 版以後出現（ver: 5），舊存檔的世界不變。
+import { ELITE_FOUR, G, GYM_TOWNS, Game, LANDMARKS, LEAGUE_TOWN, SIGNATURE, Story, UI } from './core.js';
+import { U } from './util.js';
+import { ITEMS, LEADERS, REGIONS } from './data.js';
+import { Mon } from './mon.js';
+import { World } from './world.js';
+import { EVENT_LEGENDS } from './story.js';
+import { LegendGate } from './regions.js';
 Object.assign(GYM_TOWNS, {
   unova: ['三曜市', '七寶市', '飛雲市', '雷文市', '帆巴市', '吹寄市', '雪花市', '雙龍市'],
   kalos: ['白檀市', '遙香市', '娑羅市', '比翼市', '密阿雷市', '香薰市', '百刻市', '映雪市'],
@@ -269,3 +276,5 @@ World.gymParty = function (town) {
   const totem = Mon.create(TOTEMS[type], Math.min(100, L + 1), { shiny: false, perfect: 31, item: 'sitrus-berry' });
   return [totem, ...party.slice(0, Math.max(1, party.length - 1)).filter(m => m.sp !== totem.sp)];
 };
+
+export { TOTEMS, _gateOk, _gateText, Regions2, _storyLandmark2, _questSummary2, _gymParty2 };

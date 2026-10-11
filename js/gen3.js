@@ -244,3 +244,5 @@ const Midi = (() => {
   }
   return { get, inst };
 })();
+
+export { Gen3, Midi };

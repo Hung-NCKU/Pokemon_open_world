@@ -2,6 +2,10 @@
 // - 從隊伍選 3 隻；對戰時使用 Lv.50 的複本（不改動原本的寶可夢、不拿經驗值、不存檔）
 // - 連續挑戰 7 位訓練家（第 3 層 AI，完全進化、個體值滿、攜帶道具），每場之間全部回復
 // - 每贏一場得到對戰點數（BP），7 連勝另有獎勵；記錄最高連勝；BP 可以兌換道具
+import { G, Game, LANDMARKS, Sound, Story, UI } from './core.js';
+import { mulberry32 } from './util.js';
+import { ITEMS, REGION_KEYS } from './data.js';
+import { Mon } from './mon.js';
 const BattleTower = (() => {
   const LV = 50, ROUND = 7;
   const NAMES = ['精英訓練家 ' + '雅各', '精英訓練家 艾琳', '紳士 羅伯', '大小姐 夏洛特', '龍使者 凱', '超能力者 米雅', '空手道王 大地', '靈媒師 夜子', '老練的訓練家 宗一', '老練的訓練家 千惠'];
@@ -134,3 +138,5 @@ Story.landmark = async function (lm) {
   if (lm.event === 'battletower') { G.state.flags['seen_' + lm.id] = 1; return BattleTower.visit(lm); }
   return _storyLandmarkT.call(this, lm);
 };
+
+export { BattleTower, _storyLandmarkT };

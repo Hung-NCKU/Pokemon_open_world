@@ -1,6 +1,16 @@
 // 綠寶石的野外介面：開始選單、記錄（存檔）畫面、設定（OPTION）畫面、地名看板
 // 位置與內容依 pokeemerald 的 src/start_menu.c、src/option_menu.c、src/map_name_popup.c（GBA 240×160，畫面放大 3 倍）
-const EmeraldUI = (() => {
+import { Account, EmeraldUI, G, Game, Picnic, SAVE_KEY, ShopUI, Sound, StorageUI, Story, UI, define } from './core.js';
+import { U } from './util.js';
+import { Telemetry } from './telemetry.js';
+import { ITEMS, REGIONS } from './data.js';
+import { STAT_ZH } from './mon.js';
+import { Gen3 } from './gen3.js';
+import { World } from './world.js';
+import { BagUI } from './bagui.js';
+import { monIcon } from './menus.js';
+import { openOptionMenu } from './ui/option_menu.jsx';
+define(EmeraldUI, (() => {
   const $ = id => document.getElementById(id);
   const on = () => typeof Gen3 !== 'undefined' && Gen3.on;
 
@@ -84,75 +94,8 @@ const EmeraldUI = (() => {
     } finally { box.remove(); }
   }
 
-  // ---------- 設定（option_menu.c）：淡紫色背景、上面的標題視窗、下面 7 列的設定視窗；←→ 改值，選到的值是紅字 ----------
-  async function optionMenu() {
-    const st = G.settings;
-    if (st.musicVol === undefined) st.musicVol = st.music === false ? 0 : 7;
-    if (st.sfxVol === undefined) st.sfxVol = st.sfx === false ? 0 : 7;
-    const SPEEDS = [[40, '慢'], [22, '普通'], [0, '快']];
-    const rows = [
-      { label: '文字速度', vals: () => SPEEDS.map(x => x[1]), cur: () => Math.max(0, SPEEDS.findIndex(x => x[0] === (st.textSpeed ?? 22))), set: i => { st.textSpeed = SPEEDS[i][0]; } },
-      { label: '戰鬥訊息', vals: () => ['手動', '自動'], cur: () => (st.battleAuto ? 1 : 0), set: i => { st.battleAuto = i ? 900 : 0; } },
-      { label: '音樂', num: () => st.musicVol, add: d => { st.musicVol = U.clamp(st.musicVol + d, 0, 10); Sound.applyVolume(); } },
-      { label: '音效', num: () => st.sfxVol, add: d => { st.sfxVol = U.clamp(st.sfxVol + d, 0, 10); Sound.applyVolume(); Sound.sfx('select'); } },
-      { label: '遊玩紀錄', act: 'log', text: `錯誤 ${Telemetry.errors.length} 筆` },
-      { label: '回到標題畫面', act: 'title', text: '' },
-      { label: '完成', act: 'done', text: '' },
-    ];
-    const root = document.createElement('div');
-    root.id = 'option';
-    $('game').appendChild(root);
-    let sel = 0;
-    const draw = () => {
-      root.innerHTML = `<div class="op-head">設定</div><div class="op-win">${rows.map((r, i) => {
-        let right = '';
-        if (r.vals) { const c = r.cur(); right = r.vals().map((v, k) => `<span class="${k === c ? 'on' : ''}">${v}</span>`).join(''); }
-        else if (r.num) right = `<span class="on">◀ ${r.num()} ▶</span>`;
-        else right = `<span>${U.esc(r.text)}</span>`;
-        return `<div class="op-row${i === sel ? ' sel' : ''}" data-i="${i}"><b>${U.esc(r.label)}</b><i>${right}</i></div>`;
-      }).join('')}</div>`;
-      root.querySelectorAll('.op-row').forEach(el => { el.onclick = () => { const i = +el.dataset.i; if (i === sel) activate(); else { sel = i; draw(); } }; });
-    };
-    return new Promise(res => {
-      const close = v => { pop(); root.remove(); try { localStorage.setItem(SAVE_KEY + '_settings', JSON.stringify(st)); } catch { } res(v); };
-      const change = d => {
-        const r = rows[sel];
-        if (r.vals) { const n = r.vals().length; r.set((r.cur() + d + n) % n); Sound.sfx('select'); }
-        else if (r.add) r.add(d);
-        draw();
-      };
-      let busy = false;
-      const activate = async () => {
-        const r = rows[sel];
-        if (!r.act) return change(1);
-        Sound.sfx('select');
-        if (r.act === 'done') return close(null);
-        if (busy) return;
-        busy = true; root.classList.add('hidden');
-        try {
-          if (r.act === 'log') await Game.logMenu();
-          if (r.act === 'title') {
-            const c = await UI.choose(['記錄後回去', '不記錄直接回去', '取消'], { prompt: '要回到標題畫面嗎？' });
-            UI.hideDialog();
-            if (c === 0 || c === 1) { if (c === 0) Game.save(true); close('title'); Game.toTitle(); return; }
-          }
-        } finally { busy = false; root.classList.remove('hidden'); UI.hideDialog(); }
-        draw();
-      };
-      const onKey = e => {
-        if (busy) return;
-        const k = e.key;
-        if (k === 'ArrowUp' || k === 'w') { sel = (sel + rows.length - 1) % rows.length; draw(); }
-        else if (k === 'ArrowDown' || k === 's') { sel = (sel + 1) % rows.length; draw(); }
-        else if (k === 'ArrowLeft' || k === 'a') change(-1);
-        else if (k === 'ArrowRight' || k === 'd') change(1);
-        else if (UI.isOk(e)) { if (!e.repeat) activate(); }
-        else if (UI.isNo(e)) { if (!e.repeat) { Sound.sfx('select'); close(null); } }
-      };
-      const pop = UI.pushKey(onKey);
-      draw();
-    });
-  }
+  // ---------- 設定（option_menu.c）：Preact 元件，在 js/ui/option_menu.jsx ----------
+  const optionMenu = () => openOptionMenu();
 
   // ---------- 地名看板（map_name_popup.c）：左上角從上方滑下來，停一下再收回去 ----------
   // 看板樣式：城鎮是木頭、有道館的城市是大理石或磚頭（輪流）、聯盟是磚頭、野外是木頭、洞窟是石頭
@@ -395,4 +338,4 @@ const EmeraldUI = (() => {
     box.remove();
   }
   return { startMenu, pokeNav, saveScreen, optionMenu, mapPopup, themeFor, placeName, pressStart, mainMenu, shop, sell, pc, naming, levelUp };
-})();
+})());

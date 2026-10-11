@@ -2,7 +2,11 @@
 // - 畫面：雨絲、雪花、強烈日照、霧、沙暴
 // - 遭遇：天氣中有 35% 的遭遇換成天氣喜歡的屬性（雨：水／電，雪：冰，晴：火／草，霧：幽靈／超能力／妖精，沙暴：地面／岩石／鋼）
 // - 對戰：雨、晴、雪、沙暴會帶進對戰（整場持續）；霧只影響遭遇
-const Weather = (() => {
+import { G, T, UI, Weather, define } from './core.js';
+import { U, mulberry32 } from './util.js';
+import { CLIMATE, REGIONS, REGION_KEYS } from './data.js';
+import { World } from './world.js';
+define(Weather, (() => {
   const PERIOD = 20 * 60 * 1000;
   const KINDS = {
     clear: { n: '晴朗' },
@@ -98,4 +102,4 @@ const Weather = (() => {
     }
   }
   return { KINDS, PERIOD, forRegion, at, here, adjustWild, draw, force: w => { forced = w; } };
-})();
+})());

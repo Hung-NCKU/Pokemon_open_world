@@ -6,8 +6,25 @@
 
 ## 2026-10-11
 
+### 使用者要求：`vite-esm` 分支取代 main，線上版改用這個版本
+- `vite-esm` 合併進 main（沒有改寫歷史）；原本傳統腳本版本的 main 保留在 `classic` 分支（要退回時：`git checkout classic`，或把 main 重設到 `classic`）。
+- 線上版（gh-pages）改用 Vite 打包的版本發布（`tools/deploy_pages.sh`）。
+
 ### 開發工具的安全性更新（npm audit）
-- Playwright 下載瀏覽器時沒有驗證 SSL 憑證（高，開發工具，不會進到遊戲）：升級 1.48.2 → 1.55.1（Docker 的 Playwright 映像檔一起換），`npm audit` 0 個漏洞；引擎 543/543、冒煙 17/17。`vite-esm` 分支另外把 Vite 升到 6.4.4（esbuild 開發伺服器的漏洞）。
+- `npm install` 回報 4 個漏洞，都在開發工具，不會進到遊戲：Playwright 下載瀏覽器時沒有驗證 SSL 憑證（高）、Vite 內建的 esbuild 開發伺服器可以被其他網站讀取（中）。升級 Playwright 1.48.2 → 1.55.1（Docker 的 Playwright 映像檔最新到這版）、Vite 5.4.10 → 6.4.4，`npm audit` 0 個漏洞；打包、引擎 543/543、冒煙 17/17 正常。
+
+### `vite-esm` 分支：ES module、Vite 打包、Preact（使用者要求另開分支，避免改壞 main）
+- **ES module**：48 個傳統腳本改成 `import`／`export`（`tools/esm_convert.cjs` 用 espree＋eslint-scope 自動分析與改寫）。
+  - 傳統腳本「比較早的檔案在執行期呼叫比較晚的檔案」很常見（`G` 被 35 個檔案往後參照），直接改成 import 會形成循環，模擬的執行順序整個亂掉（late.js 會在 engine.js 之前執行）。做法：26 個往後參照的單例物件先在 `js/core.js` 宣告成空物件、原本的檔案用 `define()` 填入；往後參照的函式搬到比較早的檔案（`md`、`newVol` 等 → 新的 `js/movedata.js`；`monSprite`、`playCry` → `sprites.js`）。工具模擬模組的執行順序，確認和原本的載入順序完全相同才改寫。
+  - `js/main.js` 依原本順序載入資料與模組，並把 export 放到 window（測試頁、開發者工具照舊使用 `Game`、`Battle`、`G`）。
+  - 改寫後抓到的差異：`data/towns.js` 的 `const TOWN_DESIGNS` 在模組裡變私有（改成 `window.TOWN_DESIGNS`）；改寫 HTML 時誤刪了三個測試頁的 `GEN3_BASE`（素材路徑），補回。
+- **Vite**：`npm run dev`（開發伺服器）、`npm run build`（打包到 `dist/`，JS 1.37 MB／gzip 425 KB，原本合併後 1.9 MB）、`npm run preview`。圖鑑說明拆檔改成 Vite 外掛（取代 `tools/build_web.py`）；素材、字型、Service Worker 原樣複製。`tools/deploy_pages.sh` 改用 Vite 打包；Dockerfile 改成兩階段（node 打包 → nginx）。
+- **不能再用 file:// 開啟**（瀏覽器不從 file:// 載入模組）：Playwright、`tools/unsupported.sh`、`tools/ui_shots.sh`、`tools/natural.sh` 都改用 Vite 開發伺服器；`tools/serve.mjs` 移除。
+- **Preact**：第一個元件是綠寶石的設定畫面（`js/ui/option_menu.jsx`），DOM 與 class 和原本相同；截圖和 main 的版本完全一致。Preact 的 `useEffect` 要等到下一次繪製，冒煙測試打開畫面後馬上按的鍵收不到而卡住，改用 `useLayoutEffect`。
+- 用固定的世界種子比較 main 與這個分支：野生寶可夢的等級、種類、經驗值計算完全相同。
+- 文件：README（開發與打包的指令、檔案結構）、`docs/DEVELOPMENT.md` 第 12 章（模組化的過程）。
+- 測試：引擎 543/543、冒煙 17/17（Vite 開發伺服器）；打包後的 `dist/` 在 Docker（nginx）裡載入無錯誤、圖鑑說明延後載入正常。
+- 實際遊玩測試（情境一）：main 與這個分支輪流跑，main 11/11（9 場後 Lv.11）、分支 11/11（9 場後 Lv.12）。另外兩次分支的執行比較慢甚至卡住（63 場才 Lv.11、錢花光後在商店卡住），但 main 的第二次執行也一樣卡住（18 場後 Lv.7、首發倒下後換人選單卡住）：是測試機器人在某些隨機世界裡打不過的問題，不是改寫造成的。用固定亂數比較兩個版本的對戰過程、捕捉、經驗值、野生寶可夢等級，結果完全相同。機器人在全隊倒下、錢不夠時的處理留待改進。
 
 ### 使用者要求：npm、測試框架（Playwright）、CI、Docker
 - `package.json`：`npm run serve`（`tools/serve.mjs`，沒有相依套件的靜態伺服器）、`npm test`（引擎＋冒煙）、`test:engine`、`test:smoke`、`test:natural`（實際遊玩，真實時間）、`test:install`（下載 Chromium）。
