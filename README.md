@@ -61,6 +61,8 @@ python tools/build_assets.py
 
 - `tests/engine_test.html`：引擎與系統的回歸測試（對戰機制、存檔、世界生成、城鎮、室內、洞窟解謎、AI、遊玩節奏……）。用瀏覽器開啟即可。
 - `tests/smoke.html`：冒煙測試，幾秒內用遊戲本身的流程走過新遊戲、進出室內、單打、雙打、存檔與讀檔、雲端同步失敗（模擬）、綠寶石的取名字／設定／商店賣出／電腦，每次修改後都可以跑（會備份並還原本機存檔）。
+- `tests/natural.html`（`bash tools/natural.sh`）：實際遊玩測試，不替換任何介面，只用按鍵操作：從標題畫面開新遊戲、走進研究所、草叢戰鬥（捕捉、用傷藥、升級視窗、忘記招式）、商店購買、寶可夢中心、記錄存檔；另一段用 Lv.70 的隊伍走進豐緣聯盟，房間之間用背包補血、打到冠軍。用真實時間執行（約 10～30 分鐘）。
+- [docs/UNSUPPORTED.md](docs/UNSUPPORTED.md)（`bash tools/unsupported.sh` 產生）：已知還沒完成的招式與特性清單（戰鬥引擎自己判定），和錯誤回報分開。
 - `tools/ui_shots.sh`：介面巡覽截圖。產生 `tests/ui_tour.html`，用無頭 Chrome 把每個畫面（標題、主選單、開始選單、記錄、設定、地名看板、對話框、隊伍、能力、背包、圖鑑、商店、電腦、取名字、進化、升級、戰鬥的各個選單、雙打……）截成圖片，方便逐一和原作比對。
 - `tests/playthrough.html`：自動遊玩機器人從新遊戲打到關都冠軍，記錄每段的練等場數與失敗次數；`?seed=數字` 可以固定世界重現。
 - `tools/subset_font.py`：改了遊戲文字之後重新產生字型子集（`fonts/Cubic_11_game.woff2`）。

@@ -1199,7 +1199,9 @@ const Game = {
     const who = opts.trainer ? opts.trainer.name : opts.wild ? POKEDEX[opts.wild.sp].n + opts.wild.lv : '';
     Telemetry.event('戰鬥開始', { kind, who, dbl });
     const t0 = performance.now();
-    const r = await b.run();
+    G.battle = b; // 目前的戰鬥（測試與除錯用）
+    let r;
+    try { r = await b.run(); } finally { G.battle = null; }
     Telemetry.time(kind === 'wild' ? '野生戰鬥' : '訓練家戰鬥', performance.now() - t0);
     // 對戰統計：我方最高等級 − 對手最高等級
     const myTop = Math.max(...G.party.map(m => m.lv)), foeTop = Math.max(...(opts.trainer ? opts.trainer.party : [opts.wild]).filter(Boolean).map(m => m.lv));
