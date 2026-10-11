@@ -2744,6 +2744,88 @@ async function run() {
     window.INTERIORS_FORCE = keepForce;
     G.state = keep;
   }
+  // 第六輪審查：雙打的破格每個目標都生效、睡著不能用支援招式、取消取名保留暱稱
+  {
+    const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+    Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+    const slot = sd => ({ id: moveId(sd), pp: 20 });
+    const mkD = (mine, foes) => {
+      G.state = Game.newState('T', 'kanto', 1);
+      G.state.party = mine;
+      const b = new DoubleBattle({ trainer: { title: '雙胞胎', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+      b.setup();
+      for (const m of [...mine, ...foes]) b.volOf(m).lockOn = 5;
+      return b;
+    };
+    // 1. 破格的地震打兩隻飄浮的雙彈瓦斯：兩隻都受傷
+    for (const ab of ['mold-breaker', 'teravolt', 'turboblaze']) {
+      const a = Mon.create(530, 50), c = Mon.create(18, 50), f1 = Mon.create(110, 50), f2 = Mon.create(110, 50);
+      a.moves = [slot('earthquake')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      a.ability = ab; f1.ability = f2.ability = 'levitate';
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: c, foe: true });
+      const h1 = f1.hp, h2 = f2.hp;
+      await b.doubleTurn();
+      check(`雙打：${ab} 的地震對兩隻飄浮的對手都有效`, f1.hp < h1 && f2.hp < h2, `${h1 - f1.hp} / ${h2 - f2.hp}`);
+    }
+    // 2. 睡著的皮皮用幫助：失敗、睡眠回合減少、PP 不扣；麻痺／冰凍同樣經過行動前判定
+    {
+      const a = Mon.create(35, 50), c = Mon.create(68, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      a.moves = [slot('helpinghand')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      a.st = 'slp'; a.slpT = 3;
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: m === a ? c : f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: a, foe: true });
+      let helped = false;
+      const real = b.useMoveOn.bind(b);
+      b.useMoveOn = async (u, t, mv, act) => { const r = await real(u, t, mv, act); if (mv.id === 'helpinghand' && b.volOf(c).helping) helped = true; return r; };
+      await b.doubleTurn();
+      check('雙打：睡著不能用幫助，睡眠回合照常減少、PP 不扣', !helped && a.slpT === 2 && a.moves[0].pp === 20, `helped=${helped} slpT=${a.slpT} pp=${a.moves[0].pp}`);
+      const x = Mon.create(35, 50), y = Mon.create(68, 50), g1 = Mon.create(143, 50), g2 = Mon.create(143, 50);
+      x.moves = [slot('followme')]; y.moves = [slot('splash')]; g1.moves = [slot('splash')]; g2.moves = [slot('splash')];
+      x.st = 'frz';
+      const b2 = mkD([x, y], [g1, g2]);
+      b2.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: g1 });
+      b2.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: x, foe: true });
+      const keepRand = U.rand; U.rand = () => .99; // 不會自然解凍
+      await b2.doubleTurn();
+      U.rand = keepRand;
+      check('雙打：冰凍時不能用看我嘛', !b2.volOf(x).followMe || x.st !== 'frz');
+      // 清醒時正常生效
+      const p = Mon.create(35, 50), q = Mon.create(68, 50), h1 = Mon.create(143, 50), h2 = Mon.create(143, 50);
+      p.moves = [slot('helpinghand')]; q.moves = [slot('splash')]; h1.moves = [slot('splash')]; h2.moves = [slot('splash')];
+      const b3 = mkD([p, q], [h1, h2]);
+      b3.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: m === p ? q : h1 });
+      b3.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: p, foe: true });
+      let ok3 = false;
+      const real3 = b3.useMoveOn.bind(b3);
+      b3.useMoveOn = async (u, t, mv, act) => { const r = await real3(u, t, mv, act); if (mv.id === 'helpinghand') ok3 = b3.volOf(q).helping; return r; };
+      await b3.doubleTurn();
+      check('雙打：清醒時幫助正常生效並扣 PP', ok3 && p.moves[0].pp === 19);
+    }
+    // 4. 取名時取消：保留原本的暱稱
+    {
+      const keep = G.state;
+      G.state = Game.newState('T', 'kanto', 1);
+      const m = Mon.create(4, 10); m.nick = '小火';
+      G.state.party = [m];
+      const real = { input: UI.input, choose: UI.choose, list: UI.list, say: UI.say, pick: typeof PartyUI !== 'undefined' ? PartyUI.pick : null };
+      const answers = [4, 5];
+      UI.input = async () => null;
+      UI.choose = async () => answers.shift() ?? -1;
+      let listed = 0;
+      UI.list = async () => (listed++ ? -1 : 0);
+      if (real.pick) PartyUI.pick = async () => (listed++ ? -1 : 0);
+      UI.say = async () => { };
+      await Game.partyMenu();
+      Object.assign(UI, { input: real.input, choose: real.choose, list: real.list, say: real.say });
+      if (real.pick) PartyUI.pick = real.pick;
+      check('取名：取消時保留原本的暱稱', m.nick === '小火', String(m.nick));
+      G.state = keep;
+    }
+    [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

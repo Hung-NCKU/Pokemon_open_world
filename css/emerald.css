@@ -112,7 +112,7 @@ body.gen3 .quest-panel .err { color: #c03030; }
 #naming .ns-btn.sel { filter: brightness(1.25) drop-shadow(0 0 4px #f8f800); }
 
 /* 雙打的體力框（graphics/battle_interface/healthbox_doubles_*.png）：只有名字、等級、HP 條，沒有 HP 數字與經驗值條 */
-#battle.gen3 .hbox.dbl { width: 384px; height: 96px; }
+#battle.gen3 .hbox.dbl { width: 300px; height: 96px; overflow: hidden; }
 #battle.gen3 .hbox.me.dbl { background: url("../assets/gen3/ui_healthbox_doubles_player.png") 0 0 / 384px 96px no-repeat; }
 #battle.gen3 .hbox.foe.dbl { background: url("../assets/gen3/ui_healthbox_doubles_opponent.png") 0 0 / 384px 96px no-repeat; }
 #battle .hbox.dbl .hnum, #battle .hbox.dbl .xpb { display: none; }

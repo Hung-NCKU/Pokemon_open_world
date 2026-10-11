@@ -224,7 +224,7 @@ const Game = {
     while (true) {
       const c = await UI.choose(['查看能力', '取名', '繼續'], { prompt: `捕捉到了 ${Mon.name(m)}！要做什麼？`, cancel: false });
       if (c === 0) await Game.summary(m);
-      else if (c === 1) { const n = await UI.input(`要幫 ${POKEDEX[m.sp].n} 取什麼名字？`, '', { cancel: true, icon: m.sp }); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
+      else if (c === 1) { const n = await UI.input(`要幫 ${POKEDEX[m.sp].n} 取什麼名字？`, '', { cancel: true, icon: m.sp }); if (n !== null) m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
       else break;
     }
     m.happy = Math.max(m.happy, 70);
@@ -474,7 +474,7 @@ const Game = {
       else if (c === 1) await Game.heldMenu(m);
       else if (c === 2) await Game.moveReminder(m);
       else if (c === 3 && i > 0) { G.party.splice(i, 1); G.party.unshift(m); start = 0; }
-      else if (c === 4) { const n = await UI.input('要幫牠取什麼名字？', '', { cancel: true, icon: m.sp }); m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
+      else if (c === 4) { const n = await UI.input('要幫牠取什麼名字？', '', { cancel: true, icon: m.sp }); if (n !== null) m.nick = n && n !== POKEDEX[m.sp].n ? n : undefined; }
       UI.hideDialog();
     }
   },

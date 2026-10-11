@@ -32,6 +32,25 @@ class DoubleBattle extends Battle {
   // 守住類：佇列裡沒有其他還能行動的寶可夢時，就是最後行動
   isLastMover() { return !this._pending || !this._pending.some(a => a.user && a.user.hp > 0); }
   activeMons() { return [...this.actives('me'), ...this.actives('foe')]; }
+  // 雙打專屬的支援招式（幫助、看我嘛、憤怒粉）：和一般招式一樣先經過 runMove 的行動前判定（睡眠、冰凍、畏縮、麻痺、挑釁……），
+  // 這裡只結算效果
+  async useMoveOn(user, target, mv, act) {
+    if (mv.id === 'helpinghand') {
+      this._moveUsed = true;
+      const ally = this.allyOf(user);
+      if (!ally) { await this.msg('但是失敗了！'); return false; }
+      this.volOf(ally).helping = true;
+      await this.msg(`${this.label(user)} 準備幫助 ${this.label(ally)}！`);
+      return true;
+    }
+    if (mv.id === 'followme' || mv.id === 'ragepowder') {
+      this._moveUsed = true;
+      this.volOf(user).followMe = true;
+      await this.msg(`${this.label(user)} 成為了注目的焦點！`);
+      return true;
+    }
+    return super.useMoveOn(user, target, mv, act);
+  }
   get activePerHalf() { return 2; } // 每邊兩隻（牆壁的減傷是 2732/4096）
   // 四隻寶可夢各自的行動（突襲、迅雷查的是目標那一隻，不是「那一邊」）
   queuedMoveOf(m) { const a = this.queuedBy && this.queuedBy.get(m); return a && a.type === 'move' && a.mv ? a.mv : null; }
@@ -83,8 +102,9 @@ class DoubleBattle extends Battle {
     // 複製出第二格（位置用 inline style，兩格都保留 .me／.foe 的樣式）
     const pos = {
       bmon: { foe: [{ left: '360px', top: '-6px' }, { left: '516px', top: '6px' }], me: [{ left: '30px', top: '96px' }, { left: '210px', top: '102px' }] },
-      // 體力框：src/battle_interface.c 的 InitBattlerHealthboxCoords（雙打：我方左 (159,76)、右 (171,101)，對手左 (44,19)、右 (32,44)），雙打專用的框
-      hbox: { foe: [{ left: '24px', top: '15px' }, { left: '-12px', top: '90px' }], me: [{ left: '381px', top: '186px' }, { left: '417px', top: '261px' }] },
+      // 體力框：src/battle_interface.c 的 InitBattlerHealthboxCoords（雙打：我方左 (159,76)、右 (171,101)，對手左 (44,19)、右 (32,44)）
+      // 錨點是精靈的中心，框圖的左上角＝錨點 −(32,16)；框圖寬 100 像素（300px），四個框都在 720px 的畫面內
+      hbox: { foe: [{ left: '36px', top: '9px' }, { left: '0px', top: '84px' }], me: [{ left: '381px', top: '180px' }, { left: '417px', top: '255px' }] },
     };
     this.slotEls = { me: { bmon: [], hbox: [] }, foe: { bmon: [], hbox: [] } };
     this.curSlot = { me: 0, foe: 0 };
@@ -275,22 +295,6 @@ class DoubleBattle extends Battle {
       if (lure && !toAlly && ['normal', 'any', 'adjacentFoe'].includes(a.mv.target)) target = lure;
       if (toAlly) { if (this.sideKey(user) === 'me') this.ctx(ally, opps[0]); else this.ctx(opps[0], ally); }
       else this.pair(user, target);
-      // 隊友招式
-      if (a.mv.id === 'helpinghand') {
-        const ally = this.allyOf(user);
-        if (a.slot) a.slot.pp = Math.max(0, a.slot.pp - 1);
-        await this.msg(`${this.label(user)} 使出了 ${a.mv.n}！`);
-        if (ally) { this.volOf(ally).helping = true; await this.msg(`${this.label(user)} 準備幫助 ${this.label(ally)}！`); }
-        else await this.msg('但是失敗了！');
-        continue;
-      }
-      if (a.mv.id === 'followme' || a.mv.id === 'ragepowder') {
-        if (a.slot) a.slot.pp = Math.max(0, a.slot.pp - 1);
-        await this.msg(`${this.label(user)} 使出了 ${a.mv.n}！`);
-        this.volOf(user).followMe = true;
-        await this.msg(`${this.label(user)} 成為了注目的焦點！`);
-        continue;
-      }
       // 全體招式：第一個目標走完整流程，其他目標（另一隻對手、allAdjacent 的隊友）只計算命中與傷害
       const hitsAlly = a.mv.target === 'allAdjacent' && ally && ally.hp > 0;
       const others = ['allAdjacentFoes', 'allAdjacent'].includes(a.mv.target) ? [...opps.filter(o => o !== target), ...(hitsAlly ? [ally] : [])] : [];
@@ -310,7 +314,9 @@ class DoubleBattle extends Battle {
             const oppo = this.actives(this.sideKey(user) === 'me' ? 'foe' : 'me')[0] || null;
             if (this.sideKey(user) === 'me') this.ctx(o, oppo); else this.ctx(oppo, o);
           } else this.pair(user, o);
-          await this.useMoveOn(user, o, a.mv, a);
+          // 破格、渦輪火焰、兆級電壓：每個目標都無視特性（runMove 只替第一個目標設定）
+          this.moldTarget = ['mold-breaker', 'teravolt', 'turboblaze'].includes(this.ab(user)) ? o : null;
+          try { await this.useMoveOn(user, o, a.mv, a); } finally { this.moldTarget = null; }
         }
       }
       if (others.length) {
