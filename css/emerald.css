@@ -130,3 +130,6 @@ body.gen3:not(.in-battle) #dialog.dense { font-size: 20px; line-height: 33px; pa
   border-image: url("../assets/gen3/ui_window_1.png") 8 fill / 24px stretch; image-rendering: pixelated; font-size: 22px; color: #505058; text-shadow: 2px 2px 0 #d0d0c8; }
 #levelup-win div { display: flex; justify-content: space-between; height: 42px; line-height: 42px; padding: 0 6px; }
 #levelup-win b { font-weight: normal; }
+
+/* 觸控橫向：按鍵疊在畫面下方，「下一步」提示改到左上角避免被方向鍵蓋住 */
+body.touch.landscape #goal { top: 8px; bottom: auto; }

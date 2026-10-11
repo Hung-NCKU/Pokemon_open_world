@@ -328,3 +328,15 @@ body.touch #title .keys { display: none; }
 #side-hud .hd-move .mv-why { color: #f8b048; font-size: inherit; }
 /* 提示區有空間時，招式說明改放在提示區（字比較大），不在遊戲畫面上方重複 */
 body.side-on #choice-info .mv-desc { display: none; }
+
+/* 觸控按鍵（手機、平板）：半透明、放在畫面最下方（橫向時疊在遊戲畫面上，直向時在畫面下面的區域底部） */
+body.touch #touch { align-items: flex-end; padding: 0 14px max(14px, env(safe-area-inset-bottom)); box-sizing: border-box; pointer-events: none; }
+body.touch.portrait #touch { background: none; border-top: none; }
+body.touch #touch .pad button, body.touch #touch .sm, body.touch #touch .fast { background: rgba(58, 68, 98, .45); color: rgba(255, 255, 255, .85); }
+body.touch #touch .a { background: rgba(192, 48, 64, .5); } body.touch #touch .b { background: rgba(138, 42, 64, .5); }
+body.touch #touch .mid { bottom: max(10px, env(safe-area-inset-bottom)); }
+/* 二倍速開著時，▶▶ 按鈕維持亮起 */
+body.touch #touch .fast.toggled { background: rgba(240, 200, 64, .75); color: #302010; }
+/* A、B 斜著排：改成 A 往上（原本 B 往下會超出畫面底部） */
+body.touch #touch .ab .b { transform: none; }
+body.touch #touch .ab .a { transform: translateY(-18px); }

@@ -1382,6 +1382,7 @@ const Game = {
     if (G.fast === on) return;
     G.fast = on;
     document.body.classList.toggle('fast', on);
+    document.querySelectorAll('#touch [data-fast]').forEach(b => b.classList.toggle('toggled', on)); // 觸控的開關按鈕跟著亮
     if (on) Game.speedAnims();
     else for (const a of document.getAnimations()) if (a._fast) { a.playbackRate = 1; a._fast = false; }
   },
@@ -1768,10 +1769,12 @@ window.addEventListener('load', () => {
   window.addEventListener('pointerdown', () => Sound.init(), true);
   window.addEventListener('keyup', e => { if (e.key === ' ') Game.setFast(false); G.keys.delete(e.key); G.keys.delete(e.key.toLowerCase()); G.keys.delete(e.key.toUpperCase()); });
   window.addEventListener('blur', () => { G.keys.clear(); Game.setFast(false); });
-  // 觸控：按住 ▶▶ 按鈕二倍速
+  // 觸控：▶▶ 按鈕是開關（按一下開二倍速、再按一下關掉；電腦仍是按住 Space）
   document.querySelectorAll('#touch [data-fast]').forEach(b => {
-    b.addEventListener('pointerdown', e => { e.preventDefault(); Game.setFast(true); });
-    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => Game.setFast(false));
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      Game.setFast(!G.fast);
+    });
   });
 
   // 觸控方向鍵：在野外走路（按住）；在選單、戰鬥中送出方向鍵（按住自動連按）
