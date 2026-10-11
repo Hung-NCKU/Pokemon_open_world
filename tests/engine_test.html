@@ -1364,7 +1364,7 @@ async function run() {
       if (kinds.has(key)) continue;
       kinds.add(key);
       G.state.x = b.door.x; G.state.y = b.door.y + 1;
-      Interior.enter(b);
+      await Interior.enter(b);
       const r = Interior.room, d = r.d;
       // 從入口走得到的格子
       const seen = new Set([r.x + ',' + r.y]), q = [[r.x, r.y]];
@@ -1382,17 +1382,17 @@ async function run() {
     // 進門、在室內存檔、出門
     const c = World.buildings.find(b => b.kind === 'center' && b.town.region === 'kanto');
     G.state.x = c.door.x; G.state.y = c.door.y + 1;
-    Interior.enter(c);
+    await Interior.enter(c);
     const sv = Game.parseSave(Game.serialize(G.state));
     check('室內：在建築裡存檔，讀檔時位置在門口', G.room && sv.ok && sv.state.x === c.door.x && sv.state.y === c.door.y + 1);
     G.keys.add('ArrowDown'); Interior.update(16); G.keys.clear();
     check('室內：站在出口往下走就離開建築，回到門口', !G.room && G.state.x === c.door.x && G.state.y === c.door.y + 1 && G.state.dir === 'down');
-    Interior.enter(c); Game.warp(c.door.x, c.door.y + 3);
+    await Interior.enter(c); Game.warp(c.door.x, c.door.y + 3);
     check('室內：傳送（例如輸掉對戰）會離開室內', !G.room);
     // 道館訓練家：贏了之後不再對戰
     const gb = World.buildings.find(b => b.kind === 'gym' && b.town.region === 'kanto' && b.town.gym === 0);
     G.state.x = gb.door.x; G.state.y = gb.door.y + 1;
-    Interior.enter(gb);
+    await Interior.enter(gb);
     const trn = Interior.room.npcs.find(n => n.role === 'gymTrainer');
     const realBattle = Game.battle; let fights = 0, foeType = null;
     Game.battle = async o => { fights++; foeType = o.trainer.party.every(m => (Forms.data(m).t || POKEDEX[m.sp].t).includes(LEADERS.kanto[0][1])); return 'win'; };
@@ -1564,7 +1564,7 @@ async function run() {
       let reached = false;
       const lm = { id: 'test', x: 100, y: 100 };
       G.state.x = 100; G.state.y = 101;
-      Interior.enterCave(lm, key, async () => { reached = true; });
+      await Interior.enterCave(lm, key, async () => { reached = true; });
       Interior.room.strength = true; // 已使用怪力（演出另外測試）
       for (const dir of path || []) {
         G.keys.clear(); G.keys.add(KEY[dir]);
@@ -1578,7 +1578,7 @@ async function run() {
     }
     check('洞窟解謎：三個洞窟都能推開石頭走到終點（實際用遊戲的移動走一遍）', results.every(r => r.endsWith('到達')), results.join(' '));
     // 推不動：石頭後面是牆
-    Interior.enterCave({ id: 'test', x: 100, y: 100 }, 'cave_a', null);
+    await Interior.enterCave({ id: 'test', x: 100, y: 100 }, 'cave_a', null);
     const r = Interior.room;
     const before = JSON.stringify(r.boulders);
     r.x = r.d.boulders[0][0]; r.y = r.d.boulders[0][1] + 1;
@@ -1806,7 +1806,7 @@ async function run() {
     // 怪力
     if (window.INTERIORS && INTERIORS.cave_a) {
       window.INTERIORS_FORCE = true;
-      Interior.enterCave({ id: 'x', x: 100, y: 100 }, 'cave_a', null);
+      await Interior.enterCave({ id: 'x', x: 100, y: 100 }, 'cave_a', null);
       const r = Interior.room;
       const bd = r.boulders.find(b => Interior.walkable(b.x, b.y + 1) || true);
       // 站在第一顆石頭下面往上推
@@ -1833,7 +1833,7 @@ async function run() {
     const fought = [];
     Game.eliteBattle = async (t, i) => { fought.push('e' + i); return 'win'; };
     Game.championBattle = async t => { fought.push('c'); return 'win'; };
-    Interior.enter(lb);
+    await Interior.enter(lb);
     const lobby = Interior.room && Interior.room.key;
     await Interior.tryGoal();
     const blocked = Interior.room.key === 'league';
@@ -2135,6 +2135,83 @@ async function run() {
     Cloud.logout();
     window.fetch = realFetch; window.CLOUD_CONFIG = keepCfg;
     G.state = keep;
+  }
+  // 第四輪審查 P0／P1：下載回來時帳號已經換了不寫入；同一帳號的上傳一次只送一個（舊存檔不會晚到蓋掉新存檔）
+  {
+    const realFetch = window.fetch, keepCfg = window.CLOUD_CONFIG;
+    const users = {}, saves = {}, arrived = [];
+    let tokenN = 0;
+    const gates = { get: null, post: null, refresh: null };
+    const gate = k => { let open; gates[k] = new Promise(r => { open = r; }); return () => { gates[k] = null; open(); }; };
+    window.CLOUD_CONFIG = { url: 'https://test.supabase.co', anonKey: 'anon' };
+    const reply = (status, obj) => Promise.resolve({ ok: status < 300, status, text: () => Promise.resolve(JSON.stringify(obj)) });
+    window.fetch = async (url, opt) => {
+      const u = new URL(url), body = opt.body ? JSON.parse(opt.body) : null;
+      const sess = (id, exp = 3600) => ({ access_token: 'tok' + (++tokenN) + ':' + id, refresh_token: 'r:' + id, expires_in: exp, user: { id } });
+      if (u.pathname === '/auth/v1/signup') { users[body.email] = { pw: body.password, id: 'V' + Object.keys(users).length }; return reply(200, sess(users[body.email].id)); }
+      if (u.pathname === '/auth/v1/token' && u.search.includes('refresh')) { const g = gates.refresh; if (g) await g; return reply(200, sess(body.refresh_token.split(':')[1])); }
+      if (u.pathname === '/auth/v1/token') { const usr = users[body.email]; return usr && usr.pw === body.password ? reply(200, sess(usr.id)) : reply(400, {}); }
+      if (u.pathname === '/rest/v1/saves') {
+        const id = (opt.headers.Authorization || '').split(':')[1];
+        if (opt.method === 'POST') { const g = gates.post; if (g) await g; saves[id] = body.data; arrived.push(body.data.v); return reply(201, null); }
+        const g = gates.get; if (g) await g;
+        return reply(200, saves[id] ? [{ data: saves[id] }] : []);
+      }
+      return reply(404, {});
+    };
+    const tick = ms => new Promise(r => setTimeout(r, ms));
+    const keyOf = n => SAVE_KEY + '_cloud_' + n;
+    const keepKeys = {};
+    for (const k of [SAVE_KEY, keyOf('甲甲'), keyOf('乙乙')]) keepKeys[k] = localStorage.getItem(k);
+    Cloud.logout();
+    await Cloud.register('甲甲', 'secret12'); const idA = Cloud.session.user_id; Cloud.logout();
+    await Cloud.register('乙乙', 'secret12'); Cloud.logout();
+    saves[idA] = { owner: '甲甲', savedAt: '2030-01-01T00:00:00Z', v: 9 };
+    const bLocal = JSON.stringify({ owner: '乙乙', savedAt: '2020-01-01T00:00:00Z' });
+    localStorage.setItem(keyOf('乙乙'), bLocal);
+    localStorage.removeItem(SAVE_KEY);
+    // 1. 甲 下載中 → 換成 乙 登入 → 甲 的回覆（比較新）回來
+    await Cloud.login('甲甲', 'secret12');
+    let open = gate('get');
+    let s = Account.sync();
+    await tick(10);
+    Cloud.logout(); await Cloud.login('乙乙', 'secret12');
+    open(); let r = await s;
+    check('雲端下載：下載中換了帳號，甲的存檔不會寫進乙的本機快取', r === 'stale' && localStorage.getItem(keyOf('乙乙')) === bLocal, r);
+    // 2. 甲 下載中 → 登出（變成訪客）
+    Cloud.logout(); await Cloud.login('甲甲', 'secret12');
+    localStorage.removeItem(keyOf('甲甲'));
+    open = gate('get');
+    s = Account.sync();
+    await tick(10);
+    Cloud.logout();
+    open(); r = await s;
+    check('雲端下載：下載中登出，訪客與甲的本機快取都不會被寫入', localStorage.getItem(SAVE_KEY) === null && localStorage.getItem(keyOf('甲甲')) === null, r);
+    // 3. 甲 更新 token 中 → 換成 乙
+    await Cloud.login('甲甲', 'secret12');
+    Cloud.session.expires_at = Date.now();
+    open = gate('refresh');
+    s = Account.sync();
+    await tick(10);
+    Cloud.logout(); await Cloud.login('乙乙', 'secret12');
+    open(); r = await s;
+    check('雲端下載：更新 token 中換了帳號，不寫入任何本機快取', localStorage.getItem(keyOf('乙乙')) === bLocal && localStorage.getItem(keyOf('甲甲')) === null, r);
+    // 4. 同一帳號連續兩次存檔：第一次還在傳輸時第二次不會同時送出，伺服器最後是第二次
+    Cloud.logout(); await Cloud.login('甲甲', 'secret12');
+    arrived.length = 0;
+    open = gate('post');
+    Cloud.upload(JSON.stringify({ v: 1 }));
+    const f1 = Cloud.flush();
+    await tick(10);
+    Cloud.upload(JSON.stringify({ v: 2 }));
+    const f2 = Cloud.flush();
+    await tick(10);
+    const during = arrived.length;
+    open(); await f1; await f2;
+    check('雲端上傳：同一帳號一次只傳一個，舊存檔不會晚到蓋掉新存檔', during === 0 && arrived.join() === '1,2' && saves[idA].v === 2 && Cloud.status === 'saved', `${during} / ${arrived.join()}`);
+    Cloud.logout();
+    for (const k in keepKeys) keepKeys[k] === null ? localStorage.removeItem(k) : localStorage.setItem(k, keepKeys[k]);
+    window.fetch = realFetch; window.CLOUD_CONFIG = keepCfg;
   }
   // 第三輪審查 P1：雙打守住、全體招式各目標分開判定、濕氣的時機、預知未來的施術者換下
   {

@@ -915,6 +915,7 @@ const World = {
   },
 
   drawBuilding(g, b, ox, oy) {
+    if (Gen3.on && Gen3.loading('bld_' + b.kind)) return; // 綠寶石的圖還在下載：先不畫，不閃原創圖
     const img = (Gen3.on && Gen3.building(b.kind)) || Spr.building(b);
     g.drawImage(img, b.x * TILE - ox, b.y * TILE - oy);
   },
@@ -937,6 +938,7 @@ const World = {
       g.drawImage(c, 0, 0, c.width, 45, px, py - 10, c.width, 45);
       return;
     }
+    if (Gen3.on && who.sheet && Gen3.loading(who.sheet)) return; // 綠寶石的圖還在下載：先不畫，不閃原創圖
     const c = (Gen3.on && who.sheet && Gen3.charFrame(who.sheet, dir, frame)) || Spr.character(who.pal, dir, frame);
     g.drawImage(c, px + (TILE - c.width) / 2, py + TILE - c.height);
   },

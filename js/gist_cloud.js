@@ -39,10 +39,13 @@ const GistCloud = (() => {
     const u = await gh('/user', { token });
     if (!u.ok) return { ok: false, error: u.status === 401 ? '金鑰無效或已過期' : '無法連線到 GitHub' };
     const gistId = await findGist(token);
+    gen++;
     keep({ token, login: u.data.login, gistId });
     return { ok: true, login: u.data.login, found: !!gistId };
   }
-  function disconnect() { clearTimeout(upT); upT = null; pending = null; keep(null); }
+  let gen = 0; // 連結世代：每次連結、中斷都加一
+  function disconnect() { clearTimeout(upT); upT = null; pending = null; gen++; keep(null); }
+  const identity = () => (session ? gen + ':' + session.login : null);
 
   // 上傳（10 秒內的多次存檔只上傳最後一次，減少 gist 的版本數）
   let upT = null, pending = null;
@@ -52,16 +55,21 @@ const GistCloud = (() => {
     clearTimeout(upT);
     upT = setTimeout(flush, 10000);
   }
-  async function flush() {
+  // 同一時間只有一個上傳（和 cloud.js 相同）
+  let chain = Promise.resolve();
+  function flush() { clearTimeout(upT); upT = null; chain = chain.then(send, send); return chain; }
+  async function send() {
     if (!session || pending === null) return;
     // 排程期間換了 GitHub 帳號：丟掉（不把別人的存檔傳到現在的帳號）
     if (pending.login !== session.login || pending.token !== session.token) { pending = null; return; }
     const content = pending.json; pending = null;
+    const id = identity();
     try {
       const files = { [FILE]: { content } };
       const r = session.gistId
         ? await gh(`/gists/${session.gistId}`, { method: 'PATCH', body: { files } })
         : await gh('/gists', { method: 'POST', body: { description: DESC, public: false, files } });
+      if (identity() !== id) return; // 傳輸期間中斷或換了帳號：不把 gist 編號記到新的帳號
       if (!r.ok) { Telemetry.error('GitHub 存檔失敗：' + ((r.data && r.data.message) || r.status), 'cloud'); return; }
       if (!session.gistId) keep({ ...session, gistId: r.data.id });
       Telemetry.event('GitHub 存檔');
@@ -70,13 +78,14 @@ const GistCloud = (() => {
   // 下載：回傳 { data } 或 null（檔案太大被截斷時改讀 raw_url）
   async function download() {
     if (!session || !session.gistId) return null;
+    const id = identity();
     const r = await gh(`/gists/${session.gistId}`);
-    if (!r.ok) return null;
+    if (identity() !== id || !r.ok) return null;
     const f = r.data.files && r.data.files[FILE];
     if (!f) return null;
     let text = f.content;
-    if (f.truncated) { const raw = await fetch(f.raw_url); text = await raw.text(); }
+    if (f.truncated) { const raw = await fetch(f.raw_url); text = await raw.text(); if (identity() !== id) return null; }
     try { return { data: JSON.parse(text), updated_at: r.data.updated_at }; } catch { return null; }
   }
-  return { connect, disconnect, upload, flush, download, get name() { return session && session.login; }, get session() { return session; } };
+  return { connect, disconnect, upload, flush, download, identity, get name() { return session && session.login; }, get session() { return session; } };
 })();

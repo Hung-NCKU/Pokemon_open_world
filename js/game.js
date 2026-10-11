@@ -1224,6 +1224,7 @@ const Game = {
     if (town !== G.lastTown) {
       G.lastTown = town;
       if (town) {
+        if (typeof Interior !== 'undefined' && Interior.prefetch) Interior.prefetch(town);
         s.visited[town.id] = 1;
         UI.banner(`${REGIONS[town.region].n}地區・${town.name}`);
         await Story.onEnterTown(town);
@@ -1423,6 +1424,13 @@ const Game = {
     const cv = document.getElementById('world');
     const g = cv.getContext('2d');
     if (G.mode === 'title' || !G.state) return;
+    // 綠寶石的圖塊還在下載（第一次開啟、網路慢）：先顯示讀取中，不用原創圖塊頂替
+    if (Gen3.on && !Gen3.ready()) {
+      g.fillStyle = '#10131c'; g.fillRect(0, 0, cv.width, cv.height);
+      g.fillStyle = '#c8d0e8'; g.font = '20px "Cubic11", "Cubic11Full", sans-serif'; g.textAlign = 'center';
+      g.fillText('讀取中……', cv.width / 2, cv.height / 2); g.textAlign = 'left';
+      return;
+    }
     if (G.room) return Interior.render(g, cv);
     const s = G.state;
     let px = s.x * TILE, py = s.y * TILE;

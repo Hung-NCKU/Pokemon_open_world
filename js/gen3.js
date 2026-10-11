@@ -21,12 +21,25 @@ const Gen3 = (() => {
     load('player_walk', 'player_walk.png'); load('player_run', 'player_run.png'); load('player_surf', 'player_surf.png');
     load('surf_blob', 'fx_surf_blob.png'); load('exclaim', 'fx_emotion_exclamation.png');
     for (const t of GEN3.trainers) load('npc_' + t, `npc_${t}.png`);
+    // 室內地圖建置時另外輸出的建築（小屋、告示牌）也在野外出現：一開始就下載
+    if (window.INTERIORS && INTERIORS._buildings) for (const k of Object.keys(INTERIORS._buildings)) if (!GEN3.buildings[k]) load('bld_' + k, `bld_${k}.png`);
   }
   const ready = () => !on || loaded >= total;
   // 需要時才載入的圖（室內地圖、室內人物）：回傳圖片物件，載入完成前 naturalWidth 為 0
   function ensure(name, file) {
     if (!img[name]) { const i = new Image(); i.onerror = () => console.warn('缺少素材', file); i.src = base + file; img[name] = i; }
     return img[name];
+  }
+  // 圖片還在下載中（已經要求、尚未完成）：這時不要退回原創圖，否則會先閃一下舊的圖再變成綠寶石的圖
+  const loading = name => !!img[name] && !img[name].complete;
+  // 等這些圖下載完成（最多 ms 毫秒；下載失敗也算完成，之後會退回原創圖）
+  function whenLoaded(names, ms = 3000) {
+    const list = names.map(n => img[n]).filter(i => i && !i.complete);
+    if (!list.length) return Promise.resolve();
+    return Promise.race([
+      Promise.all(list.map(i => new Promise(r => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); }))),
+      new Promise(r => setTimeout(r, ms)),
+    ]);
   }
 
   function canvas(w, h) {
@@ -123,7 +136,7 @@ const Gen3 = (() => {
   const anims = on ? new Set(GEN3.anims) : new Set();
   function animUrl(name) { return anims.has(name) ? `${base}anim/${name}.png` : null; }
 
-  return { on, ready, ensure, tile, recolor, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
+  return { on, ready, ensure, loading, whenLoaded, tile, recolor, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
     hasTrainer: n => on && GEN3.trainers.includes(n), bld: k => on && GEN3.buildings[k] };
 })();
 

@@ -70,8 +70,12 @@ const Cloud = (() => {
     clearTimeout(upT);
     upT = setTimeout(flush, 2000);
   }
-  async function flush() {
-    const p = pending; pending = null; upT = null;
+  // 同一時間只有一個上傳在傳輸：新的上傳排在前一個完成之後，並且送出「當時最新」的存檔
+  // （否則網路慢時，先送出的舊存檔可能比新存檔晚到伺服器，把雲端的進度蓋回舊的）
+  let chain = Promise.resolve();
+  function flush() { clearTimeout(upT); upT = null; chain = chain.then(send, send); return chain; }
+  async function send() {
+    const p = pending; pending = null;
     if (!p) return;
     const same = () => p.gen === gen && session && session.user_id === p.uid;
     try {
@@ -89,11 +93,17 @@ const Cloud = (() => {
     if (typeof UI !== 'undefined') UI.banner('雲端同步失敗：這次的存檔只存在這台裝置（下次存檔會再試）');
   }
   // 下載：回傳 { data, updated_at } 或 null
+  // 下載期間登出或換了帳號：丟掉回覆（不把 A 的存檔交給 B）
   async function download() {
-    if (!enabled() || !session || !(await fresh())) return null;
-    const r = await call(`/rest/v1/saves?select=data,updated_at&user_id=eq.${session.user_id}`);
-    if (!r.ok || !Array.isArray(r.data) || !r.data.length) return null;
+    if (!enabled() || !session) return null;
+    const g = gen, uid = session.user_id;
+    const same = () => g === gen && session && session.user_id === uid;
+    if (!(await fresh()) || !same()) return null;
+    const r = await call(`/rest/v1/saves?select=data,updated_at&user_id=eq.${uid}`);
+    if (!same() || !r.ok || !Array.isArray(r.data) || !r.data.length) return null;
     return r.data[0];
   }
-  return { enabled, register, login, logout, upload, flush, download, get status() { return status; }, get name() { return session && session.name; }, get session() { return session; } };
+  // 目前的身分（登入世代＋使用者）：Account.sync 用來確認下載前後是同一個人
+  const identity = () => (session ? gen + ':' + session.user_id : null);
+  return { enabled, register, login, logout, upload, flush, download, identity, get status() { return status; }, get name() { return session && session.name; }, get session() { return session; } };
 })();

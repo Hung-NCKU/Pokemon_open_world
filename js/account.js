@@ -62,17 +62,21 @@ const Account = (() => {
   const saveKey = () => (gh() ? SAVE_KEY + '_gh_' + GistCloud.name : cloud() ? (Cloud.name ? SAVE_KEY + '_cloud_' + Cloud.name : SAVE_KEY) : current ? SAVE_KEY + '_' + current : SAVE_KEY);
   const upload = json => { const b = backend(); if (b) b.upload(json); };
   // 開啟標題畫面時：雲端的存檔比本機新就下載（以存檔時間 savedAt 比較）
+  // 下載開始時記住「哪個服務、哪個身分、寫到哪個位置」，下載回來後三者都沒變才寫入（中途登出、換帳號就丟掉）
   async function sync() {
     const be = backend();
     if (!be) return null;
+    const id = be.identity(), key = saveKey();
+    const still = () => backend() === be && be.identity() === id && saveKey() === key;
     try {
       const remote = await be.download();
+      if (!still()) return 'stale';
       if (!remote || !remote.data) return 'none';
-      const localRaw = store.get(saveKey());
+      const localRaw = store.get(key);
       let localAt = 0;
       try { localAt = localRaw ? Date.parse(JSON.parse(localRaw).savedAt || 0) || 0 : 0; } catch { }
       const remoteAt = Date.parse(remote.data.savedAt || remote.updated_at || 0) || 0;
-      if (remoteAt > localAt) { store.set(saveKey(), JSON.stringify(remote.data)); return 'downloaded'; }
+      if (remoteAt > localAt) { store.set(key, JSON.stringify(remote.data)); return 'downloaded'; }
       return 'local';
     } catch (e) { Telemetry.error('雲端同步失敗：' + e.message, 'cloud'); return 'error'; }
   }

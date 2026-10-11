@@ -43,7 +43,25 @@ const Interior = (() => {
     return i >= 0 ? i : 9;
   }
 
-  function enter(b) {
+  // 進入前先下載房間的圖（背景、前景、人物），下載好才切換畫面：不會先看到黑畫面或原創圖的人物再變成綠寶石的圖
+  const roomImages = (key, gfx) => {
+    Gen3.ensure('int_' + key, `int_${key}.png`); Gen3.ensure('int_' + key + '_top', `int_${key}_top.png`);
+    for (const g of gfx) Gen3.ensure('npc_' + g, `npc_${g}.png`);
+    return ['int_' + key, 'int_' + key + '_top', ...gfx.map(g => 'npc_' + g)];
+  };
+  // 走進城鎮時，在背景先下載這座城鎮的建築內部（玩家走到門口時通常已經下載好了）
+  function prefetch(town) {
+    if (!window.INTERIORS || !Gen3.on) return;
+    const go = () => {
+      for (const b of World.buildings) {
+        if (b.town !== town || !can(b)) continue;
+        const key = keyFor(b);
+        roomImages(key, INTERIORS[key].npcs.map(n => n.gfx).filter(Boolean));
+      }
+    };
+    (window.requestIdleCallback || (f => setTimeout(f, 200)))(go);
+  }
+  async function enter(b) {
     const key = keyFor(b), d = INTERIORS[key];
     const t = b.town;
     const lead = b.kind === 'gym' ? LEADERS[t.region][t.gym] : null;
@@ -57,25 +75,24 @@ const Interior = (() => {
       if (/^ev\d$/.test(n.role)) { n.ev = (b.ev || [])[+n.role[2]]; if (n.ev && TownEvents.DEF[n.ev]) n.gfx = TownEvents.DEF[n.ev].gfx; }
       if (n.role === 'gymTrainer') { n.cls = gymTrainerClass(lead[1]); n.gfx = ((window.GEN3 && GEN3.trainers) || [])[n.cls] || n.gfx; }
     }
+    Sound.sfx('door');
+    await Gen3.whenLoaded(roomImages(key, npcs.map(n => n.gfx)));
     const [ex, ey] = d.exits[0];
     room = { key, d, b, x: ex, y: ey, dir: 'up', npcs };
     G.room = room;
     G.move = null;
-    Gen3.ensure('int_' + key, `int_${key}.png`); Gen3.ensure('int_' + key + '_top', `int_${key}_top.png`);
-    for (const n of npcs) Gen3.ensure('npc_' + n.gfx, `npc_${n.gfx}.png`);
-    Sound.sfx('door');
     Telemetry.event('進入建築', { kind: b.kind, town: t.name });
   }
   // 洞窟解謎：從地標進入，推開石頭走到終點（每次進入石頭都會回到原位）
   const canCave = key => !!(window.INTERIORS && (Gen3.on || window.INTERIORS_FORCE) && INTERIORS[key] && INTERIORS[key].goal);
-  function enterCave(lm, key, onGoal) {
+  async function enterCave(lm, key, onGoal) {
     const d = INTERIORS[key];
+    Sound.sfx('door');
+    await Gen3.whenLoaded(roomImages(key, ['boulder']));
     const [ex, ey] = d.exits[0];
     room = { key, d, b: { kind: 'cave', town: null, door: { x: lm.x, y: lm.y }, lm }, x: ex, y: ey, dir: 'up', npcs: [],
       boulders: d.boulders.map(([x, y]) => ({ x, y })), onGoal };
     G.room = room; G.move = null;
-    Gen3.ensure('int_' + key, `int_${key}.png`); Gen3.ensure('int_' + key + '_top', `int_${key}_top.png`); Gen3.ensure('npc_boulder', 'npc_boulder.png');
-    Sound.sfx('door');
     Telemetry.event('進入洞窟', { lm: lm.id });
   }
   // 怪力：會怪力的寶可夢優先，其次格鬥屬性，再其次攻擊最高的（不會因為沒有秘傳招式而卡住）
@@ -140,7 +157,7 @@ const Interior = (() => {
 
   // ---------- 寶可夢聯盟：大廳 → 四天王 ×4 → 冠軍 ----------
   const CHAMP_LOOK = { hoenn: 'wallace' };
-  function goRoom(key, e4) {
+  async function goRoom(key, e4) {
     const d = INTERIORS[key], b = room.b, t = b.town;
     const npcs = d.npcs.map((n, i) => ({ ...n, i }));
     for (const n of npcs) {
@@ -149,13 +166,12 @@ const Interior = (() => {
         if (t.region !== 'hoenn' && e) n.gfx = LEADER_LOOK[e.type] || 'expert_m';
       }
       if (n.role === 'champion' && t.region !== 'hoenn') n.gfx = CHAMP_LOOK[t.region] || 'expert_m';
-      Gen3.ensure('npc_' + n.gfx, `npc_${n.gfx}.png`);
     }
+    Sound.sfx('door');
+    await Gen3.whenLoaded(roomImages(key, npcs.map(n => n.gfx)));
     const [ex, ey] = d.exits[0];
     room = { key, d, b, x: ex, y: ey, dir: 'up', npcs, e4, noBack: true, cleared: false };
     G.room = room; G.move = null;
-    Gen3.ensure('int_' + key, `int_${key}.png`); Gen3.ensure('int_' + key + '_top', `int_${key}_top.png`);
-    Sound.sfx('door');
     Telemetry.event('聯盟房間', { key });
   }
   // 往前的門：大廳需要 8 枚徽章並確認；四天王與冠軍的房間要先打贏
@@ -338,5 +354,5 @@ const Interior = (() => {
     if (r === 'win') G.state.defeated[key] = 1;
   }
 
-  return { goRoom, tryGoal, healAnim, can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
+  return { goRoom, tryGoal, prefetch, healAnim, can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
 })();
