@@ -3487,6 +3487,27 @@ async function run() {
     Object.assign(UI, { say: keep.say, choose: keep.choose });
     G.state = keep.state;
   }
+  // 招式選單的游標記住上次選的招式
+  {
+    const keepChoose = UI.choose;
+    const b = setup(25, 30, 143, 30);
+    b.me.moves = [85, 98, 86, 104].map(id => ({ id, pp: 10 }));
+    const starts = [];
+    let pick = 2;
+    UI.choose = async (opts, o = {}) => {
+      if (o.cls === 'move-menu') { starts.push(o.start); return pick; }
+      return 0; // 行動選單：戰鬥
+    };
+    const a1 = await b.chooseAction();
+    pick = 1;
+    await b.chooseAction();
+    b.me.moves[1].pp = 0; b.me.moves[0].pp = 0;
+    await b.chooseAction();
+    UI.choose = keepChoose;
+    check('招式選單：第一次游標在第一個招式', starts[0] === 0 && a1.idx === 2, JSON.stringify(starts));
+    check('招式選單：游標停在上次選的招式', starts[1] === 2, JSON.stringify(starts));
+    check('招式選單：上次的招式不能用時（PP 0）改到第一個能用的', starts[2] === 2, JSON.stringify(starts));
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

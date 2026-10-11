@@ -7,6 +7,9 @@ import { Mon } from './mon.js';
 import { TM } from './tm.js';
 import { md, newVol } from './movedata.js';
 
+// 招式選單的游標：記住每隻寶可夢上次選的招式（這次遊玩期間，不寫進存檔）
+const LAST_MOVE = new WeakMap();
+
 class Battle {
   constructor(opts) {
     this.wildMon = opts.wild || null;
@@ -149,9 +152,12 @@ class Battle {
           }).join('');
           bar.querySelectorAll('.gb').forEach(el => { el.onclick = ev => { ev.stopPropagation(); toggle(el.dataset.g); }; });
         };
-        let focusIdx = 0;
+        // 游標停在上次選的招式（不能用時改到第一個能用的）
+        const last = LAST_MOVE.get(me);
+        const start = last !== undefined && opts[last] && !opts[last].disabled ? last : Math.max(0, opts.findIndex(o => !o.disabled));
+        let focusIdx = start;
         const toggle = id => { const g = gm.find(x => x.id === id); if (!g || !g.ok) { Sound.sfx('bump'); return; } on = on === id ? null : id; Sound.sfx('select'); drawBar(focusIdx); };
-        if (gm.length) { this.el.appendChild(bar); drawBar(0); }
+        if (gm.length) { this.el.appendChild(bar); drawBar(start); }
         const onKey = e => {
           if (e.repeat) return false;
           const g = gm.find(x => x.key.toLowerCase() === e.key.toLowerCase());
@@ -160,8 +166,9 @@ class Battle {
         };
         let i;
         try {
-          i = await UI.choose(opts, { prompt: '', cols: 2, cls: 'move-menu', onFocus: k => { focusIdx = k; if (gm.length) drawBar(k); return info(k); }, onKey });
+          i = await UI.choose(opts, { prompt: '', cols: 2, start, cls: 'move-menu', onFocus: k => { focusIdx = k; if (gm.length) drawBar(k); return info(k); }, onKey });
         } finally { bar.remove(); }
+        if (i >= 0) LAST_MOVE.set(me, i);
         if (i >= 0) return { type: 'move', idx: i, tera: on === 'tera', mega: on === 'mega', z: on === 'z', dmax: on === 'dmax' };
       } else if (c === 1) {
         const r = await Game.bagMenu({ battle: this });
