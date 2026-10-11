@@ -1,4 +1,4 @@
-# 每次 push、PR 自動執行引擎測試與冒煙測試（Playwright＋Chromium）
+# 每次 push、PR 自動執行引擎測試與冒煙測試（Playwright＋Chromium），並確認 Vite 打包成功
 # pokeemerald 的素材（assets/gen3）不在版本庫裡，需要素材的少數測試會標成「略過」；完整的測試請在本機執行 npm test
 name: test
 
@@ -20,6 +20,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm test
+      # 打包也要成功（Vite；沒有素材時 CSS 裡的素材網址保持原樣）
+      - run: npm run build
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

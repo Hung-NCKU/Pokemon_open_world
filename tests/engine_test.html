@@ -3372,6 +3372,96 @@ async function run() {
     [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
     U.rand = keepRand;
   }
+  // 城都比照關都的完整度（js/johto.js）；撿拾、採蜜
+  {
+    const keep = { state: G.state, battle: Game.battle, say: UI.say, choose: UI.choose, save: Game.save };
+    const NEW = ['darkcave', 'ruinsofalph', 'unioncave', 'slowpokewell', 'ilexforest', 'nationalpark', 'radiotower', 'mtmortar', 'lakeofrage', 'icepath', 'dragonsden'];
+    G.state = Game.newState('T', 'johto', 1);
+    World.generate(424242, 'johto', 8);
+    const ids = new Set([...World.landmarks.values()].filter(l => l.region === 'johto').map(l => l.id));
+    const placed = NEW.filter(id => ids.has(id));
+    check('城都：世界配置第 8 版放上新的地標', placed.length >= NEW.length - 1, `${placed.length}/${NEW.length}：缺 ${NEW.filter(id => !ids.has(id)).join(',')}`);
+    const sudo = [...World.events.values()].find(e => e.kind === 'sudowoodo');
+    check('城都：道路上有擋路的樹才怪，而且有路可以繞', !!sudo && World.regionAt(sudo.x, sudo.y) === 'johto' && World.detourExists(sudo.x, sudo.y));
+    const dd = [...World.landmarks.values()].find(l => l.id === 'dragonsden');
+    if (dd) {
+      const t = World.zoneTable(Math.floor(dd.x / ZONE), Math.floor(dd.y / ZONE), 'water');
+      check('城都：龍穴附近的水面出現迷你龍', t.some(e => e.id === 147), t.map(e => e.id).join(','));
+    }
+    const h = World.homeTown;
+    const ht = World.zoneTable(Math.floor(h.cx / ZONE), Math.floor(h.cy / ZONE), 'tall');
+    check('城都：若葉鎮附近的草叢有尾立、咕咕', ht.some(e => e.id === 161) && ht.some(e => e.id === 163), ht.map(e => e.id).join(','));
+    // 舊存檔（第 7 版）的世界不變：沒有新地標、沒有樹才怪；任務線不會卡在不存在的地標
+    World.generate(424242, 'johto', 7);
+    check('城都：舊存檔（第 7 版）的世界沒有新地標與樹才怪', ![...World.landmarks.values()].some(l => NEW.includes(l.id)) && ![...World.events.values()].some(e => e.kind === 'sudowoodo'));
+    const q = Story.questsFor('johto');
+    const s7 = G.state; s7.flags.q_johto = 1;
+    check('城都：空木博士的任務線 10 步；舊世界裡不存在的地標那一步視為完成', q.length === 10 && q[3].done(s7) && q[5].done(s7) && q[6].done(s7));
+    World.generate(424242, 'johto', 8);
+    check('城都：新世界裡要真的趕走火箭隊才算完成', !q[3].done(s7));
+    // 勁敵小銀：屬性有利的御三家，最後一次是最終進化
+    const t3 = SILVER.team(3, 152, 40), t1 = SILVER.team(1, 158, 5);
+    check('城都：勁敵小銀選屬性有利的御三家（菊草葉 → 火爆獸、小鋸鱷 → 菊草葉）', t3[t3.length - 1].sp === 157 && t1[0].sp === 152, `${t3.map(m => m.sp)} / ${t1.map(m => m.sp)}`);
+    // 支線：條件與流程（對戰用假的結果）
+    const said = [];
+    UI.say = async t => { said.push(t); };
+    UI.choose = async () => 0;
+    Game.save = () => { };
+    let fought = null;
+    Game.battle = async o => { fought = o; return 'win'; };
+    G.state = Game.newState('T', 'johto', 1);
+    G.state.party = [Mon.create(152, 30)];
+    const lm = id => [...World.landmarks.values()].find(l => l.id === id);
+    await Story.landmark(lm('dragonsden'));
+    check('城都景點：第一次來找到道具（龍穴 → 龍之牙）', G.state.bag['dragon-fang'] === 1 && G.state.flags.seen_dragonsden);
+    await Story.landmark(lm('dragonsden'));
+    check('城都景點：第二次來不會再拿到', G.state.bag['dragon-fang'] === 1);
+    fought = null;
+    await Story.landmark(lm('lakeofrage'));
+    check('憤怒之湖：不到 6 枚徽章不能靠近', !fought);
+    G.state.badges.johto = [0, 1, 2, 3, 4, 5];
+    await Story.landmark(lm('lakeofrage'));
+    check('憤怒之湖：6 枚徽章後和閃光的暴鯉龍戰鬥', fought && fought.wild.sp === 130 && fought.wild.shiny && G.state.flags.lm_lakeofrage);
+    G.state.badges.johto = [];
+    fought = null;
+    await Story.landmark(lm('slowpokewell'));
+    check('呆呆獸之井：沒有徽章時進不去', !fought && !G.state.flags.boss_slowpokewell);
+    G.state.badges.johto = [0];
+    await Story.landmark(lm('slowpokewell'));
+    check('呆呆獸之井：1 枚徽章後連戰到幹部蘭斯，拿到王者之證', G.state.flags.boss_slowpokewell && fought.trainer.name === '蘭斯' && G.state.bag['kings-rock'] === 1);
+    fought = null;
+    G.state.badges.johto = [0, 1];
+    await Story.eventEntity(sudo);
+    check('樹才怪：不到 3 枚徽章不能澆水', !fought && !G.state.bag['squirt-bottle']);
+    G.state.badges.johto = [0, 1, 2];
+    await Story.eventEntity(sudo);
+    check('樹才怪：3 枚徽章後借到傑尼龜噴壺，澆水後戰鬥，道路暢通', fought && fought.wild.sp === 185 && G.state.bag['squirt-bottle'] && !World.eventAt(sudo.x, sudo.y));
+    // 勁敵：第一次見空木博士後，2 枚徽章進城都的城鎮再遇到
+    fought = null;
+    await Story.prof('johto');
+    check('勁敵小銀：第一次見空木博士後出現', fought && fought.trainer.name === '小銀' && G.state.flags.silver1);
+    fought = null;
+    await Story.onEnterTown(World.towns.find(t => t.region === 'johto' && t.gym === 2));
+    check('勁敵小銀：2 枚城都徽章後在城都的城鎮再遇到', fought && fought.trainer.name === '小銀' && G.state.flags.silver2);
+    Object.assign(Game, { battle: keep.battle, save: keep.save });
+    Object.assign(UI, { say: keep.say, choose: keep.choose });
+    // 撿拾：戰鬥結束後沒有攜帶道具才會撿到；採蜜撿到甜甜蜜
+    G.state.party = [Mon.create(263, 25), Mon.create(263, 25), Mon.create(415, 40)];
+    G.state.party[0].ability = 'pickup'; G.state.party[1].ability = 'pickup'; G.state.party[1].item = 'leftovers'; G.state.party[2].ability = 'honey-gather';
+    G.state.party.forEach(m => { if (m !== G.state.party[1]) m.item = null; });
+    const keepRand = U.rand; U.rand = () => .01;
+    UI.say = async () => { };
+    await Game.afterBattleFinds();
+    U.rand = keepRand; UI.say = keep.say;
+    check('撿拾：戰鬥結束後撿到道具（等級 25 → 從好傷藥開始的清單）', G.state.party[0].item === 'super-potion', String(G.state.party[0].item));
+    check('撿拾：已經攜帶道具時不會撿', G.state.party[1].item === 'leftovers');
+    check('採蜜：撿到甜甜蜜', G.state.party[2].item === 'honey');
+    const counts = {}; U.seed(1);
+    for (let i = 0; i < 2000; i++) { const it = pickupItem(5); counts[it] = (counts[it] || 0) + 1; }
+    U.unseed();
+    check('撿拾：Lv.5 時以傷藥最多（約 30%）', counts.potion > 500 && counts.potion < 700, JSON.stringify(counts));
+    G.state = keep.state;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

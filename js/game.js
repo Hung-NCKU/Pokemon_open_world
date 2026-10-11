@@ -4,7 +4,7 @@ import { Account, ELITE_FOUR, EmeraldUI, Forms, G, Game, Hidden, Interior, Mega,
 import { U } from './util.js';
 import { Telemetry } from './telemetry.js';
 import { CHAMP_SPRITES, ITEMS, LEADERS, LEADER_SPRITES, REGIONS, REGION_KEYS, REGION_POS, SHOP_LIST, TRAINER_BATTLE_SPRITES, TRAINER_CLASSES, TYPES, typeTag } from './data.js';
-import { Abil, EXP_CANDY, Held, IT_IMPL, NATURE_INDEX, VITAMIN } from './abilities.js';
+import { Abil, EXP_CANDY, Held, IT_IMPL, NATURE_INDEX, VITAMIN, pickupItem } from './abilities.js';
 import { Mon, NATURES, NAT_STAT, STATUS_ZH, STAT_ZH } from './mon.js';
 import { TM } from './tm.js';
 import { SUPPORT_ZH, md } from './movedata.js';
@@ -1231,9 +1231,23 @@ define(Game, {
     if (!G.tower) Telemetry.battle(kind, r, Number.isFinite(foeTop) ? myTop - foeTop : 0, b.turn || 0);
     Telemetry.event('戰鬥結束', { kind, who, r });
     // noBlackout：劇情戰輸了也不會被送回寶可夢中心（例如第一場勁敵戰）
+    if (r !== 'lose' && !G.tower) await Game.afterBattleFinds();
     if (r === 'lose' && opts.noBlackout) { Game.healParty(); await UI.say('寶可夢都恢復了精神。'); }
     else if (r === 'lose') await Game.blackout();
     return r;
+  },
+
+  // 撿拾、採蜜：戰鬥結束後，沒有攜帶道具的寶可夢有機會撿到東西（最新世代：撿拾 10%，道具依等級；採蜜 5%～50% 依等級）
+  async afterBattleFinds() {
+    for (const m of G.party) {
+      if (m.item || m.hp <= 0) continue;
+      let it = null;
+      if (m.ability === 'pickup' && U.rand() < .1) it = pickupItem(m.lv);
+      else if (m.ability === 'honey-gather' && U.rand() < Math.min(.5, Math.ceil(m.lv / 10) * .05)) it = 'honey';
+      if (!it || !ITEMS[it]) continue;
+      m.item = it;
+      await UI.say(`${Mon.name(m)} 撿到了${ITEMS[it].n}！（攜帶著）`);
+    }
   },
 
   async blackout() {

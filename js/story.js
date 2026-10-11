@@ -132,7 +132,7 @@ define(Story, {
       await UI.say(`${reg.prof}：「我正在研究${reg.n}地區的寶可夢生態。可以幫我調查嗎？先捕捉 5 種${reg.n}地區的寶可夢吧！」`);
       return;
     }
-    const q = localQuest(region);
+    const q = Story.questsFor(region); // 城都有自己的任務線（js/johto.js）
     for (let i = 0; i < q.length; i++) {
       if (!q[i].done(s) || !q[i].reward || s.flags[`${key}_r${i}`]) continue;
       s.flags[`${key}_r${i}`] = 1;

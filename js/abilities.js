@@ -83,6 +83,17 @@ const TYPE_ITEM = {
 // 危機時（體力 1/4 以下，貪吃鬼 1/2 以下）發動的樹果：回復 1/3 體力（性格討厭的味道會混亂）或提高能力
 const PINCH_HEAL = { 'figy-berry': 1, 'wiki-berry': 3, 'mago-berry': 5, 'aguav-berry': 4, 'iapapa-berry': 2 }; // 討厭這個味道的性格：降低的能力
 const PINCH_STAT = { 'liechi-berry': 'atk', 'ganlon-berry': 'def', 'salac-berry': 'spe', 'petaya-berry': 'spa', 'apicot-berry': 'spd' };
+// 撿拾（最新世代）：依等級（每 10 級一段）從清單往後取 9 種常見道具（30%、10%×6、4%×2），另有 1%×2 的稀有道具
+const PICKUP_COMMON = ['potion', 'antidote', 'super-potion', 'great-ball', 'repel', 'escape-rope', 'full-heal', 'hyper-potion', 'ultra-ball', 'revive',
+  'rare-candy', 'sun-stone', 'moon-stone', 'heart-scale', 'full-restore', 'max-revive', 'pp-up', 'max-elixir'];
+const PICKUP_RARE = ['hyper-potion', 'nugget', 'kings-rock', 'full-restore', 'ether', 'iron-ball', 'destiny-knot', 'elixir', 'destiny-knot', 'leftovers', 'max-elixir'];
+function pickupItem(lv) {
+  const t = Math.min(9, Math.floor((Math.max(1, lv) - 1) / 10));
+  const w = [30, 10, 10, 10, 10, 10, 10, 4, 4];
+  let r = U.rand() * 100;
+  for (let i = 0; i < 9; i++) { r -= w[i]; if (r < 0) return PICKUP_COMMON[t + i]; }
+  return PICKUP_RARE[t + (r < 1 ? 0 : 1)];
+}
 const STATUS_BERRY = { 'cheri-berry': ['par'], 'chesto-berry': ['slp'], 'pecha-berry': ['psn', 'tox'], 'rawst-berry': ['brn'], 'aspear-berry': ['frz'] };
 const CONSUMABLE = new Set(['focus-sash', 'sitrus-berry', 'oran-berry', 'lum-berry', 'chesto-berry', 'cheri-berry', 'pecha-berry', 'rawst-berry',
   'aspear-berry', 'persim-berry', 'leppa-berry', ...Object.keys(PINCH_HEAL), ...Object.keys(PINCH_STAT), 'air-balloon', 'white-herb', 'mental-herb', 'power-herb', 'weakness-policy', 'throat-spray']);
@@ -149,4 +160,4 @@ if (window.HELDITEMS) {
   SHOP_LIST.push(...Object.keys(HELDITEMS).filter(id => !SHOP_LIST.includes(id) && ITEMS[id].kind === 'held'));
 }
 
-export { AB_IMPL, IT_IMPL, TYPE_ITEM, PINCH_HEAL, PINCH_STAT, STATUS_BERRY, CONSUMABLE, HELD_PRICE, Abil, Held, NATURE_INDEX, VITAMIN, EXP_CANDY, TRAIN_PRICE };
+export { AB_IMPL, IT_IMPL, TYPE_ITEM, PINCH_HEAL, PINCH_STAT, PICKUP_COMMON, PICKUP_RARE, pickupItem, STATUS_BERRY, CONSUMABLE, HELD_PRICE, Abil, Held, NATURE_INDEX, VITAMIN, EXP_CANDY, TRAIN_PRICE };

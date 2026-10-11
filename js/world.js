@@ -10,7 +10,7 @@ const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5], house_s: [4, 4, 1, 3], sign: [1, 1, 0, 0] };
 const WW = 960, WH = 600;
-const WORLD_VER = 7; // 世界配置的版本（見 World.generate）
+const WORLD_VER = 8; // 世界配置的版本（見 World.generate）；8：城都的地標與支線（js/johto.js）
 const SAVE_VER = 2;  // 存檔格式的版本（見 Game.MIGRATE）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);
@@ -398,7 +398,10 @@ const World = {
     this.landmarks = new Map();
     if (typeof LANDMARKS === 'undefined') return;
     const hard = [T.WATER, T.DEEP, T.BRIDGE, T.PATH, T.TOWN, T.BLDG, T.DOOR, T.LANDMARK];
-    for (const [region, list] of Object.entries(LANDMARKS)) for (const lm of list) {
+    // 第 8 版起新增的地標排在最後才放：比較早就有的地標位置和第 7 版完全相同
+    const all = Object.entries(LANDMARKS).flatMap(([region, list]) => list.map(lm => [region, lm]));
+    const late = ([, lm]) => (lm.ver || 0) >= 8;
+    for (const [region, lm] of [...all.filter(e => !late(e)), ...all.filter(late)]) {
       if (lm.ver && lm.ver > this.worldVer) continue; // 較新版本才有的地標（舊存檔的世界不變）
       const anchor = this.towns.find(t => t.region === region && (lm.near === 'home' ? t.kind === 'home' : lm.near === 'league' ? t.kind === 'league' : t.gym === lm.near));
       if (!anchor) continue;
