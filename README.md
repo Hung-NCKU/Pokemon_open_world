@@ -2,7 +2,7 @@
 
 參考《寶可夢 綠寶石》的玩法與畫面製作的網頁版開放世界寶可夢遊戲。九大地區依照寶可夢世界全圖的相對位置連在同一張地圖上，全部 1025 種寶可夢都能在野外遇到；對戰以最新世代（朱／紫）的規則為準，回合處理參考 Pokémon Showdown。
 
-**想學習這個專案是怎麼做出來的：請看 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**（依系統整理的教材：架構、資料管線、世界生成、繪製、對戰引擎、AI、存檔、測試、真實的錯誤與除錯過程、練習題）。時間順序的完整紀錄見 [DEVLOG.md](DEVLOG.md)，規劃與進度見 [PROGRESS.md](PROGRESS.md)。
+**想學習這個專案是怎麼做出來的：請看 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**（依系統整理的教材：架構、資料管線、世界生成、繪製、對戰引擎、AI、存檔、測試、真實的錯誤與除錯過程）。時間順序的完整紀錄見 [DEVLOG.md](DEVLOG.md)，規劃與進度見 [PROGRESS.md](PROGRESS.md)。
 
 ## 開始遊玩
 

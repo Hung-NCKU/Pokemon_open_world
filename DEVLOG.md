@@ -6,6 +6,9 @@
 
 ## 2026-10-11
 
+### 文件：移除練習題
+- 使用者不需要練習題：docs/DEVELOPMENT.md 的第 12 章（已在 GitHub 上刪除）連同目錄的連結一起拿掉，README 的教材說明也不再提到練習題。
+
 ### 使用者要求：所有介面逐一檢查，全部改成綠寶石
 - 做法：新增介面巡覽（`tools/ui_shots.sh`＋`tests/ui_tour.js`），用一份玩到中段的存檔把 40 多個畫面逐一截圖，和 pokeemerald 的原始碼（視窗座標、調色盤、文字位置）比對後修改，改完再截圖確認。素材都從 pokeemerald 產生（`tools/build_ui.py` 新增對話框、地名看板、取名字畫面；`build_assets.py` 加上雙打的體力框）。
 - 改成綠寶石的畫面（`js/emerald_ui.js`、`css/emerald.css`）：
