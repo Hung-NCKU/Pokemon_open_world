@@ -235,8 +235,10 @@
       },
       moveIdx: labels => {
         const me = G.battle ? G.battle.me : G.party[0];
-        let best = 0, bp = -1;
-        me.moves.forEach((s, i) => { const m = MOVES[s.id]; const p = s.pp > 0 && m ? (m.p || 0) : -1; if (p > bp) { bp = p; best = i; } });
+        // 灰色（PP 用完、被無理取鬧／定身法／封印等封住）的招式選不了，跳過
+        const dis = [...document.querySelectorAll('#choices .choice')].map(el => el.classList.contains('dis'));
+        let best = Math.max(0, dis.findIndex(d => !d)), bp = -1;
+        me.moves.forEach((s, i) => { const m = MOVES[s.id]; const p = s.pp > 0 && m && !dis[i] ? (m.p || 0) : -1; if (p > bp) { bp = p; best = i; } });
         return best;
       },
       bagChoice: () => (usingBall ? ['精靈球', '精靈球'] : G.state.bag['hyper-potion'] ? ['道具', '厲害傷藥'] : ['道具', '傷藥']),
