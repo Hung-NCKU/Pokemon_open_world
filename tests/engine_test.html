@@ -2637,6 +2637,113 @@ async function run() {
     Object.assign(UI, { choose: real.choose, say: real.say }); SummaryUI.forget = real.forget; Game.forgetList = real.list;
     G.state = keep;
   }
+  // 第五輪回報：雙打大爆炸、淘金潮的自身效果時機、學習裝置關閉的努力值、雙打牆壁、道館房間
+  {
+    const keepIntro = [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave];
+    Battle.prototype.trainerIntro = Battle.prototype.trainerLeave = async () => { };
+    const slot = sd => ({ id: moveId(sd), pp: 10 });
+    const mkD = (mine, foes) => {
+      G.state = Game.newState('T', 'kanto', 1);
+      G.state.party = mine;
+      const b = new DoubleBattle({ trainer: { title: '雙胞胎', name: 'T', party: foes, kind: 'trainer', money: 1 }, double: true });
+      b.setup();
+      for (const m of [...mine, ...foes]) b.volOf(m).lockOn = 5;
+      return b;
+    };
+    // 1. 大爆炸：兩隻對手（與隊友）都受到傷害，使用者打完才倒下
+    {
+      const a = Mon.create(76, 50), c = Mon.create(18, 50), f1 = Mon.create(143, 60), f2 = Mon.create(143, 60);
+      a.moves = [slot('explosion')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      a.ability = 'sturdy'; f1.ability = f2.ability = 'thick-fat';
+      const b = mkD([a, c], [f1, f2]);
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: c, foe: true });
+      const h1 = f1.hp, h2 = f2.hp, hc = c.hp;
+      await b.doubleTurn();
+      check('雙打：大爆炸打到兩隻對手與隊友，使用者打完才倒下', f1.hp < h1 && f2.hp < h2 && c.hp < hc && a.hp === 0, `${h1 - f1.hp} / ${h2 - f2.hp} / ${hc - c.hp}`);
+    }
+    // 2. 淘金潮：第二個目標仍用原本的特攻計算，特攻在招式結束後才降一級
+    {
+      const a = Mon.create(1000, 60), c = Mon.create(25, 50), f1 = Mon.create(143, 60), f2 = Mon.create(143, 60);
+      a.moves = [slot('makeitrain')]; c.moves = [slot('splash')]; f1.moves = [slot('splash')]; f2.moves = [slot('splash')];
+      f1.ability = f2.ability = 'thick-fat';
+      const b = mkD([a, c], [f1, f2]);
+      const stages = [];
+      const real = b.calcDamage.bind(b);
+      b.calcDamage = (u, t, vU, ...r) => { if (u === a) stages.push(vU.stg.spa); return real(u, t, vU, ...r); };
+      b.chooseDouble = async m => ({ type: 'move', idx: 0, user: m, target: f1 });
+      b.aiDouble = m => ({ type: 'move', idx: 0, user: m, target: c, foe: true });
+      await b.doubleTurn();
+      check('雙打：淘金潮打兩個目標時都用原本的特攻，結束後才降一級', stages.length === 2 && stages.every(s => s === 0) && b.volOf(a).stg.spa === -1, `${stages.join()} → ${b.volOf(a).stg.spa}`);
+    }
+    // 3. 學習裝置關閉：沒上場的後備不拿努力值
+    {
+      for (const off of [true, false]) {
+        G.state = Game.newState('T', 'kanto', 1);
+        const me = Mon.create(25, 30), bench = Mon.create(7, 30);
+        me.ev = [0, 0, 0, 0, 0, 0]; bench.ev = [0, 0, 0, 0, 0, 0];
+        G.state.party = [me, bench]; G.state.expShareOff = off;
+        const foe = Mon.create(16, 10);
+        const b = new Battle({ wild: foe });
+        b.setup();
+        b.msg = async () => { };
+        const realGive = Game.giveExp; Game.giveExp = async () => { };
+        await b.awardExp();
+        Game.giveExp = realGive;
+        const sum = m => m.ev.reduce((x, y) => x + y, 0);
+        if (off) check('學習裝置關閉：上場的拿努力值，沒上場的後備不拿', sum(me) > 0 && sum(bench) === 0, `${sum(me)} / ${sum(bench)}`);
+        else check('學習裝置開啟：後備也拿努力值', sum(bench) > 0);
+      }
+    }
+    // 4. 雙打的光牆：減傷 2732/4096（單打 1/2）
+    {
+      const a = Mon.create(65, 50), c = Mon.create(25, 50), f1 = Mon.create(143, 50), f2 = Mon.create(143, 50);
+      const b = mkD([a, c], [f1, f2]);
+      const mvd = { ...md(moveId('psychic')) };
+      b.pair(a, f1);
+      U.seed(5); const d0 = b.calcDamage(a, f1, b.volOf(a), b.volOf(f1), mvd, 1, 90).dmg;
+      b.sides.foe.lightscreen = 5;
+      U.seed(5); const d1 = b.calcDamage(a, f1, b.volOf(a), b.volOf(f1), mvd, 1, 90).dmg;
+      const s1 = setup(65, 50, 143, 50);
+      U.seed(5); const e0 = s1.calcDamage(s1.me, s1.foe, s1.vMe, s1.vFoe, mvd, 1, 90).dmg;
+      s1.sides.foe.lightscreen = 5;
+      U.seed(5); const e1 = s1.calcDamage(s1.me, s1.foe, s1.vMe, s1.vFoe, mvd, 1, 90).dmg;
+      check('牆壁：雙打的光牆減傷約 2/3（2732/4096），單打 1/2', Math.abs(d1 / d0 - 2732 / 4096) < .03 && Math.abs(e1 / e0 - .5) < .03, `${d0}→${d1} / ${e0}→${e1}`);
+    }
+    // 5. 道館房間：鐵旋（電）、亞莎（火）用各自的道館
+    {
+      const key = gym => Interior.keyFor({ kind: 'gym', town: { region: 'hoenn', gym } });
+      const has = k => !!(window.INTERIORS && INTERIORS[k]);
+      check('道館房間：鐵旋用紫堇市道館、亞莎用釜炎鎮道館（有素材時），杜娟仍是卡那茲市道館',
+        key(0) === 'gym_rock' && (!has('gym_electric') || key(2) === 'gym_electric') && (!has('gym_fire') || key(3) === 'gym_fire'), `${key(0)} ${key(2)} ${key(3)}`);
+    }
+    [Battle.prototype.trainerIntro, Battle.prototype.trainerLeave] = keepIntro;
+  }
+  // 寶可夢中心的治療動畫（綠寶石 FldEff_PokecenterHeal）：一顆一顆放球、音樂、閃光，結束後清掉
+  {
+    const keep = G.state;
+    G.state = Game.newState('T', 'kanto', 1);
+    G.state.party = [Mon.create(25, 10), Mon.create(4, 10), Mon.create(7, 10)];
+    const c = World.buildings.find(b => b.kind === 'center');
+    const keepForce = window.INTERIORS_FORCE; window.INTERIORS_FORCE = true;
+    check('治療動畫：寶可夢中心有室內地圖', Interior.can(c));
+    if (Interior.can(c)) {
+      await Interior.enter(c);
+      const room = Interior.room, nurse = room.npcs.find(n => n.role === 'nurse');
+      const seen = [];
+      const realSfx = Sound.sfx; Sound.sfx = k => seen.push(k);
+      let jingleAt = null;
+      const t = Interior.healAnim(3, async () => { jingleAt = room.healing && room.healing.f; });
+      const during = room.healing && room.healing.n === 3 && nurse.dir === 'left';
+      await t;
+      Sound.sfx = realSfx;
+      check('治療動畫：放 3 顆球（各一次音效）、放完 32 格後才播音樂、結束後護士轉回來', during && seen.filter(k => k === 'ball_shake').length === 3
+        && jingleAt === 25 * 2 + 32 && !room.healing && nurse.dir === 'down', `${seen.join()} / ${jingleAt}`);
+      Interior.leave();
+    }
+    window.INTERIORS_FORCE = keepForce;
+    G.state = keep;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

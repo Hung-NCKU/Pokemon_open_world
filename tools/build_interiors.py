@@ -135,6 +135,53 @@ def reachable(w, h, coll, npcs, start, goal):
     return False
 
 
+MAX_OPEN = 4
+
+
+def open_path(w, h, coll, npcs, start, goal, bg, top):
+    """機關道館（紫堇市的電力柵欄、釜炎鎮的洞、橙華市的房門、綠嶺市的旋轉地板）在這個遊戲沒有機關，
+    從入口走不到館主時：找「穿過最少障礙格」的路線，把路上的障礙格改成可以走，
+    圖換成旁邊的地板（看起來像打開的柵欄、門），前景清空。最外圈的牆與人物所在的格子不打開。回傳打開的格數。"""
+    import heapq
+    block = {(n["x"], n["y"]) for n in npcs}
+    INF = 10 ** 9
+    dist = {tuple(start): 0}
+    prev = {}
+    pq = [(0, tuple(start))]
+    end = None
+    while pq:
+        d0, (x, y) = heapq.heappop(pq)
+        if d0 > dist.get((x, y), INF):
+            continue
+        if abs(x - goal[0]) + abs(y - goal[1]) == 1:
+            end = (x, y)
+            break
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if not (1 <= nx < w - 1 and 1 <= ny < h - 1) or (nx, ny) in block:
+                continue
+            cost = 1 if coll[ny * w + nx] == "0" else 200
+            if d0 + cost < dist.get((nx, ny), INF):
+                dist[(nx, ny)] = d0 + cost
+                prev[(nx, ny)] = (x, y)
+                heapq.heappush(pq, (d0 + cost, (nx, ny)))
+    if not end:
+        return 0
+    path = [end]
+    while path[-1] in prev:
+        path.append(prev[path[-1]])
+    opened = [(x, y) for (x, y) in path if coll[y * w + x] == "1"]
+    # 地板的樣子：路線上原本就能走的格子（離被打開的格子最近的那一格）
+    floor = [(x, y) for (x, y) in path if coll[y * w + x] == "0"]
+    for (x, y) in opened:
+        fx, fy = min(floor, key=lambda p: abs(p[0] - x) + abs(p[1] - y))
+        tile = bg.crop((fx * 16, fy * 16, fx * 16 + 16, fy * 16 + 16))
+        bg.paste(tile, (x * 16, y * 16))
+        top.paste((0, 0, 0, 0), (x * 16, y * 16, x * 16 + 16, y * 16 + 16))
+        coll[y * w + x] = "0"
+    return len(opened)
+
+
 def save_sprite(gfx):
     out = os.path.join(OUT, f"npc_{gfx}.png")
     if gfx.startswith("leader_"):
@@ -159,9 +206,25 @@ def main():
             continue
         if gym:
             leader = next((n for n in npcs if n["role"] == "leader"), None)
-            if not leader or not reachable(w, h, coll, npcs, exits[0], (leader["x"], leader["y"])):
-                print(f"  {key}（{map_name}）：從入口走不到館主，略過")
+            if not leader:
+                print(f"  {key}（{map_name}）：沒有館主，略過")
                 continue
+            if not reachable(w, h, coll, npcs, exits[0], (leader["x"], leader["y"])):
+                # 只打開少數幾格（柵欄、一兩格牆）；房間之間靠門或傳送台相連的道館（橙華市、綠嶺市）打開會很不自然，略過
+                trial = list(coll)
+                if open_path(w, h, trial, npcs, exits[0], (leader["x"], leader["y"]), bg.copy(), top.copy()) > MAX_OPEN:
+                    print(f"  {key}（{map_name}）：要打開太多格才走得到館主，略過")
+                    continue
+                n = open_path(w, h, coll, npcs, exits[0], (leader["x"], leader["y"]), bg, top)
+                if not reachable(w, h, coll, npcs, exits[0], (leader["x"], leader["y"])):
+                    print(f"  {key}（{map_name}）：從入口走不到館主，略過")
+                    continue
+                print(f"  {key}（{map_name}）：沒有機關，打開路線上的 {n} 格障礙")
+            # 原作要經過機關（樓下、傳送）才到得了的道館訓練家：這裡走不到，拿掉
+            far = [t for t in npcs if t["role"] == "gymTrainer" and not reachable(w, h, coll, [x for x in npcs if x is not t], exits[0], (t["x"], t["y"]))]
+            if far:
+                npcs = [t for t in npcs if t not in far]
+                print(f"  {key}：拿掉走不到的道館訓練家 {len(far)} 位")
         for n in npcs:
             if not save_sprite(n["gfx"]):
                 print(f"  缺少人物圖 {n['gfx']}，改用一般人物")
@@ -218,6 +281,51 @@ def main():
         save_sprite(g)
     with open(os.path.join(OUT, "interiors.js"), "w", encoding="utf-8") as f:
         f.write("// 由 tools/build_interiors.py 產生\nwindow.INTERIORS = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
+
+    export_heal_fx()
+
+
+def read_pal(path):
+    lines = open(path, encoding="utf-8").read().splitlines()[3:19]
+    return [tuple(int(v) for v in l.split()) for l in lines if l.strip()]
+
+
+def export_heal_fx():
+    """寶可夢中心治療機器的特效（src/field_effect.c 的 FldEff_PokecenterHeal）：
+    fx_heal_ball.png：精靈球 8×8，8 格（前 4 格是 Flash1 的 4 個相位，後 4 格是 Flash2），
+      閃光＝調色盤第 8、6、2、5、3 色依相位往白色混合（MultiplyInvertedPaletteRGBComponents，比例 16／12／8／0 ÷ 16）
+    fx_heal_monitor.png：牆上的螢幕 24×16，2 格（交替閃爍）"""
+    fe = os.path.join(EM, "graphics", "field_effects")
+    ball = Image.open(os.path.join(fe, "pics", "pokeball_glow.png"))
+    pal = read_pal(os.path.join(fe, "palettes", "pokeball_glow.pal"))
+    idx = list(ball.getdata())
+    K = [16, 12, 8, 0]
+    def tint(c, k):  # 5 位元色彩往白色混合，和 GBA 相同的整數運算
+        c5 = [v >> 3 for v in c]
+        return tuple(round((v + (((31 - v) * k) >> 4)) * 255 / 31) for v in c5)
+    def frame(phases):
+        im = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
+        for i, v in enumerate(idx):
+            if v == 0:
+                continue
+            col = tint(pal[v], K[phases[v]]) if v in phases else pal[v]
+            im.putpixel((i % 8, i // 8), col + (255,))
+        return im
+    sheet = Image.new("RGBA", (64, 8), (0, 0, 0, 0))
+    for c in range(4):  # Flash1：第 8 色相位 (c+3)&3、第 6 色 (c+2)&3、第 2 色 (c+1)&3、第 5、3 色 c
+        sheet.paste(frame({8: (c + 3) & 3, 6: (c + 2) & 3, 2: (c + 1) & 3, 5: c, 3: c}), (c * 8, 0))
+    for c in range(4):  # Flash2：全部同一個相位
+        sheet.paste(frame({8: c, 6: c, 2: c, 5: c, 3: c}), (32 + c * 8, 0))
+    sheet.save(os.path.join(OUT, "fx_heal_ball.png"))
+    gp = read_pal(os.path.join(fe, "palettes", "general_0.pal"))
+    mon = Image.new("RGBA", (48, 16), (0, 0, 0, 0))
+    for k in range(2):
+        im = Image.open(os.path.join(fe, "pics", "pokecenter_monitor", f"{k}.png"))
+        for i, v in enumerate(im.getdata()):
+            if v:
+                mon.putpixel((k * 24 + i % 24, i // 24), gp[v] + (255,))
+    mon.save(os.path.join(OUT, "fx_heal_monitor.png"))
+    print("  治療機器特效：fx_heal_ball.png、fx_heal_monitor.png")
 
 
 if __name__ == "__main__":

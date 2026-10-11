@@ -917,12 +917,19 @@ Object.assign(Battle.prototype, {
       if ((ui === 'kings-rock' || ui === 'razor-fang') && target.hp > 0 && !shielded && !secs.some(s => s.volatileStatus === 'flinch') && U.rand() < .1) vT.flinch = true;
     }
     // 生命寶珠的反作用力、貝殼之鈴、打倒對手時的特性
-    // 雙打的全體招式：生命寶珠、爽喉噴霧、自身的能力變化是「整個招式一次」，不是每個目標各一次（act._once 記錄已結算的項目）
-    const once = k => { const o = act && act._once; if (!o) return true; if (o[k]) return false; o[k] = true; return true; };
+    // 雙打的全體招式：生命寶珠、爽喉噴霧、自身的能力變化是「整個招式一次」，而且在所有目標都打完之後才結算
+    // （淘金潮打第二個目標時特攻還沒降；act._once 記錄已排入的項目，act._once.after 是招式結束後要執行的）
+    const later = async (k, fn) => {
+      const o = act && act._once;
+      if (!o) return fn();
+      if (o[k]) return;
+      o[k] = true;
+      if (o.after) o.after.push(fn); else await fn();
+    };
     if (user.hp > 0 && total > 0) {
-      if (ui === 'life-orb' && ua !== 'magic-guard' && !sheer && !this._futureSrcOut && once('lifeOrb')) { await this.selfDamage(user, Math.max(1, Math.floor(Mon.maxHp(user) / 10))); await this.msg(`${this.label(user)} 的體力被削減了！`); }
+      if (ui === 'life-orb' && ua !== 'magic-guard' && !sheer && !this._futureSrcOut) await later('lifeOrb', async () => { if (user.hp > 0) { await this.selfDamage(user, Math.max(1, Math.floor(Mon.maxHp(user) / 10))); await this.msg(`${this.label(user)} 的體力被削減了！`); } });
       if (ui === 'shell-bell' && user.hp > 0 && user.hp < Mon.maxHp(user)) { await this.healMon(user, Math.max(1, Math.floor(total / 8))); await this.msg(`${this.label(user)} 用貝殼之鈴回復了少許體力！`); }
-      if (ui === 'throat-spray' && mv.flags.sound && user.hp > 0 && once('throatSpray')) { await this.consume(user, `${this.label(user)} 使用了{i}！`); await this.boost(user, { spa: 1 }, user); }
+      if (ui === 'throat-spray' && mv.flags.sound && user.hp > 0) await later('throatSpray', async () => { if (user.hp > 0 && user.item === 'throat-spray') { await this.consume(user, `${this.label(user)} 使用了{i}！`); await this.boost(user, { spa: 1 }, user); } });
     }
     if (target.hp <= 0 && user.hp > 0) {
       if (ua === 'moxie' || ua === 'chilling-neigh') await this.boost(user, { atk: 1 }, user);
@@ -937,9 +944,9 @@ Object.assign(Battle.prototype, {
     // 對目標的揮發狀態（束縛類）
     if (mv.volatileStatus && target.hp > 0 && !subHit) await this.addVolatile(target, mv.volatileStatus, user, mv);
     // 自身效果
-    if (mv.self && mv.self.boosts && user.hp > 0 && once('self') && (!mv.self.chance || U.rand() * 100 < mv.self.chance)) await this.boost(user, mv.self.boosts, user);
+    if (mv.self && mv.self.boosts && user.hp > 0) await later('self', async () => { if (user.hp > 0 && (!mv.self.chance || U.rand() * 100 < mv.self.chance)) await this.boost(user, mv.self.boosts, user); });
     if (mv.self && mv.self.volatileStatus === 'roost') vU.roost = true;
-    if (mv.selfBoost && mv.selfBoost.boosts && user.hp > 0 && once('selfBoost')) await this.boost(user, mv.selfBoost.boosts, user);
+    if (mv.selfBoost && mv.selfBoost.boosts && user.hp > 0) await later('selfBoost', async () => { if (user.hp > 0) await this.boost(user, mv.selfBoost.boosts, user); });
     // 解凍
     if (mv.thawsTarget && target.st === 'frz' && target.hp > 0) { target.st = null; this.draw(); await this.msg(`${tname} 的冰凍融化了！`); }
     if (mv.id === 'sparklingaria' && target.st === 'brn') { target.st = null; this.draw(); }
@@ -1156,7 +1163,7 @@ Object.assign(Battle.prototype, {
     if (phys && user.st === 'brn' && mv.id !== 'facade' && ua !== 'guts') base = Math.floor(base / 2);
     // 最終修正（穿透無視牆壁）
     const sd = this.sides[this.sideKey(target)];
-    if (!crit && ua !== 'infiltrator' && !['brickbreak', 'psychicfangs', 'ragingbull'].includes(mv.id) && (sd.auroraveil || (phys ? sd.reflect : sd.lightscreen))) base = Math.floor(base / 2);
+    if (!crit && ua !== 'infiltrator' && !['brickbreak', 'psychicfangs', 'ragingbull'].includes(mv.id) && (sd.auroraveil || (phys ? sd.reflect : sd.lightscreen))) base = (this.activePerHalf || 1) > 1 ? Math.floor(base * 2732 / 4096) : Math.floor(base / 2);
     // Z 招式打在守住上：只受到 1/4 傷害
     if (mv.isZ && mv.zHitProtect) base = Math.floor(base / 4);
     let fMod = 1;
@@ -1578,6 +1585,7 @@ Object.assign(Battle.prototype, {
   },
   async selfFaint(user) {
     if (user.hp <= 0) return;
+    if (this._deferFaint) { this._deferFaint.add(user); return; } // 雙打的大爆炸：所有目標都打完才倒下
     this.selfKO = this.sideKey(user);
     await this.hurt(user, user.hp);
   },

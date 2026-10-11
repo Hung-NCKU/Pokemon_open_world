@@ -32,6 +32,7 @@ class DoubleBattle extends Battle {
   // 守住類：佇列裡沒有其他還能行動的寶可夢時，就是最後行動
   isLastMover() { return !this._pending || !this._pending.some(a => a.user && a.user.hp > 0); }
   activeMons() { return [...this.actives('me'), ...this.actives('foe')]; }
+  get activePerHalf() { return 2; } // 每邊兩隻（牆壁的減傷是 2732/4096）
   // 四隻寶可夢各自的行動（突襲、迅雷查的是目標那一隻，不是「那一邊」）
   queuedMoveOf(m) { const a = this.queuedBy && this.queuedBy.get(m); return a && a.type === 'move' && a.mv ? a.mv : null; }
   // 未來攻擊：打施放時選的格位目前在場的寶可夢
@@ -295,6 +296,8 @@ class DoubleBattle extends Battle {
       if (others.length) a.mv = { ...a.mv, spreadMod: .75 };
       this.firstMover = first; first = false;
       this._moveUsed = false;
+      // 全體招式：自身的效果與自爆類的倒下等所有目標都打完才結算
+      if (others.length) { a._once.after = []; this._deferFaint = new Set(); }
       await this.runMove(user, target, a);
       // 全體招式：只要招式確實使出了，每個目標分開判定（第一個目標守住、免疫或沒打中，不影響其他目標）
       // 大爆炸等自己倒下的招式：仍然打到其他目標；濕氣讓招式沒有使出時不打
@@ -307,6 +310,16 @@ class DoubleBattle extends Battle {
             if (this.sideKey(user) === 'me') this.ctx(o, oppo); else this.ctx(oppo, o);
           } else this.pair(user, o);
           await this.useMoveOn(user, o, a.mv, a);
+        }
+      }
+      if (others.length) {
+        const after = a._once.after || [], faint = this._deferFaint;
+        a._once.after = null; this._deferFaint = null;
+        if (after.length || (faint && faint.size)) {
+          const oppo = this.actives(this.sideKey(user) === 'me' ? 'foe' : 'me')[0] || null;
+          if (oppo) this.pair(user, oppo);
+          for (const fn of after) await fn();
+          for (const u of faint || []) await this.selfFaint(u);
         }
       }
       this.drawAll();

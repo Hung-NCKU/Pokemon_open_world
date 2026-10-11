@@ -7,7 +7,8 @@ const Interior = (() => {
   const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
   // 館主屬性 → 使用的綠寶石道館（沒有對應道館的屬性選相近的）
   const GYM_ROOM = {
-    rock: 'gym_rock', ground: 'gym_rock', steel: 'gym_rock', electric: 'gym_rock', fire: 'gym_rock',
+    // 有素材的屬性用自己的道館（紫堇市：電、釜炎鎮：火）；沒有的用相近的
+    rock: 'gym_rock', ground: 'gym_rock', steel: 'gym_electric', electric: 'gym_electric', fire: 'gym_fire',
     fighting: 'gym_fighting', dark: 'gym_fighting', ghost: 'gym_fighting', poison: 'gym_fighting', psychic: 'gym_fighting',
     flying: 'gym_flying', grass: 'gym_flying', bug: 'gym_flying', fairy: 'gym_flying', normal: 'gym_flying',
     water: 'gym_water', ice: 'gym_water', dragon: 'gym_water',
@@ -32,7 +33,9 @@ const Interior = (() => {
   function keyFor(b) {
     if (b.kind === 'gym') {
       const lead = LEADERS[b.town.region] && LEADERS[b.town.region][b.town.gym];
-      return lead ? GYM_ROOM[lead[1]] || 'gym_rock' : null;
+      if (!lead) return null;
+      const k = GYM_ROOM[lead[1]] || 'gym_rock';
+      return INTERIORS[k] ? k : 'gym_rock'; // 舊版素材沒有這間道館時退回岩石道館
     }
     if (b.kind === 'league') return 'league';
     return ['center', 'mart', 'house', 'lab', 'house_s'].includes(b.kind) ? b.kind : null;
@@ -120,23 +123,62 @@ const Interior = (() => {
     return true;
   }
 
-  // 寶可夢中心的治療機器：在護士左邊的機器上依序放上精靈球（每 0.3 秒一顆），全部放好後隨音樂閃爍
-  //   機器的位置：古辰鎮寶可夢中心地圖（OldaleTown_PokemonCenter_1F）的第 5–6 欄、第 1–2 列
-  const HEAL_SLOTS = [[5.35, 1.45], [5.85, 1.45], [5.35, 1.8], [5.85, 1.8], [5.35, 2.15], [5.85, 2.15]];
+  // 寶可夢中心的治療機器：照綠寶石 src/field_effect.c 的 FldEff_PokecenterHeal（以 60 格／秒計時）
+  //   精靈球：每 25 格放一顆（SE_BALL），位置＝(93,36) 起、偏移 (0,0)(6,0)(0,4)(6,4)(0,8)(6,8)，8×8 置中
+  //   放完 32 格後播放治療音樂、牆上的螢幕開始閃（16 格換一次，共 8 次）
+  //   球閃光：Flash1 每 8 格換相位、繞 3 圈（96 格），Flash2 再 3 個相位（24 格），停 30 格後球消失，等音樂結束
+  //   座標是主角站在櫃台前（第 7 欄第 4 列）時的畫面座標：主角那一格的左上角在畫面 (112,72)，所以地圖像素＝畫面座標 − (0,8)（GBA 1 像素＝畫布 3 像素）
+  const HEAL_BALL = [[0, 0], [6, 0], [0, 4], [6, 4], [0, 8], [6, 8]];
+  const healTimeline = n => {
+    const place = 25 * (n - 1), jingle = place + 32, flash1 = jingle, flash2 = flash1 + 96, gone = flash2 + 24 + 30;
+    return { place, jingle, flash1, flash2, gone, monitorEnd: jingle + 128 };
+  };
   async function healAnim(n, playJingle) {
     if (!room) return playJingle();
+    n = Math.max(1, Math.min(6, n));
     const nurse = room.npcs.find(x => x.role === 'nurse');
     if (nurse) nurse.dir = 'left';
-    room.healing = { n: 0, blink: false };
-    Gen3.ensure('ball_poke', 'ball_poke.png');
-    for (let i = 0; i < Math.min(6, n); i++) {
-      room.healing.n = i + 1;
-      Sound.sfx('select');
-      await new Promise(r => setTimeout(r, G.fast ? 150 : 300));
+    Gen3.ensure('fx_heal_ball', 'fx_heal_ball.png'); Gen3.ensure('fx_heal_monitor', 'fx_heal_monitor.png');
+    const tl = healTimeline(n);
+    const fps = () => (G.fast ? 120 : 60);
+    room.healing = { n, f: 0 };
+    const wait = frames => new Promise(r => setTimeout(r, frames * 1000 / fps()));
+    // 放球（每 25 格一顆）
+    for (let i = 0; i < n; i++) {
+      room.healing.f = i * 25;
+      Sound.sfx('ball_shake');
+      if (i < n - 1) await wait(25);
     }
-    room.healing.blink = true;
-    await playJingle();
+    await wait(32);
+    // 音樂開始：之後的動畫以時間推進，直到球消失、音樂結束
+    const t0 = performance.now(), f0 = tl.jingle;
+    let live = true;
+    const tick = () => { if (!live || !room || !room.healing) return; room.healing.f = f0 + (performance.now() - t0) * fps() / 1000; requestAnimationFrame(tick); };
+    room.healing.f = f0;
+    requestAnimationFrame(tick);
+    await Promise.all([playJingle(), wait(tl.gone - tl.jingle)]);
+    live = false;
     if (room) { room.healing = null; if (nurse) nurse.dir = 'down'; }
+  }
+  function drawHeal(g, ox, oy) {
+    const h = room.healing, S = TILE / 16, tl = healTimeline(h.n), f = h.f;
+    const ball = Gen3.ensure('fx_heal_ball', 'fx_heal_ball.png'), mon = Gen3.ensure('fx_heal_monitor', 'fx_heal_monitor.png');
+    // 牆上的螢幕
+    if (f >= tl.jingle && f < tl.monitorEnd && mon.naturalWidth) {
+      const k = Math.floor((f - tl.jingle) / 16) % 2;
+      g.drawImage(mon, k * 24, 0, 24, 16, (124 - 12) * S - ox, (24 - 8 - 8) * S - oy, 24 * S, 16 * S);
+    }
+    if (f >= tl.gone) return;
+    // 球的閃光相位：Flash1 第 0～3 格、Flash2 第 4～7 格；還沒閃時用原本的樣子（第 7 格＝不混白色）
+    let fr = 7;
+    if (f >= tl.flash1 && f < tl.flash2) fr = Math.floor((f - tl.flash1) / 8) % 4;
+    else if (f >= tl.flash2) fr = 4 + Math.min(3, Math.floor((f - tl.flash2) / 8));
+    const placed = Math.min(h.n, Math.floor(f / 25) + 1);
+    for (let i = 0; i < placed; i++) {
+      const x = (93 + HEAL_BALL[i][0] - 4) * S - ox, y = (36 + HEAL_BALL[i][1] - 4 - 8) * S - oy;
+      if (ball.naturalWidth) g.drawImage(ball, fr * 8, 0, 8, 8, x, y, 8 * S, 8 * S);
+      else { g.fillStyle = '#e83030'; g.beginPath(); g.arc(x + 4 * S, y + 4 * S, 3.5 * S, 0, Math.PI * 2); g.fill(); }
+    }
   }
 
   function exit() {
@@ -280,18 +322,8 @@ const Interior = (() => {
         World.drawPerson(g, n.x * TILE - ox, n.y * TILE - oy, n.dir, { pal: Spr.trainerPal(n.cls || 0, n.i % 5), sheet: 'npc_' + n.gfx }, 0);
       }
     }
-    // 治療機器上的精靈球
-    if (room.healing) {
-      const ball = Gen3.ensure('ball_poke', 'ball_poke.png');
-      const on = !room.healing.blink || (G.frame >> 3) % 2;
-      for (let i = 0; i < room.healing.n; i++) {
-        const [hx, hy] = HEAL_SLOTS[i];
-        const x = hx * TILE - ox, y = hy * TILE - oy;
-        if (ball.naturalWidth) g.drawImage(ball, 0, 0, 16, 16, x, y, 18, 18);
-        else { g.fillStyle = '#e83030'; g.beginPath(); g.arc(x + 9, y + 9, 8, 0, Math.PI * 2); g.fill(); }
-        if (room.healing.blink && on) { g.fillStyle = 'rgba(255,255,200,.7)'; g.beginPath(); g.arc(x + 9, y + 9, 10, 0, Math.PI * 2); g.fill(); }
-      }
-    }
+    // 治療機器上的精靈球與牆上的螢幕
+    if (room.healing) drawHeal(g, ox, oy);
     const top = Gen3.ensure('int_' + room.key + '_top', `int_${room.key}_top.png`);
     if (top.naturalWidth) g.drawImage(top, -ox, -oy, W, H);
   }
