@@ -1,4 +1,5 @@
 // 共用工具：亂數、雜訊、雜項
+import { G } from './core.js';
 const U = {
   // 遊戲邏輯共用的亂數來源；U.seed(n) 改為固定亂數（測試、重播用），U.unseed() 還原
   rand: Math.random,
@@ -57,3 +58,5 @@ function fbm(x, y, seed, oct = 4) {
   }
   return v / t;
 }
+
+export { U, mulberry32, hash2, valueNoise, fbm };

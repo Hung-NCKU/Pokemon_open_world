@@ -1,19 +1,23 @@
 // 形態：地區形態（阿羅拉、伽勒爾、洗翠、帕底亞）與洛托姆的家電形態（資料：data/forms.js）
 // 個體以 m.form（形態名稱，例如 'vulpix-alola'）記錄；屬性、種族值、特性、招式、體重都改用形態的資料
+import { FORM_EVO, Forms, Game, UI, define } from './core.js';
+import { U } from './util.js';
+import { ITEMS } from './data.js';
+import { Mon } from './mon.js';
 const FORM_REGION = { alola: 'alola', galar: 'galar', paldea: 'paldea', hisui: 'sinnoh' };
 // 地區形態進化成不同物種（其餘維持同一地區形態，例如 阿羅拉六尾 → 阿羅拉九尾）
-const FORM_EVO = {
+define(FORM_EVO, {
   'meowth-galar': { to: 863, lvl: 28 }, 'farfetchd-galar': { to: 865, lvl: 30 }, 'mr-mime-galar': { to: 866, lvl: 42 },
   'corsola-galar': { to: 864, lvl: 38 }, 'yamask-galar': { to: 867, lvl: 34 }, 'linoone-galar': { to: 862, lvl: 35 },
   'sneasel-hisui': { to: 903, lvl: 30 }, 'qwilfish-hisui': { to: 904, lvl: 30 }, 'wooper-paldea': { to: 980, lvl: 20 },
-};
+});
 // 洛托姆的形態與專屬招式（PokéAPI 招式編號）
 const ROTOM_FORMS = [
   [null, 84], ['rotom-heat', 315], ['rotom-wash', 56], ['rotom-frost', 59], ['rotom-fan', 403], ['rotom-mow', 437],
 ];
 ITEMS['rotom-catalog'] = { n: '洛托姆型錄', price: 0, kind: 'key', d: '記載著家電的型錄。可以改變洛托姆的形態。' };
 
-const Forms = {
+define(Forms, {
   get(m) { return m && m.form && window.FORMS && FORMS[m.form] && FORMS[m.form].base === m.sp ? FORMS[m.form] : null; },
   // 個體資料：形態覆蓋物種
   data(m) {
@@ -74,4 +78,6 @@ const Forms = {
     await UI.say(`洛托姆變成了${form ? FORMS[form].n : '原本的樣子'}！`);
     return true;
   },
-};
+});
+
+export { FORM_REGION, ROTOM_FORMS };

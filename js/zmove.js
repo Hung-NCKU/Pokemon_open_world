@@ -2,6 +2,12 @@
 // - 需要重要物品「Z 手環」，寶可夢攜帶某屬性的 Z 純晶，使用該屬性的攻擊招式時可以變成 Z 招式（招式選單按 E）
 // - 威力依原本招式的威力換算（第七世代表）；不會被守住完全擋下（只受到 1/4 傷害）；每場一次，和超級進化、太晶化擇一
 // - 取得：阿羅拉地區的博士送 Z 手環與一般 Z；阿羅拉的道館送同屬性的 Z 純晶；其餘的散落在阿羅拉各地
+import { G, Game, Story, T, UI, ZMove, define } from './core.js';
+import { mulberry32 } from './util.js';
+import { ITEMS, LEADERS, REGIONS, REGION_POS, TYPES } from './data.js';
+import { md } from './movedata.js';
+import { World } from './world.js';
+import { Battle } from './battle.js';
 ITEMS['z-ring'] = { n: 'Z 手環', price: 0, kind: 'key', d: '能把 Z 純晶的力量傳給寶可夢的手環。' };
 const ZCRYSTAL = {};
 for (const [type, z] of Object.entries(window.ZMOVES || {})) {
@@ -9,7 +15,7 @@ for (const [type, z] of Object.entries(window.ZMOVES || {})) {
   ITEMS[z.item] = { n: z.itemN, price: 0, kind: 'held', d: `讓寶可夢攜帶後，可以把${TYPES[type].n}屬性的招式變成 Z 招式「${z.n}」。` };
 }
 
-const ZMove = {
+define(ZMove, {
   // 第七世代：原本威力 → Z 招式威力
   power(bp) {
     if (bp <= 55) return 100; if (bp <= 65) return 120; if (bp <= 75) return 140; if (bp <= 85) return 160;
@@ -27,7 +33,7 @@ const ZMove = {
     return { ...mv, id: 'zmove', baseId: mv.id, n: z.n, type, bp: ZMove.power(mv.bp), acc: true, isZ: true, breaksProtect: true,
       secondary: null, secondaries: null, self: null, multihit: null, drain: null, recoil: null, flags: { ...mv.flags, contact: mv.flags && mv.flags.contact } };
   },
-};
+});
 
 Object.assign(Battle.prototype, {
   gimmickUsed(side) { return !!((this.megaUsed && this.megaUsed[side]) || (this.teraUsed && this.teraUsed[side]) || (this.zUsed && this.zUsed[side])); },
@@ -113,3 +119,5 @@ Story.prof = async function (region) {
   }
   return _prof.call(this, region);
 };
+
+export { ZCRYSTAL, _resolveMove, _runMove, _doTurn, _aiChoose, _megaOk, _teraZ, _zGenerate, _prof };

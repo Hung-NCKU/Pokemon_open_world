@@ -1,4 +1,8 @@
 // 寶可夢個體：能力值、經驗值、招式、進化（最新世代公式）
+import { FORM_EVO, Forms, G } from './core.js';
+import { U } from './util.js';
+import { ITEMS, TYPES } from './data.js';
+import { Abil } from './abilities.js';
 const NATURES = ['勤奮', '怕寂寞', '勇敢', '固執', '頑皮', '大膽', '坦率', '悠閒', '淘氣', '樂天', '膽小', '急躁', '認真', '爽朗',
   '天真', '內斂', '慢吞吞', '冷靜', '害羞', '馬虎', '溫和', '溫順', '自大', '慎重', '浮躁'];
 const NAT_STAT = [1, 2, 5, 3, 4]; // 攻擊 防禦 速度 特攻 特防
@@ -212,3 +216,5 @@ const Mon = {
   },
   genderMark(m) { return m.gender === 'F' ? '♀' : m.gender === 'M' ? '♂' : ''; },
 };
+
+export { NATURES, NAT_STAT, STAT_ZH, STATUS_ZH, STATUS_C, SPR, STRUGGLE, Mon };

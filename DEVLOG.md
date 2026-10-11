@@ -6,6 +6,18 @@
 
 ## 2026-10-11
 
+### `vite-esm` 分支：ES module、Vite 打包、Preact（使用者要求另開分支，避免改壞 main）
+- **ES module**：48 個傳統腳本改成 `import`／`export`（`tools/esm_convert.cjs` 用 espree＋eslint-scope 自動分析與改寫）。
+  - 傳統腳本「比較早的檔案在執行期呼叫比較晚的檔案」很常見（`G` 被 35 個檔案往後參照），直接改成 import 會形成循環，模擬的執行順序整個亂掉（late.js 會在 engine.js 之前執行）。做法：26 個往後參照的單例物件先在 `js/core.js` 宣告成空物件、原本的檔案用 `define()` 填入；往後參照的函式搬到比較早的檔案（`md`、`newVol` 等 → 新的 `js/movedata.js`；`monSprite`、`playCry` → `sprites.js`）。工具模擬模組的執行順序，確認和原本的載入順序完全相同才改寫。
+  - `js/main.js` 依原本順序載入資料與模組，並把 export 放到 window（測試頁、開發者工具照舊使用 `Game`、`Battle`、`G`）。
+  - 改寫後抓到的差異：`data/towns.js` 的 `const TOWN_DESIGNS` 在模組裡變私有（改成 `window.TOWN_DESIGNS`）；改寫 HTML 時誤刪了三個測試頁的 `GEN3_BASE`（素材路徑），補回。
+- **Vite**：`npm run dev`（開發伺服器）、`npm run build`（打包到 `dist/`，JS 1.37 MB／gzip 425 KB，原本合併後 1.9 MB）、`npm run preview`。圖鑑說明拆檔改成 Vite 外掛（取代 `tools/build_web.py`）；素材、字型、Service Worker 原樣複製。`tools/deploy_pages.sh` 改用 Vite 打包；Dockerfile 改成兩階段（node 打包 → nginx）。
+- **不能再用 file:// 開啟**（瀏覽器不從 file:// 載入模組）：Playwright、`tools/unsupported.sh`、`tools/ui_shots.sh`、`tools/natural.sh` 都改用 Vite 開發伺服器；`tools/serve.mjs` 移除。
+- **Preact**：第一個元件是綠寶石的設定畫面（`js/ui/option_menu.jsx`），DOM 與 class 和原本相同；截圖和 main 的版本完全一致。Preact 的 `useEffect` 要等到下一次繪製，冒煙測試打開畫面後馬上按的鍵收不到而卡住，改用 `useLayoutEffect`。
+- 用固定的世界種子比較 main 與這個分支：野生寶可夢的等級、種類、經驗值計算完全相同。
+- 文件：README（開發與打包的指令、檔案結構）、`docs/DEVELOPMENT.md` 第 12 章（模組化的過程）。
+- 測試：引擎 543/543、冒煙 17/17（Vite 開發伺服器）；打包後的 `dist/` 在 Docker（nginx）裡載入無錯誤、圖鑑說明延後載入正常。
+
 ### 使用者要求：npm、測試框架（Playwright）、CI、Docker
 - `package.json`：`npm run serve`（`tools/serve.mjs`，沒有相依套件的靜態伺服器）、`npm test`（引擎＋冒煙）、`test:engine`、`test:smoke`、`test:natural`（實際遊玩，真實時間）、`test:install`（下載 Chromium）。
 - 測試框架：Playwright（`playwright.config.js`、`tests/e2e/*.spec.js`）。原本的測試頁不變，Playwright 透過本機伺服器打開它們，等 `document.title` 變成 PASS／FAIL，再列出失敗的項目；`PW_CHANNEL=chrome` 可以用已安裝的 Chrome。改用 http 而不是 file://，也不再需要「虛擬時間」：引擎測試真實時間約 40 秒。

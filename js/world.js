@@ -1,5 +1,11 @@
 // 開放世界：地形生成、城鎮道路、訓練家、野生寶可夢、繪製
-const T = { GRASS: 0, TALL: 1, TREE: 2, WATER: 3, SAND: 4, MOUNT: 5, CAVE: 6, SNOW: 7, SNOWTALL: 8, DESERT: 9, PATH: 10, BRIDGE: 11, TOWN: 12, BLDG: 13, DOOR: 14, FLOWER: 15, DEEP: 16, LANDMARK: 17 };
+import { ELITE_FOUR, G, GYM_TOWNS, Game, LANDMARKS, LEAGUE_TOWN, SIGNATURE, Story, T, define } from './core.js';
+import { U, fbm, hash2, mulberry32, valueNoise } from './util.js';
+import { BIOME_TYPES, CLIMATE, LEADERS, REGIONS, REGION_KEYS, REGION_LINKS, REGION_POS, TOWN_A, TOWN_B, TRAINER_CLASSES, TRAINER_NAMES } from './data.js';
+import { Mon } from './mon.js';
+import { Gen3 } from './gen3.js';
+import { Spr } from './sprites.js';
+define(T, { GRASS: 0, TALL: 1, TREE: 2, WATER: 3, SAND: 4, MOUNT: 5, CAVE: 6, SNOW: 7, SNOWTALL: 8, DESERT: 9, PATH: 10, BRIDGE: 11, TOWN: 12, BLDG: 13, DOOR: 14, FLOWER: 15, DEEP: 16, LANDMARK: 17 });
 const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5], house_s: [4, 4, 1, 3], sign: [1, 1, 0, 0] };
@@ -963,3 +969,5 @@ const World = {
     this.mapCanvas = c;
   },
 };
+
+export { TILE, BUILDING_SIZE, WW, WH, WORLD_VER, SAVE_VER, TOWN_W, TOWN_H, BLOCKED, World };

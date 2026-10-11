@@ -1,4 +1,7 @@
 // 圖鑑與箱子共用的搜尋：名稱、屬性、地區（世代）、捕捉狀態、標記
+import { G, UI } from './core.js';
+import { REGIONS, TYPES, typeTag } from './data.js';
+import { Mon } from './mon.js';
 const MARKS = ['●', '▲', '■', '♥', '★', '◆'];
 const Search = {
   empty() { return { text: '', type: null, gen: null, status: 'all', mark: null }; },
@@ -71,3 +74,5 @@ const Search = {
     }
   },
 };
+
+export { MARKS, Search };

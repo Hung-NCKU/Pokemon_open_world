@@ -307,3 +307,18 @@ if (lm.ver && lm.ver > this.worldVer) continue;                        // 新的
 ---
 
 *這份文件與 [DEVLOG.md](../DEVLOG.md)（時間順序的完整紀錄）、[PROGRESS.md](../PROGRESS.md)（規劃與進度）一起閱讀。*
+
+## 12. 模組化：從傳統腳本到 ES module、Vite 與 Preact（`vite-esm` 分支）
+
+原本的程式是 index.html 依序載入的 60 個傳統腳本，檔案之間靠全域變數互相呼叫，載入順序就是執行順序。改成 ES module（`import`／`export`）時遇到的問題與做法：
+
+1. **自動找出依賴**：`tools/esm_convert.cjs` 用 espree 解析每個檔案、eslint-scope 分析作用域，得到「這個檔案宣告了什麼」與「用到別的檔案的什麼」，自動加上 `import { … } from './x.js'` 和 `export { … }`。先只分析、列出問題（寫入別的檔案的變數、重複宣告、隱含的全域變數），沒有問題才改寫。
+2. **執行順序**：ES module 會先執行被 import 的模組。傳統腳本裡「比較早的檔案在執行期才呼叫比較晚的檔案」（例如 util.js 用到 game.js 的 `G`）很常見，改成 import 之後會形成循環，執行順序整個亂掉（模擬的結果是 late.js 在 engine.js 之前執行，包裝 `Battle.prototype` 的順序就錯了）。解法是讓**每個 import 都指向比較早的檔案**：
+   - 這種「往後參照」的單例物件（`G`、`Game`、`UI`、`Story`……共 26 個）先在最早的 `js/core.js` 宣告成空物件，原本的檔案用 `define(X, {...})` 把內容（含 getter）填進去，呼叫的地方完全不用改；
+   - 往後參照的函式手動搬到比較早的檔案（`md`、`newVol` → `js/movedata.js`，`monSprite`、`playCry` → `js/sprites.js`）；
+   - 工具模擬 ES module 的執行順序，確認和原本的載入順序完全相同才改寫。
+3. **改寫之後才發現的差異**：資料檔 `data/towns.js` 用 `const TOWN_DESIGNS`（傳統腳本是全域，模組裡變成私有）；`document.currentScript` 在模組裡是 null；測試頁裡的 `<script>` 要改成 `type="module"` 才會在遊戲模組之後執行。全部靠測試抓出來（引擎 543、冒煙 17、實際遊玩 17）。
+4. **Vite**：開發伺服器（`npm run dev`）與打包（`npm run build`）。打包後 JS 從原本合併的 1.9 MB 變成 1.37 MB（gzip 425 KB）；圖鑑說明在打包時拆成 `data/dex_text.js`、頁面載入後才下載（原本 `tools/build_web.py` 做的事改成 Vite 外掛）；綠寶石素材在執行期才用網址載入，打包後原樣複製。
+5. **Preact**：介面逐步改成元件。第一個是設定畫面（`js/ui/option_menu.jsx`），DOM 結構和 class 與原本相同，樣式不用改。遇到的差異：Preact 的 `useEffect` 在下一次繪製才執行，冒煙測試打開畫面後馬上按鍵就收不到；改用 `useLayoutEffect`（在 `render()` 裡同步執行），行為才和原本一樣。
+
+> 💡 這次的重點：大規模的機械式改寫交給工具（解析、模擬、檢查），工具先「只分析不改寫」；改寫後用原本就有的測試確認行為不變，截圖和原本的版本並排比較。

@@ -3,6 +3,10 @@
 //   rain（從畫面上方落下）、orbit（繞著目標）、lunge（衝向對手）、shake（震動）、tint（變色，blendcolor）、
 //   flash（背景閃光／變暗）、wait
 // 常見招式照原版腳本的動作順序重做；沒有腳本的招式沿用屬性通用動畫（battle_view.js 的 moveAnim）
+import { Sound } from './core.js';
+import { U } from './util.js';
+import { Gen3 } from './gen3.js';
+import { Battle } from './battle.js';
 const AnimKit = {
   // 在 battle 上建立一組工具
   make(b, user, target) {
@@ -253,3 +257,5 @@ Battle.prototype.moveAnim = async function (user, target, mv) {
   if (!script || !this.el) return _moveAnimGeneric.call(this, user, target, mv);
   try { await script(AnimKit.make(this, user, target)); } catch (e) { console.warn('招式動畫失敗', mv.id, e); }
 };
+
+export { AnimKit, MOVE_ANIM, MOVE_SE, TYPE_SE, _moveAnimGeneric };

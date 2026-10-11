@@ -5,7 +5,7 @@
 # - 每次執行都重新產生 gh-pages（強制推送，只保留最新一份），不影響 main 的歷史
 # - 要撤下原版素材：刪除 gh-pages 分支，並把 Pages 的來源改回 main（見 docs/DEVELOPMENT.md）
 #
-# 用法：bash tools/deploy_pages.sh   （先執行 python tools/build_assets.py 產生 assets/gen3）
+# 用法：bash tools/deploy_pages.sh   （先執行 python tools/build_assets.py 產生 assets/gen3；需要 Node.js）
 set -euo pipefail
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
@@ -15,15 +15,13 @@ REV=$(git rev-parse --short HEAD)
 OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 
-git archive HEAD | tar -x -C "$OUT"
-mkdir -p "$OUT/assets"
-cp -r assets/gen3 "$OUT/assets/"
+# 用 Vite 打包（dist/：模組合併壓縮、圖鑑說明拆出、複製素材與 Service Worker）
+[ -d node_modules ] || npm ci
+npm run build
+cp -r dist/. "$OUT/"
 touch "$OUT/.nojekyll"
 # Service Worker 的版本＝提交編號（版本改變時，玩家的裝置會清掉舊的快取）
 sed -i "s/const VERSION = 'dev';/const VERSION = '$REV';/" "$OUT/sw.js"
-# 合併腳本成 app.js、圖鑑說明改成載入後才下載（只改發布的複本，原始碼不變）
-PY=${PYTHON:-python}
-"$PY" tools/build_web.py "$OUT" "$REV"
 
 cd "$OUT"
 git init -q

@@ -1,5 +1,16 @@
 // 綠寶石版介面：隊伍、圖鑑、訓練家卡片（素材由 tools/build_ui.py 從 pokeemerald 產生）
 // 位置依 pokeemerald 的視窗與座標資料（GBA 240×160，畫面放大 3 倍）
+import { G, Game, Sound, UI } from './core.js';
+import { U } from './util.js';
+import { BIOME_ZH, LEADERS, REGIONS, REGION_KEYS, typeTag } from './data.js';
+import { Abil } from './abilities.js';
+import { Mon, STAT_ZH } from './mon.js';
+import { Gen3 } from './gen3.js';
+import { playCry } from './sprites.js';
+import { World } from './world.js';
+import { ECO_ZH } from './ecology.js';
+import { Wild } from './overworld_mons.js';
+import { Search } from './search.js';
 
 // 寶可夢小圖示：No.1–386 用綠寶石的圖示（2 格動畫），之後用第七世代圖示，再之後用一般圖
 function monIcon(sp, shiny, form = null) {
@@ -281,3 +292,5 @@ const CardUI = (() => {
   }
   return { show, stars };
 })();
+
+export { monIcon, hpColor, PartyUI, DexUI, CardUI };

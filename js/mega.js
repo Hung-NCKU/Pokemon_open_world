@@ -3,6 +3,13 @@
 // - 一場戰鬥只能使用一種特殊能力：超級進化或太晶化
 // - 原始回歸：固拉多／蓋歐卡攜帶朱紅色／靛藍色寶珠出場時自動發生
 // - 取得：第一次成為冠軍時獲得超級手環與御三家的超級石；其他超級石散落在各地區（靠近時閃光）
+import { G, Game, Mega, Sound, Story, T, UI, define } from './core.js';
+import { mulberry32 } from './util.js';
+import { ITEMS, REGIONS, REGION_KEYS, REGION_POS } from './data.js';
+import { Held } from './abilities.js';
+import { Mon } from './mon.js';
+import { World } from './world.js';
+import { Battle } from './battle.js';
 ITEMS['mega-ring'] = { n: '超級手環', price: 0, kind: 'key', d: '鑲著鑰石的手環。寶可夢攜帶超級石時，可以在戰鬥中超級進化。' };
 for (const [id, st] of Object.entries(window.MEGA_STONES || {})) {
   if (!ITEMS[id] || !ITEMS[id].n || /[A-Za-z]{4}/.test(ITEMS[id].n)) ITEMS[id] = { n: st.n, price: 0, kind: 'held' };
@@ -13,7 +20,7 @@ for (const [id, st] of Object.entries(window.MEGA_STONES || {})) {
     : `讓${POKEDEX[st.base].n}攜帶後，就能在戰鬥中超級進化成${FORMS[st.form] ? FORMS[st.form].n : ''}。`;
 }
 
-const Mega = {
+define(Mega, {
   // 這隻寶可夢攜帶的超級石對應的形態（原始回歸的寶珠另外處理）
   formFor(m) {
     const st = m && m.item && window.MEGA_STONES && MEGA_STONES[m.item];
@@ -44,7 +51,7 @@ const Mega = {
     for (let i = 0; i < 2; i++) { const e = (POKEDEX[s].ev || []).find(x => x.lvl); if (!e) break; s = e.to; }
     return Object.keys(MEGA_STONES || {}).find(k => MEGA_STONES[k].base === s && !FORMS[MEGA_STONES[k].form].primal) || null;
   },
-};
+});
 
 // ---------- 戰鬥 ----------
 Object.assign(Battle.prototype, {
@@ -128,3 +135,5 @@ Story.eventEntity = async function (e) {
   if (!G.state.bag['mega-ring'] && MEGA_STONES[e.item] && !FORMS[MEGA_STONES[e.item].form].primal) await UI.say('（好像需要超級手環才能使用。聽說成為冠軍就能得到……）');
   Game.save(true);
 };
+
+export { _canTera, _megaGenerate, _eventEntity };

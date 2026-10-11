@@ -1,5 +1,12 @@
 // 關都城鎮小屋裡的人（data/towns.js 的 houses 指定）：原作的經典事件與實用服務
 // 名稱依神奇寶貝百科（52poke）：奈奈美、姓名鑑定師、招式回憶處、遺忘爺爺、寶可夢發燒友俱樂部會長、格鬥道場（空手道大王 武德）
+import { Forms, G, Game, Sound, UI } from './core.js';
+import { mulberry32 } from './util.js';
+import { Telemetry } from './telemetry.js';
+import { ITEMS, TRAINER_BATTLE_SPRITES } from './data.js';
+import { Mon } from './mon.js';
+import { TM } from './tm.js';
+import { World } from './world.js';
 ITEMS['old-amber'] = { n: '秘密琥珀', price: 0, kind: 'key', d: '封存著古代寶可夢遺傳因子的琥珀。紅蓮島的研究所可以讓牠復活。' };
 
 const TownEvents = (() => {
@@ -216,3 +223,5 @@ const TownEvents = (() => {
   }
   return { DEF, TRADES, FOSSILS, RUN, run, house };
 })();
+
+export { TownEvents };

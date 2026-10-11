@@ -4,6 +4,7 @@
 // - 耗時：世界生成、地圖繪製、存檔、戰鬥……（最近一次、平均、最大）
 // - 遊玩事件：最近 60 筆（進入戰鬥、勝負、傳送、存檔），錯誤發生時可以對照前後發生了什麼
 // F3 切換畫面左上角的即時顯示；設定選單「遊玩紀錄」可以查看與下載
+import { G } from './core.js';
 const Telemetry = (() => {
   const KEY = 'pkmn_openworld_log';
   const MAX_ERR = 30, MAX_EV = 60;
@@ -111,3 +112,5 @@ const Telemetry = (() => {
 
   return { battle, battleStats, error, event, time, measure, frame, report, download, clearErrors, toggleOverlay, get errors() { return errors; } };
 })();
+
+export { Telemetry };

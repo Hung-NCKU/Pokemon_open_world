@@ -6,6 +6,11 @@
 // - 碰到就開始戰鬥；離開太遠會消失；使用除蟲噴霧時不會出現
 // - 圖示：No.1–386 用綠寶石的圖示（2 格動畫），其他用第七世代圖示
 // 物種的習性：先看代表性物種的表，其他依屬性與種族值推定
+import { Forms, G, Game, Sound, T, UI } from './core.js';
+import { U } from './util.js';
+import { Mon } from './mon.js';
+import { Gen3 } from './gen3.js';
+import { BLOCKED, TILE, TOWN_H, TOWN_W, World } from './world.js';
 const Wild = (() => {
   const TABLE = {
     stationary: [143, 185, 213, 79, 74, 95, 111, 76, 446, 531, 324, 338, 337, 299, 476, 524, 557, 688, 703, 771, 194, 590, 591, 836, 833],
@@ -208,3 +213,5 @@ const OverworldMons = (() => {
     _canStand: (x, y) => canStand(null, x, y),
   };
 })();
+
+export { Wild, OverworldMons };

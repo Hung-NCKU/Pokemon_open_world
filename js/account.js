@@ -4,7 +4,11 @@
 // - 登入狀態記在「pkmn_session」（下次開啟自動登入）
 // - 跨平台同步（優先順序）：GitHub Gist（js/gist_cloud.js，每台裝置輸入一次只有 gist 權限的金鑰）
 //   → Supabase（js/cloud.js，js/cloud_config.js 有設定時）→ 只存在這台裝置的本機帳號
-const Account = (() => {
+import { Account, SAVE_KEY, UI, define } from './core.js';
+import { Telemetry } from './telemetry.js';
+import { Cloud } from './cloud.js';
+import { GistCloud } from './gist_cloud.js';
+define(Account, (() => {
   const ACC_KEY = 'pkmn_accounts', SES_KEY = 'pkmn_session';
   const store = {
     get: k => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -160,4 +164,4 @@ const Account = (() => {
     }
   }
   return { sync, upload, backend, online: () => !!backend(), linkGitHub, set fastHash(v) { fastHash = v; }, get current() { return who(); }, saveKey, register, login, logout, menu, store, accounts };
-})();
+})());

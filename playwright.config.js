@@ -1,4 +1,4 @@
-// Playwright：在瀏覽器裡執行 tests/ 的測試頁（引擎、冒煙、實際遊玩），由 tools/serve.mjs 提供網頁
+// Playwright：在瀏覽器裡執行 tests/ 的測試頁（引擎、冒煙、實際遊玩），由 Vite 開發伺服器提供網頁
 // npm test → 引擎＋冒煙；npm run test:natural → 實際遊玩（真實時間，約 10～30 分鐘，需要 assets/gen3 素材）
 import { defineConfig } from '@playwright/test';
 
@@ -21,7 +21,7 @@ export default defineConfig({
     { name: 'natural', testMatch: /natural\.spec\.js/, timeout: 60 * 60 * 1000 },
   ],
   webServer: {
-    command: `node tools/serve.mjs ${PORT}`,
+    command: `npx vite --port ${PORT} --strictPort`, // Vite 開發伺服器（轉換 JSX、解析 import 'preact'）
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env.CI,
   },

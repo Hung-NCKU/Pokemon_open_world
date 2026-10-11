@@ -3,7 +3,11 @@
 //   左側小框：道具圖示　左下：說明（0,13 14×6）
 //   選數量時：背包裡的數量（1,11 12×2）、數量與價錢（18,11 10×2）
 // 背景框 ui_shop.png 的左上是透明的，看得到後面的商店地圖（和原作一樣）
-const ShopUI = (() => {
+import { G, Game, ShopUI, Sound, UI, define } from './core.js';
+import { U } from './util.js';
+import { ITEMS } from './data.js';
+import { BagUI } from './bagui.js';
+define(ShopUI, (() => {
   const T = 24, ROWS = 8;
   const css = (x, y, w, h) => `left:${x * T}px;top:${y * T}px;width:${w * T}px;height:${h * T}px`;
   const yen = n => `${n} 元`;
@@ -102,4 +106,4 @@ const ShopUI = (() => {
     });
   }
   return { open };
-})();
+})());

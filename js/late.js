@@ -1,7 +1,15 @@
 // 後期機制：極巨化／超極巨化、太晶團體戰、合體與分離、究極爆發、戰鬥中變形（資料：data/late.js）
+import { BForm, Dmax, G, Game, Mega, Sound, Story, T, UI, define } from './core.js';
+import { U, mulberry32 } from './util.js';
+import { ITEMS, REGIONS, REGION_POS, TYPES } from './data.js';
+import { Mon } from './mon.js';
+import { TM } from './tm.js';
+import { STRUGGLE_MD, md } from './movedata.js';
+import { TILE, World } from './world.js';
+import { Battle } from './battle.js';
 
 // ============ 戰鬥中暫時的形態（變形、極巨化外觀）：戰鬥結束後恢復 ============
-const BForm = {
+define(BForm, {
   set(m, form) {
     if (m._bfFrom === undefined) m._bfFrom = m.form || null;
     if (form) m.form = form; else if (m._bfFrom) m.form = m._bfFrom; else delete m.form;
@@ -11,11 +19,11 @@ const BForm = {
     if (m._bfFrom) m.form = m._bfFrom; else delete m.form;
     delete m._bfFrom;
   },
-};
+});
 
 // ============ 極巨化 ============
 ITEMS['dynamax-band'] = { n: '極巨腕帶', price: 0, kind: 'key', d: '能讓寶可夢極巨化的腕帶。極巨化持續 3 回合，HP 變成 2 倍，招式變成極巨招式。' };
-const Dmax = {
+define(Dmax, {
   // 第八世代：原本威力 → 極巨招式威力（格鬥、毒另一張表）
   power(bp, type) {
     const low = type === 'fighting' || type === 'poison';
@@ -42,7 +50,7 @@ const Dmax = {
     return { ...mv, id: 'maxmove', baseId: mv.id, n: name, type, bp: Dmax.power(mv.bp, type), acc: true, isMax: true, maxEffect: type,
       secondary: null, secondaries: null, self: null, multihit: null, drain: null, recoil: null, flags: { ...mv.flags, protect: 1 } };
   },
-};
+});
 // 極巨化時 HP 2 倍；團體戰的首領 HP 5 倍
 const _monStats = Mon.stats;
 Mon.stats = function (m) {
@@ -431,3 +439,5 @@ Story.questSummary = function (s) {
   ];
   return _questSummaryG.call(this, s) + '\n' + lines.join('\n');
 };
+
+export { _monStats, _gimmickUsed, _resolveMoveD, _runMoveD, _forceOut, _doTurnD, _endOfTurnD, _onSwitchOutD, _onEntryD, _finishD, BattleForms, _useMoveOnD, _hurtD, FUSION, Fusion, _megaFormFor, _canMegaU, RAID_TYPES, Raid, _abilityStartR, _lateGenerate, _eventAtR, _eventEntityR, drawRaidCrystal, _rollWildG, _profD, _questSummaryG };

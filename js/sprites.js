@@ -1,4 +1,7 @@
 // 第三世代（綠寶石）風格的原創像素美術：以 16×16 原生解析度繪製後放大 2 倍
+import { Forms, G, T } from './core.js';
+import { mulberry32 } from './util.js';
+import { TRAINER_CLASSES } from './data.js';
 const Spr = (() => {
   const S = 3; // 放大倍率
   const N = 16; // 原生圖塊大小
@@ -487,3 +490,31 @@ const Spr = (() => {
 
   return { makeTiles, building, character, PLAYER, trainerPal, surfBlob, exclaim, battleBg, C };
 })();
+
+// ---------- 寶可夢圖片與叫聲（從 battle_view.js 移來：圖鑑、能力頁、電腦箱子也會用到） ----------
+// 寶可夢圖：1–386 用綠寶石原版、387–649 用黑白版動態圖、其後用最新版；叫聲取自 PokéAPI
+const PKSPR = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/';
+const CRY = id => `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`;
+const ITEM_SPR = id => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${id}.png`;
+
+function monSprite(m, back) {
+  const id = m.sp, sh = m.shiny;
+  const f = typeof Forms !== 'undefined' && Forms.get(m);
+  if (f) return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${f.id}.png`, scale: 2 };
+  if (id <= 386) return { url: `${PKSPR}versions/generation-iii/emerald/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 3 };
+  if (id <= 649) return { url: `${PKSPR}versions/generation-v/black-white/animated/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.gif`, scale: 2 };
+  return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 2 };
+}
+
+function playCry(id, faint = false) {
+  const v = (G.settings.sfxVol ?? 7) / 10;
+  if (v <= 0) return;
+  try {
+    const a = new Audio(CRY(id));
+    a.volume = .6 * v;
+    if (faint) { a.playbackRate = .75; a.preservesPitch = false; }
+    a.play().catch(() => { });
+  } catch { }
+}
+
+export { Spr, PKSPR, CRY, ITEM_SPR, monSprite, playCry };

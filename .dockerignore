@@ -8,3 +8,4 @@ saves
 docker-compose.yml
 Dockerfile
 **/__pycache__
+dist

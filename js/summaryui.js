@@ -1,5 +1,13 @@
 // 綠寶石版能力頁（graphics/summary_screen）：資料、能力、招式三頁；←→ 換頁、↑↓ 換寶可夢
 // 能力頁按 Z 切換顯示 能力值 → 個體值 → 努力值；招式頁按 Z 進入選擇，可查看說明並交換順序
+import { Sound, UI } from './core.js';
+import { U } from './util.js';
+import { typeTag } from './data.js';
+import { Abil, Held } from './abilities.js';
+import { Mon, NATURES, NAT_STAT, STAT_ZH } from './mon.js';
+import { SUPPORT_ZH, md } from './movedata.js';
+import { Gen3 } from './gen3.js';
+import { monSprite, playCry } from './sprites.js';
 const SummaryUI = (() => {
   const PAGES = ['寶可夢資訊', '寶可夢能力', '戰鬥招式'];
   const CAT = { ph: '物理', sp: '特殊', st: '變化' };
@@ -126,3 +134,5 @@ const SummaryUI = (() => {
   }
   return { show, forget };
 })();
+
+export { SummaryUI };

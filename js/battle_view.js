@@ -1,8 +1,12 @@
 // 戰鬥畫面（綠寶石版面：240×160 × 3）
-// 寶可夢圖：1–386 用綠寶石原版、387–649 用黑白版動態圖、其後用最新版；叫聲取自 PokéAPI
-const PKSPR = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/';
-const CRY = id => `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`;
-const ITEM_SPR = id => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${id}.png`;
+// 寶可夢圖與叫聲（monSprite、playCry）在 js/sprites.js
+import { G, Sound, UI } from './core.js';
+import { U } from './util.js';
+import { TRAINER_SPRITE_URL } from './data.js';
+import { Mon, STATUS_ZH } from './mon.js';
+import { Gen3 } from './gen3.js';
+import { ITEM_SPR, Spr, monSprite, playCry } from './sprites.js';
+import { Battle } from './battle.js';
 
 const TYPE_FX = {
   normal: ['impact', 'impact'], fire: ['small_ember', 'fire'], water: ['water_droplet', 'bubble'], electric: ['electric_orbs', 'lightning'],
@@ -13,26 +17,6 @@ const TYPE_FX = {
 };
 const STATUS_FX = { par: 'lightning', brn: 'small_ember', psn: 'poison_bubble', tox: 'toxic_bubble', slp: 'letter_z', frz: 'ice_crystals_0' };
 const STATUS_ICON_ROW = { psn: 0, tox: 0, par: 1, slp: 2, frz: 3, brn: 4 };
-
-function monSprite(m, back) {
-  const id = m.sp, sh = m.shiny;
-  const f = typeof Forms !== 'undefined' && Forms.get(m);
-  if (f) return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${f.id}.png`, scale: 2 };
-  if (id <= 386) return { url: `${PKSPR}versions/generation-iii/emerald/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 3 };
-  if (id <= 649) return { url: `${PKSPR}versions/generation-v/black-white/animated/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.gif`, scale: 2 };
-  return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 2 };
-}
-
-function playCry(id, faint = false) {
-  const v = (G.settings.sfxVol ?? 7) / 10;
-  if (v <= 0) return;
-  try {
-    const a = new Audio(CRY(id));
-    a.volume = .6 * v;
-    if (faint) { a.playbackRate = .75; a.preservesPitch = false; }
-    a.play().catch(() => { });
-  } catch { }
-}
 
 Object.assign(Battle.prototype, {
   setup() {
@@ -432,3 +416,5 @@ Object.assign(Battle.prototype, {
     await U.sleep(200);
   },
 });
+
+export { TYPE_FX, STATUS_FX, STATUS_ICON_ROW };

@@ -2,6 +2,9 @@
 // - 衝浪：演出後坐上寶可夢下水
 // - 飛翔：演出後主角飛上天空、畫面變暗，到目的地後再亮起
 // - 怪力：每次進洞窟第一次推石頭時演出
+import { G, Sound } from './core.js';
+import { Mon } from './mon.js';
+import { playCry } from './sprites.js';
 const FieldMove = (() => {
   function overlay(cls) {
     const el = document.createElement('div');
@@ -54,3 +57,5 @@ const FieldMove = (() => {
   async function strength(m) { await cutIn(m, '怪力'); }
   return { cutIn, fade, surf, fly, strength };
 })();
+
+export { FieldMove };

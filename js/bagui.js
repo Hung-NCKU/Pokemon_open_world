@@ -1,5 +1,9 @@
 // 綠寶石版背包畫面（pokeemerald graphics/bag：背景、背包圖、道具圖示）
 // 左右切換口袋、上下選擇道具；回傳選到的道具 id 或 null
+import { G, Sound, UI } from './core.js';
+import { U } from './util.js';
+import { ITEMS } from './data.js';
+import { Gen3 } from './gen3.js';
 const BagUI = (() => {
   const POCKETS = [
     { n: '道具', frame: 1, has: id => !isBall(id) && !isBerry(id) && !isKey(id) && !isTM(id) },
@@ -118,3 +122,5 @@ const BagUI = (() => {
   }
   return { pick, icon };
 })();
+
+export { BagUI };

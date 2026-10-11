@@ -8,6 +8,11 @@
 // - AI：比較兩個目標選傷害最大的，避免用會打到自己隊友的全體招式
 // - 隊友：幫助（威力 ×1.5）、看我嘛／憤怒粉（吸引招式）、友情防守、正電／負電、電池、能量點
 // - 倒下的寶可夢在回合結束時由後備替換
+import { AI, G, Game, Sound, UI } from './core.js';
+import { U } from './util.js';
+import { Mon } from './mon.js';
+import { md, newVol } from './movedata.js';
+import { Battle } from './battle.js';
 class DoubleBattle extends Battle {
   constructor(opts) {
     super(opts);
@@ -496,3 +501,5 @@ Battle.prototype.calcDamage = function (user, target, vU, vT, mv, eff, bp) {
   if (r && typeof r.dmg === 'number') { r.dmg = Math.max(1, Math.floor(r.dmg * mod)); return r; }
   return r;
 };
+
+export { DoubleBattle, _calcDamageD };

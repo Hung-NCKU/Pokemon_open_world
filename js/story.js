@@ -1,17 +1,23 @@
 // 劇情內容：原作城鎮名稱、館主招牌隊伍、地標與傳說事件、關都任務線
 // 名稱參考神奇寶貝百科（wiki.52poke.com）；隊伍參考原作（紅綠／火紅葉綠、心金魂銀重賽）
+import { ELITE_FOUR, G, GYM_TOWNS, Game, Hidden, Interior, LANDMARKS, LEAGUE_TOWN, SIGNATURE, Sound, Story, T, UI, Weather, define } from './core.js';
+import { U } from './util.js';
+import { ITEMS, REGIONS } from './data.js';
+import { Mon } from './mon.js';
+import { playCry } from './sprites.js';
+import { World } from './world.js';
 
 // 道館所在城鎮（依道館順序）與聯盟所在地
-const GYM_TOWNS = {
+define(GYM_TOWNS, {
   kanto: ['深灰市', '華藍市', '枯葉市', '玉虹市', '淺紅市', '金黃市', '紅蓮島', '常青市'],
   johto: ['桔梗市', '檜皮鎮', '滿金市', '緣朱市', '湛藍市', '淺蔥市', '卡吉鎮', '煙墨市'],
   hoenn: ['卡那茲市', '武鬥鎮', '紫菫市', '釜炎鎮', '橙華市', '茵鬱市', '綠嶺市', '琉璃市'],
   sinnoh: ['黑金市', '百代市', '帷幕市', '野原市', '家緣市', '水脈市', '雪峰市', '濱海市'],
-};
-const LEAGUE_TOWN = { kanto: '石英高原', hoenn: '彩幽市' };
+});
+define(LEAGUE_TOWN, { kanto: '石英高原', hoenn: '彩幽市' });
 
 // 招牌隊伍：[前期（約 Lv.35 以下）, 後期／重賽]，排在最後的是王牌
-const SIGNATURE = {
+define(SIGNATURE, {
   kanto: {
     gyms: [
       [[74, 95], [76, 141, 139, 112, 208, 95]],            // 小剛：小拳石、大岩蛇 → 隆隆岩、鐮刀盔、多刺菊石獸、鑽角犀獸、大鋼蛇
@@ -31,17 +37,17 @@ const SIGNATURE = {
       return [18, 65, 112, ...pair, counter];
     },
   },
-};
+});
 
 // 四天王（火紅葉綠），排在最後的是王牌
-const ELITE_FOUR = {
+define(ELITE_FOUR, {
   kanto: [
     { name: '科拿', type: 'ice', sprite: 'lorelei-gen3', team: [87, 91, 80, 124, 131] },     // 白海獅、刺甲貝、呆殼獸、迷唇姐、拉普拉斯
     { name: '希巴', type: 'fighting', sprite: 'bruno-gen3', team: [95, 107, 106, 95, 68] }, // 大岩蛇、快拳郎、飛腿郎、大岩蛇、怪力
     { name: '菊子', type: 'ghost', sprite: 'agatha-gen3', team: [94, 42, 93, 24, 94] },      // 耿鬼、大嘴蝠、鬼斯通、阿柏怪、耿鬼
     { name: '阿渡', type: 'dragon', sprite: 'lance-gen3', team: [130, 148, 148, 142, 149] }, // 暴鯉龍、哈克龍、哈克龍、化石翼龍、快龍
   ],
-};
+});
 
 // 勁敵青綠：依玩家的御三家選擇屬性有利的那隻，隨進度進化
 const RIVAL = {
@@ -58,7 +64,7 @@ const RIVAL = {
 };
 
 // 地標：near 指定靠近哪座城鎮（gym 編號或 home／league）；sea 表示在海上的小島
-const LANDMARKS = {
+define(LANDMARKS, {
   kanto: [
     { id: 'mtmoon', n: '月見山', near: 0, event: 'fossil' },
     { id: 'powerplant', n: '無人發電廠', near: 2, event: 'legend', sp: 145, lv: 50, need: 'birds' },
@@ -66,7 +72,7 @@ const LANDMARKS = {
     { id: 'mtember', n: '燈火山', near: 6, event: 'legend', sp: 146, lv: 50, need: 'birds' },
     { id: 'ceruleancave', n: '華藍洞窟', near: 1, event: 'legend', sp: 150, lv: 70, need: 'champion' },
   ],
-};
+});
 const EVENT_LEGENDS = new Set([144, 145, 146, 150]);
 // 洞窟解謎（tools/build_interiors.py 的 CAVES）與深處的寶物
 const CAVE_PUZZLES = { mtmoon: 'cave_a', ceruleancave: 'cave_b', mtember: 'cave_c' };
@@ -102,7 +108,7 @@ function localQuest(region) {
   ];
 }
 
-const Story = {
+define(Story, {
   questsFor(region) { return region === 'kanto' ? QUEST : localQuest(region); },
   questStage(s, region = 'kanto') { const q = Story.questsFor(region); let i = 0; while (i < q.length && q[i].done(s)) i++; return i; },
   questText(s, region = 'kanto') {
@@ -267,4 +273,6 @@ const Story = {
     if (s.flags[key] || Story.legendDone(lm.sp)) { await UI.say('這裡已經恢復了平靜。'); return; }
     await UI.say(`${lm.n}的深處傳來強大的氣息……傳說的寶可夢就在入口前。`);
   },
-};
+});
+
+export { RIVAL, EVENT_LEGENDS, CAVE_PUZZLES, CAVE_LOOT, QUEST, localQuest };

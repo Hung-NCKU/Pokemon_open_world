@@ -3,6 +3,7 @@
 // - 金鑰只存在這台裝置的瀏覽器（localStorage），不會出現在網頁原始碼裡；外流也只能動 gist，碰不到儲存庫
 // - 存檔存在玩家帳號底下的一個私人 gist（檔名 pokemon_openworld_save.json），以存檔時間 savedAt 判斷哪邊比較新
 // 和 cloud.js（Supabase）提供相同的介面，Account 依設定選用其中一個
+import { Telemetry } from './telemetry.js';
 const GistCloud = (() => {
   const KEY = 'pkmn_gist_session', FILE = 'pokemon_openworld_save.json', DESC = 'Pokémon THE WORLD 存檔（自動同步）';
   const API = 'https://api.github.com';
@@ -89,3 +90,5 @@ const GistCloud = (() => {
   }
   return { connect, disconnect, upload, flush, download, identity, get name() { return session && session.login; }, get session() { return session; } };
 })();
+
+export { GistCloud };

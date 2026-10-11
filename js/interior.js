@@ -2,7 +2,18 @@
 // 地圖與碰撞取自綠寶石（tools/build_interiors.py → assets/gen3/interiors.js）。
 // 主角在室內時，世界座標停在門口前一格，所以在室內存檔、讀檔會回到門口。
 // 沒有室內素材時（或測試環境），進門仍是原本的選單。
-const Interior = (() => {
+import { ELITE_FOUR, G, Game, Interior, Sound, UI, define } from './core.js';
+import { U, mulberry32 } from './util.js';
+import { Telemetry } from './telemetry.js';
+import { LEADERS, LEADER_SPRITES, REGIONS, TRAINER_BATTLE_SPRITES, TRAINER_CLASSES, TRAINER_NAMES, TYPES, typeEff } from './data.js';
+import { Mon } from './mon.js';
+import { TM } from './tm.js';
+import { Gen3 } from './gen3.js';
+import { Spr } from './sprites.js';
+import { TILE, World } from './world.js';
+import { TownEvents } from './town_events.js';
+import { FieldMove } from './fieldmove.js';
+define(Interior, (() => {
   const DIR = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
   // 館主屬性 → 使用的綠寶石道館（沒有對應道館的屬性選相近的）
@@ -387,4 +398,4 @@ const Interior = (() => {
   }
 
   return { goRoom, tryGoal, prefetch, healAnim, can, canCave, enterCave, boulderAt, enter, exit, leave, update, render, interact, keyFor, get room() { return room; }, walkable: (x, y) => room && walkable(x, y) };
-})();
+})());
