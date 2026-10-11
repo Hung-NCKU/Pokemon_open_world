@@ -2592,12 +2592,20 @@ async function run() {
     for (const seed of [12345, 777]) {
       World.generate(seed, 'kanto', WORLD_VER);
       const homes = World.towns.filter(t => t.kind === 'home');
-      const walk = [T.GRASS, T.FLOWER, T.TALL, T.SNOW, T.SNOWTALL, T.SAND, T.DESERT];
+      const walk = [T.TOWN, T.GRASS, T.FLOWER, T.TALL, T.SNOW, T.SNOWTALL, T.SAND, T.DESERT];
       const bad = World.training.filter(a => {
-        for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (!walk.includes(World.tile(x, y)) || World.townAt(x, y) || World.trainers.has(x + ',' + y)) return true;
+        for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (!walk.includes(World.tile(x, y)) || World.trainers.has(x + ',' + y)) return true;
         const home = homes.find(t => t.region === a.region);
         return !home || Math.hypot(a.x + a.w / 2 - home.cx, a.y + a.h / 2 - home.cy) > 30;
       });
+      // 在初始城鎮裡、寶可夢中心旁邊（相隔 2 格以內），不蓋到門口
+      const far = World.training.filter(a => {
+        const c = World.buildings.find(b => b.kind === 'center' && b.town.kind === 'home' && b.town.region === a.region);
+        const gap = Math.max(0, c.x - (a.x + a.w), a.x - (c.x + c.w), c.y - (a.y + a.h), a.y - (c.y + c.h));
+        const doorHit = World.buildings.some(b => b.town === c.town && World.trainingAt(b.door.x, b.door.y + 1));
+        return !a.nearCenter || gap > 2 || doorHit;
+      });
+      check(`鯉魚王訓練場：在初始城鎮的寶可夢中心旁邊（種子 ${seed}）`, !far.length, far.map(a => a.region).join(','));
       check(`鯉魚王訓練場：每個初始城鎮旁邊都有一塊，都是可以走的草地（種子 ${seed}）`, World.training.length === homes.length && homes.length >= 9 && !bad.length,
         `${World.training.length}/${homes.length} ${bad.map(a => a.region).join(',')}`);
     }
