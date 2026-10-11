@@ -44,7 +44,7 @@ const Game = {
       // 同步帳號（GitHub 或雲端）：同時上傳（跨裝置共用）
       if (typeof Account !== 'undefined') Account.upload(json);
       Telemetry.event('存檔');
-      if (!silent) UI.banner('已儲存遊戲進度');
+      if (!silent) UI.banner(typeof Account !== 'undefined' && Account.online() ? '已儲存遊戲進度（同步到雲端中……）' : '已儲存遊戲進度');
       return true;
     } catch (e) { console.error(e); UI.banner('存檔失敗！'); return false; }
   },

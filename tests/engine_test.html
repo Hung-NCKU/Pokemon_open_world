@@ -2086,6 +2086,56 @@ async function run() {
     window.fetch = realFetch; UI.choose = keepChoose; UI.say = keepSay;
     G.state = keep;
   }
+  // 雲端：排程上傳與登出／換帳號／token 更新交錯時，不會把 A 的存檔送到 B
+  {
+    const keep = G.state, realFetch = window.fetch, keepCfg = window.CLOUD_CONFIG;
+    const users = {}, saves = {};
+    let tokenN = 0, refreshDelay = null;
+    window.CLOUD_CONFIG = { url: 'https://test.supabase.co', anonKey: 'anon' };
+    const reply = (status, obj) => Promise.resolve({ ok: status < 300, status, text: () => Promise.resolve(JSON.stringify(obj)) });
+    window.fetch = async (url, opt) => {
+      const u = new URL(url), body = opt.body ? JSON.parse(opt.body) : null;
+      const sess = (id, exp = 3600) => ({ access_token: 'tok' + (++tokenN) + ':' + id, refresh_token: 'r:' + id, expires_in: exp, user: { id } });
+      if (u.pathname === '/auth/v1/signup') { users[body.email] = { pw: body.password, id: 'U' + Object.keys(users).length }; return reply(200, sess(users[body.email].id)); }
+      if (u.pathname === '/auth/v1/token' && u.search.includes('refresh')) { if (refreshDelay) await refreshDelay; return reply(200, sess(body.refresh_token.split(':')[1])); }
+      if (u.pathname === '/auth/v1/token') { const usr = users[body.email]; return usr && usr.pw === body.password ? reply(200, sess(usr.id)) : reply(400, {}); }
+      if (u.pathname === '/rest/v1/saves') {
+        const id = (opt.headers.Authorization || '').split(':')[1];
+        if (opt.method === 'POST') { if (body.user_id !== id) return reply(403, {}); saves[id] = body.data; return reply(201, null); }
+        return reply(200, saves[id] ? [{ data: saves[id] }] : []);
+      }
+      return reply(404, {});
+    };
+    const tick = ms => new Promise(r => setTimeout(r, ms));
+    Cloud.logout();
+    await Cloud.register('甲', 'secret12'); const idA = Cloud.session.user_id; Cloud.logout();
+    await Cloud.register('乙', 'secret12'); const idB = Cloud.session.user_id; Cloud.logout();
+    // 甲 排入存檔 → 登出 → 乙 登入 → 排程時間到
+    await Cloud.login('甲', 'secret12');
+    Cloud.upload(JSON.stringify({ owner: '甲', money: 111 }));
+    Cloud.logout();
+    await Cloud.login('乙', 'secret12');
+    await tick(2500);
+    check('雲端：甲排入的存檔在登出、乙登入後不會送到乙的帳號', !saves[idB] && !saves[idA]);
+    // 乙 的 token 快過期：更新期間登出 → 上傳不送出
+    Cloud.upload(JSON.stringify({ owner: '乙', money: 222 }));
+    Cloud.session.expires_at = Date.now();   // 讓上傳前需要更新 token
+    let release; refreshDelay = new Promise(r => { release = r; });
+    const fl = Cloud.flush();
+    await tick(10);
+    Cloud.logout();
+    release(); await fl;
+    check('雲端：更新 token 期間登出，舊的回覆不會恢復登入、也不會上傳', !Cloud.session && !saves[idB]);
+    // 正常情況：乙 登入後存檔，送到乙
+    refreshDelay = null;
+    await Cloud.login('乙', 'secret12');
+    Cloud.upload(JSON.stringify({ owner: '乙', money: 333 }));
+    await Cloud.flush();
+    check('雲端：正常存檔送到目前登入的帳號，狀態為已存', saves[idB] && saves[idB].money === 333 && Cloud.status === 'saved');
+    Cloud.logout();
+    window.fetch = realFetch; window.CLOUD_CONFIG = keepCfg;
+    G.state = keep;
+  }
   // 對戰塔（世界配置第 6 版）
   {
     const keep = G.state, keepBattle = Game.battle, keepChoose = UI.choose, keepSay = UI.say;

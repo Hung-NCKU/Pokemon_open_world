@@ -42,19 +42,21 @@ const GistCloud = (() => {
     keep({ token, login: u.data.login, gistId });
     return { ok: true, login: u.data.login, found: !!gistId };
   }
-  function disconnect() { keep(null); }
+  function disconnect() { clearTimeout(upT); upT = null; pending = null; keep(null); }
 
   // 上傳（10 秒內的多次存檔只上傳最後一次，減少 gist 的版本數）
   let upT = null, pending = null;
   function upload(json) {
     if (!session) return;
-    pending = json;
+    pending = { json, login: session.login, token: session.token };
     clearTimeout(upT);
     upT = setTimeout(flush, 10000);
   }
   async function flush() {
     if (!session || pending === null) return;
-    const content = pending; pending = null;
+    // 排程期間換了 GitHub 帳號：丟掉（不把別人的存檔傳到現在的帳號）
+    if (pending.login !== session.login || pending.token !== session.token) { pending = null; return; }
+    const content = pending.json; pending = null;
     try {
       const files = { [FILE]: { content } };
       const r = session.gistId

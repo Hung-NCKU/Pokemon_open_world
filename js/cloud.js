@@ -9,6 +9,10 @@ const Cloud = (() => {
   const email = name => encodeURIComponent(name).replace(/%/g, '_').toLowerCase() + '@pokemon-openworld.app';
   let session = null;
   try { session = JSON.parse(localStorage.getItem(SES) || 'null'); } catch { }
+  // 登入世代：每次登入、註冊、登出都加一。非同步的回覆、排程的上傳都記住自己的世代，
+  // 世代不同（中途登出或換了帳號）就丟掉，避免 A 帳號的存檔被送到 B 帳號、或舊的登入回覆蓋掉新的登入
+  let gen = 0;
+  let status = 'idle'; // idle／syncing／saved／failed
   const keep = s => { session = s; try { s ? localStorage.setItem(SES, JSON.stringify(s)) : localStorage.removeItem(SES); } catch { } };
 
   async function call(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
@@ -28,43 +32,61 @@ const Cloud = (() => {
   async function fresh() {
     if (!session) return false;
     if (Date.now() < session.expires_at - 60000) return true;
+    const g = gen, name = session.name;
     const r = await call('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: session.refresh_token }, auth: false });
+    if (g !== gen) return false;               // 更新期間登出或換了帳號
     if (!r.ok) { keep(null); return false; }
-    setSession(r.data, session.name);
+    setSession(r.data, name);
     return true;
   }
 
   async function register(name, pw) {
+    cancelUpload(); const g = ++gen;
     const r = await call('/auth/v1/signup', { method: 'POST', body: { email: email(name), password: pw, data: { name } }, auth: false });
+    if (g !== gen) return { ok: false, error: '已取消' };
     if (!r.ok) return { ok: false, error: /registered|exists/i.test(errMsg(r.data)) ? '這個帳號名稱已經有人使用了' : errMsg(r.data) };
     if (!r.data.access_token) return { ok: false, error: '雲端要求電子郵件確認：請在 Supabase 關閉「Confirm email」（見 docs/CLOUD_SETUP.md）' };
     setSession(r.data, name);
     return { ok: true };
   }
   async function login(name, pw) {
+    cancelUpload(); const g = ++gen;
     const r = await call('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: email(name), password: pw }, auth: false });
+    if (g !== gen) return { ok: false, error: '已取消' };
     if (!r.ok) return { ok: false, error: '帳號或密碼不正確' };
     setSession(r.data, name);
     return { ok: true };
   }
-  function logout() { keep(null); }
+  function logout() { cancelUpload(); gen++; keep(null); status = 'idle'; }
 
   // 存檔：upsert 到 saves（每個帳號一份），2 秒內的多次存檔只上傳最後一次
+  // 排程的資料綁定「當時的帳號」與登入世代；送出前再確認一次，不是同一個人就丟掉
   let upT = null, pending = null;
+  function cancelUpload() { clearTimeout(upT); upT = null; pending = null; }
   function upload(json) {
     if (!enabled() || !session) return;
-    pending = json;
+    pending = { json, uid: session.user_id, gen };
+    status = 'syncing';
     clearTimeout(upT);
-    upT = setTimeout(async () => {
-      const data = pending; pending = null;
-      try {
-        if (!(await fresh())) return;
-        const r = await call('/rest/v1/saves?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
-          body: { user_id: session.user_id, data: JSON.parse(data), updated_at: new Date().toISOString() } });
-        if (!r.ok) Telemetry.error('雲端存檔失敗：' + errMsg(r.data), 'cloud');
-        else Telemetry.event('雲端存檔');
-      } catch (e) { Telemetry.error('雲端存檔失敗：' + e.message, 'cloud'); }
-    }, 2000);
+    upT = setTimeout(flush, 2000);
+  }
+  async function flush() {
+    const p = pending; pending = null; upT = null;
+    if (!p) return;
+    const same = () => p.gen === gen && session && session.user_id === p.uid;
+    try {
+      if (!same() || !(await fresh()) || !same()) return;
+      const r = await call('/rest/v1/saves?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
+        body: { user_id: p.uid, data: JSON.parse(p.json), updated_at: new Date().toISOString() } });
+      if (p.gen !== gen) return;
+      if (!r.ok) fail(errMsg(r.data));
+      else { status = 'saved'; Telemetry.event('雲端存檔'); }
+    } catch (e) { if (p.gen === gen) fail(e.message); }
+  }
+  function fail(msg) {
+    status = 'failed';
+    Telemetry.error('雲端存檔失敗：' + msg, 'cloud');
+    if (typeof UI !== 'undefined') UI.banner('雲端同步失敗：這次的存檔只存在這台裝置（下次存檔會再試）');
   }
   // 下載：回傳 { data, updated_at } 或 null
   async function download() {
@@ -73,5 +95,5 @@ const Cloud = (() => {
     if (!r.ok || !Array.isArray(r.data) || !r.data.length) return null;
     return r.data[0];
   }
-  return { enabled, register, login, logout, upload, download, get name() { return session && session.name; }, get session() { return session; } };
+  return { enabled, register, login, logout, upload, flush, download, get status() { return status; }, get name() { return session && session.name; }, get session() { return session; } };
 })();
