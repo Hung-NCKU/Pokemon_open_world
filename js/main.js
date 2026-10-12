@@ -9,6 +9,8 @@ import '../data/tms.js';
 import '../data/forms.js';
 import '../data/late.js';
 import '../data/zmoves.js';
+import '../data/zsig.js'; // 專屬 Z 純晶與專屬 Z 招式（tools/fetch_zsig.py）
+import '../data/eggmoves.js'; // 遺傳招式（tools/fetch_eggmoves.py）
 import '../data/sd_anims.js'; // Showdown 的 Z 招式動畫（tools/fetch_showdown_anims.mjs）
 import '../data/breeding.js';
 import '../data/towns.js';
@@ -32,6 +34,7 @@ import * as m15 from './events.js';
 import * as m16 from './regions.js';
 import * as m17 from './regions2.js';
 import * as johto from './johto.js'; // 城都的地標、支線、勁敵、任務線
+import * as storyLate from './story_late.js'; // 原始回歸與究極爆發的劇情
 import * as sdanim from './sd_anim.js'; // Showdown 動畫的執行（Z 招式）
 import * as m18 from './battletower.js';
 import * as m19 from './town_events.js';
@@ -66,4 +69,4 @@ import * as m47 from './game.js';
 import * as m48 from './hud.js';
 
 for (const m of [core, m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45, m46, m47, m48]) Object.assign(window, m);
-Object.assign(window, johto, sdanim);
+Object.assign(window, johto, storyLate, sdanim);

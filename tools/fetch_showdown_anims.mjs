@@ -49,8 +49,12 @@ const visit = (table, kind, id) => {
   for (const m of src.matchAll(/showEffect\(\s*["'](\w+)["']/g)) fxUsed.add(m[1]);
   for (const m of src.matchAll(/BattleEffects\.(\w+)/g)) fxUsed.add(m[1]);
 };
+// 專屬 Z 招式（data/zsig.js）
+const SIG = ['catastropika', 'stokedsparksurfer', 'sinisterarrowraid', 'maliciousmoonsault', 'oceanicoperetta', 'extremeevoboost', 'pulverizingpancake',
+  'genesissupernova', 'guardianofalola', 'soulstealing7starstrike', 'clangoroussoulblaze', 'splinteredstormshards', 'letssnuggleforever',
+  'searingsunrazesmash', 'menacingmoonrazemaelstrom', 'lightthatburnsthesky'];
 visit(BattleOtherAnims, 'other', 'zpower');
-for (const id of Object.values(Z)) visit(BattleMoveAnims, 'move', id);
+for (const id of [...Object.values(Z), ...SIG]) visit(BattleMoveAnims, 'move', id);
 
 // 動畫用到的場景與精靈的方法（確認執行時的替代實作都有）
 const api = new Set();

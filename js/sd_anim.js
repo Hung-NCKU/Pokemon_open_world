@@ -32,6 +32,7 @@ class Scene {
     this.end = 0;
     this.els = [];
     this.anims = [];
+    this.restores = [];
     this.rate = G.fast ? 2 : 1;
     // Showdown 的兩個寶可夢中心（我方 z=0 → (210,245)、對手 z=200 → (430,135)）對到綠寶石畫面上的實際位置
     const me = battle.center('me'), foe = battle.center('foe');
@@ -122,6 +123,9 @@ class Scene {
       // 把佇列的動作變成 transform（相對於原本的位置與大小）
       flush() {
         if (!img || !segs.length) return 0;
+        // 寶可夢的框（.bmon）平常會裁掉超出的部分；動畫中讓牠可以跳出框外（皮卡皮卡必殺擊跳到對手身上）
+        const box = img.parentElement;
+        if (box) { scene.restores.push([box, box.style.overflow, box.style.zIndex]); box.style.overflow = 'visible'; box.style.zIndex = 9; }
         const pb = scene.map(sdPos(base, sp));
         const tf = loc => {
           const p = scene.map(sdPos(loc, sp));
@@ -151,6 +155,7 @@ class Scene {
     await new Promise(r => setTimeout(r, total / this.rate + 50));
     for (const a of this.anims) a.cancel();
     for (const el of this.els) el.remove();
+    for (const [box, overflow, z] of this.restores) { box.style.overflow = overflow; box.style.zIndex = z; }
   }
 }
 
@@ -161,10 +166,10 @@ const SDAnim = {
     if (!SDAnim.ok() || !battle.el) return Promise.resolve();
     return new Scene(battle).run(SD_ANIMS.BattleOtherAnims.zpower.anim, user, target);
   },
-  // 依屬性的 Z 招式動畫
-  zmove(battle, user, target, type) {
-    const id = SDAnim.ok() && SD_ANIMS.Z[type];
-    const a = id && SD_ANIMS.BattleMoveAnims[id];
+  // Z 招式動畫：專屬 Z 招式有自己的動畫，其他依屬性
+  zmove(battle, user, target, type, sigId) {
+    if (!SDAnim.ok()) return Promise.resolve(false);
+    const a = (sigId && SD_ANIMS.BattleMoveAnims[sigId]) || SD_ANIMS.BattleMoveAnims[SD_ANIMS.Z[type]];
     if (!a || !battle.el) return Promise.resolve(false);
     return new Scene(battle).run(a.anim, user, target).then(() => true);
   },

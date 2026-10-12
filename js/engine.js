@@ -442,7 +442,7 @@ Object.assign(Battle.prototype, {
       if (this.typesOf(user).join() !== t) { vU.types = [t]; vU.proteanUsed = true; await this.abilityMsg(user, `${name} 變成了${TYPES[t].n}屬性！`); }
     }
     // 破格、渦輪火焰、兆級電壓（菌絲之力的變化招式）：無視目標的特性
-    this.moldTarget = ['mold-breaker', 'teravolt', 'turboblaze'].includes(this.ab(user)) || (this.ab(user) === 'mycelium-might' && mv.cat === 'Status') ? target : null;
+    this.moldTarget = ['mold-breaker', 'teravolt', 'turboblaze'].includes(this.ab(user)) || (this.ab(user) === 'mycelium-might' && mv.cat === 'Status') || mv.ignoreAbility ? target : null;
     let ok;
     try { ok = await this.useMoveOn(user, target, mv, act); } finally { this.moldTarget = null; }
     // 吵鬧：連續 3 回合，期間場上的寶可夢都不會睡著
@@ -529,7 +529,7 @@ Object.assign(Battle.prototype, {
       if (!target || target.hp <= 0) { await this.msg('但是沒有目標……'); return false; }
       // 守住
       // 無形拳：接觸類招式無視守住
-      if (vT.protect && mv.flags.protect && !mv.breaksProtect && !(this.ab(user) === 'unseen-fist' && mv.flags.contact)) {
+      if (vT.protect && mv.flags.protect && !mv.breaksProtect && !mv.bypassProtect && !(this.ab(user) === 'unseen-fist' && mv.flags.contact)) {
         await this.msg(`${tname} 保護住了自己！`);
         await this.protectContact(user, target, mv);
         if (mv.hasCrashDamage) await this.crash(user);
@@ -948,6 +948,9 @@ Object.assign(Battle.prototype, {
     }
     if (mv.id === 'clearsmog' && target.hp > 0) { Object.keys(vT.stg).forEach(k => { vT.stg[k] = 0; }); await this.msg(`${tname} 的能力變化恢復原狀了！`); }
     if (mv.id === 'burnup') vU.types = this.typesOf(user).filter(t => t !== 'fire');
+    // 專屬 Z 招式：起源超新星大爆炸展開精神場地；狼嘯石牙颶風暴消除場地
+    if (mv.id === 'genesissupernova' && user.hp > 0) { this.field.terrain = 'psychicterrain'; this.field.terrainT = 5; await this.msg('腳下傳來奇妙的感覺！'); }
+    if (mv.id === 'splinteredstormshards' && this.field.terrain) { this.field.terrain = null; await this.msg('場地恢復原狀了。'); }
     if (mv.id === 'doubleshock') vU.types = this.typesOf(user).filter(t => t !== 'electric');
     // 與道具相關的招式
     const tItem = this.itm(target);
@@ -1099,6 +1102,7 @@ Object.assign(Battle.prototype, {
     if (typeof mv.damage === 'number') return mv.damage;
     switch (mv.id) {
       case 'superfang': case 'naturesmadness': case 'ruination': return Math.max(1, Math.floor(target.hp / 2));
+      case 'guardianofalola': return Math.max(1, Math.floor(target.hp * 3 / 4)); // 巨人衛士・阿羅拉：目標剩餘體力的 3/4
       case 'psywave': return Math.max(1, Math.floor(user.lv * U.ri(50, 150) / 100));
       case 'endeavor': return target.hp > user.hp ? target.hp - user.hp : false;
       case 'finalgambit': return user.hp;
@@ -1116,7 +1120,8 @@ Object.assign(Battle.prototype, {
   calcDamage(user, target, vU, vT, mv, eff, bp) {
     const st = Mon.stats(target);
     // 太晶爆發：太晶化時攻擊比特攻高就變成物理招式
-    const phys = mv.id === 'terablast' && this.isTera(user) ? Mon.stats(user)[1] > Mon.stats(user)[3] : mv.cat === 'Physical';
+    // 太晶爆發（太晶化時）、光子噴湧、焚天滅世熾光爆：攻擊比特攻高就變成物理招式
+    const phys = (mv.id === 'terablast' && this.isTera(user)) || mv.id === 'photongeyser' || mv.id === 'lightthatburnsthesky' ? Mon.stats(user)[1] * boostMul(vU.stg.atk) > Mon.stats(user)[3] * boostMul(vU.stg.spa) : mv.cat === 'Physical';
     const ua = this.ab(user), ta = this.ab(target), ui = this.itm(user), ti = this.itm(target);
     const w = this.wx(), t = this.field.terrain;
     const contact = mv.flags.contact && ui !== 'punching-glove' && ua !== 'long-reach';

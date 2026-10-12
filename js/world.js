@@ -10,7 +10,7 @@ const TILE = 48; // 16px × 3（GBA 畫面放大 3 倍）
 // [寬, 高, 門的 x, 門的 y]
 const BUILDING_SIZE = { center: [4, 4, 1, 3], mart: [4, 4, 1, 3], house: [5, 5, 3, 4], lab: [7, 5, 4, 4], gym: [6, 5, 3, 4], league: [11, 7, 5, 5], house_s: [4, 4, 1, 3], sign: [1, 1, 0, 0] };
 const WW = 960, WH = 600;
-const WORLD_VER = 8; // 世界配置的版本（見 World.generate）；8：城都的地標與支線（js/johto.js）
+const WORLD_VER = 9; // 世界配置的版本（見 World.generate）；8：城都的地標與支線（js/johto.js）；9：原始回歸、究極爆發的劇情地標（js/story_late.js）
 const SAVE_VER = 2;  // 存檔格式的版本（見 Game.MIGRATE）
 const TOWN_W = 16, TOWN_H = 12;
 const BLOCKED = new Set([T.TREE, T.MOUNT, T.BLDG, T.LANDMARK]);

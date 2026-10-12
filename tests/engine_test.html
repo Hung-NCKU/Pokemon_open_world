@@ -3508,6 +3508,138 @@ async function run() {
     check('招式選單：游標停在上次選的招式', starts[1] === 2, JSON.stringify(starts));
     check('招式選單：上次的招式不能用時（PP 0）改到第一個能用的', starts[2] === 2, JSON.stringify(starts));
   }
+  // 遺傳招式；專屬 Z 招式
+  {
+    const keepState = G.state;
+    G.state = Game.newState('T', 'kanto', 1);
+    const mom = Mon.create(25, 30), dad = Mon.create(26, 30);
+    mom.gender = 'f'; dad.gender = 'm';
+    mom.moves = [{ id: moveId('wish'), pp: 10 }, { id: moveId('thunderbolt'), pp: 15 }];
+    dad.moves = [{ id: moveId('quickattack'), pp: 30 }];
+    const egg = Picnic.makeEgg(mom, dad);
+    check('遺傳招式：皮卡丘媽媽會祈願（皮丘的蛋招式），孵出的皮丘也會', egg.mon.sp === 172 && egg.mon.moves.some(s => s.id === moveId('wish')), egg.mon.moves.map(s => MOVES[s.id].n).join('、'));
+    check('遺傳招式：不是蛋招式的（十萬伏特）不會遺傳', !egg.mon.moves.some(s => s.id === moveId('thunderbolt')) || (EGG_MOVES[172] || []).includes(moveId('thunderbolt')));
+    G.state = keepState;
+    // 專屬 Z 招式
+    const keepRand = U.rand; U.rand = () => .5;
+    const b = setup(25, 50, 143, 50);
+    b.me.item = 'pikanium-z';
+    const vt = md(moveId('volttackle')), tb = md(moveId('thunderbolt'));
+    const z = ZMove.makeFor(b.me, vt);
+    check('專屬 Z：皮卡丘＋皮卡丘Ｚ＋伏特攻擊 → 皮卡皮卡必殺擊（威力 210）', ZMove.eligible(b, b.me, vt) && z.n === ZSIG['pikanium-z'].z.n && z.bp === 210 && z.isZ, `${z.n} ${z.bp}`);
+    check('專屬 Z：其他招式（十萬伏特）不能用皮卡丘Ｚ', !ZMove.eligible(b, b.me, tb));
+    const e = setup(133, 50, 143, 50);
+    e.me.item = 'eevium-z';
+    e.me.moves = [{ id: moveId('lastresort'), pp: 5 }];
+    G.state.bag['z-ring'] = 1;
+    await e.doTurn({ type: 'move', idx: 0, z: true });
+    check('專屬 Z：九彩昇華齊聚頂讓伊布全能力 +2', ['atk', 'def', 'spa', 'spd', 'spe'].every(k => e.vMe.stg[k] === 2), JSON.stringify(e.vMe.stg));
+    const t = setup(785, 50, 143, 50);
+    t.me.item = 'tapunium-z';
+    t.me.moves = [{ id: moveId('naturesmadness'), pp: 10 }];
+    G.state.bag['z-ring'] = 1;
+    t.volOf(t.me).lockOn = 2;
+    const h = t.foe.hp;
+    t.queued = { me: { type: 'move', idx: 0 }, foe: { idx: 0 } };
+    t._zMe = true;
+    const act = t.resolveMove(t.me, t.vMe, 0);
+    await t.runMove(t.me, t.foe, act);
+    check('專屬 Z：巨人衛士・阿羅拉造成目標體力 3/4 的傷害', h - t.foe.hp === Math.floor(h * 3 / 4), `${h} → ${t.foe.hp}`);
+    const m = setup(151, 60, 143, 50);
+    m.me.item = 'mewnium-z';
+    G.state.bag['z-ring'] = 1;
+    m.me.moves = [{ id: moveId('psychic'), pp: 10 }];
+    m.volOf(m.me).lockOn = 2;
+    m._zMe = true;
+    await m.runMove(m.me, m.foe, m.resolveMove(m.me, m.vMe, 0));
+    check('專屬 Z：起源超新星大爆炸展開精神場地', m.field.terrain === 'psychicterrain');
+    U.rand = keepRand;
+  }
+  // 超極巨招式的專屬效果
+  {
+    const keepRand = U.rand; U.rand = () => .5;
+    const gm = async (sp, mvName, foeSp = 143) => {
+      const b = setup(sp, 60, foeSp, 60);
+      G.state.bag['dynamax-band'] = 1;
+      b.me.gmax = true;
+      b.me.moves = [{ id: moveId(mvName), pp: 10 }];
+      await b.dynamax(b.me);
+      b.volOf(b.me).lockOn = 2;
+      const act = b.resolveMove(b.me, b.vMe, 0);
+      return { b, act };
+    };
+    {
+      const { b, act } = await gm(6, 'flamethrower');
+      check('超極巨：超極巨噴火龍用火屬性招式 → 超極巨地獄滅焰', act.mv.n === '超極巨地獄滅焰' && act.mv.gmax === 'wildfire', act.mv.n);
+      await b.runMove(b.me, b.foe, act);
+      const h = b.foe.hp;
+      await b.endOfTurn();
+      check('超極巨地獄滅焰：非火屬性的對手每回合受到 1/6 傷害', h - b.foe.hp === Math.floor(Mon.maxHp(b.foe) / 6), `${h} → ${b.foe.hp}`);
+      for (let i = 0; i < 3; i++) await b.endOfTurn();
+      check('超極巨地獄滅焰：4 回合後結束', !b.sides.foe.gmaxRes);
+      const o = await gm(6, 'airslash');
+      check('超極巨：屬性不同（飛行）時是一般的極巨招式', o.act.mv.n !== '超極巨地獄滅焰' && !o.act.mv.gmax);
+    }
+    {
+      const { b, act } = await gm(25, 'thunderbolt');
+      await b.runMove(b.me, b.foe, act);
+      check('超極巨萬雷轟頂：讓對手麻痺', b.foe.st === 'par');
+    }
+    {
+      const { b, act } = await gm(892, 'darkestlariat');
+      b.vFoe.protect = 'protect';
+      const h = b.foe.hp;
+      await b.runMove(b.me, b.foe, act);
+      check('超極巨奪命一擊：無視守住', act.mv.n === '超極巨奪命一擊' && b.foe.hp < h, act.mv.n);
+    }
+    U.rand = keepRand;
+  }
+  // 原始回歸（豐緣）與究極爆發（阿羅拉）的劇情
+  {
+    const keep = { state: G.state, battle: Game.battle, say: UI.say, choose: UI.choose, save: Game.save };
+    UI.say = async () => { }; UI.choose = async () => 0; Game.save = () => { };
+    let fought = [];
+    Game.battle = async o => { fought.push(o); return 'win'; };
+    G.state = Game.newState('T', 'hoenn', 1);
+    G.state.party = [Mon.create(258, 50)];
+    World.generate(777, 'hoenn', 9);
+    const lm = id => [...World.landmarks.values()].find(l => l.id === id);
+    check('劇情地標：第 9 版的世界有煙囪山、送神山、拉納基拉山的山頂', lm('mtchimney') && lm('mtpyre') && lm('lanakila'));
+    // 蓋歐卡還在沉睡
+    const kyogre = [...World.legends.values()].find(l => l.sp === 382);
+    G.state.badges.hoenn = [0, 1, 2, 3];
+    fought = [];
+    await Story.legend(kyogre);
+    check('原始回歸：趕走海洋隊之前，蓋歐卡還在沉睡（不會戰鬥）', !fought.length);
+    await Story.landmark(lm('mtpyre'));
+    check('原始回歸：送神山要先打敗煙囪山的熔岩隊', !G.state.flags.boss_mtpyre && !fought.length);
+    G.state.badges.hoenn = [0, 1];
+    await Story.landmark(lm('mtchimney'));
+    check('原始回歸：煙囪山需要 3 枚徽章', !G.state.flags.boss_mtchimney);
+    G.state.badges.hoenn = [0, 1, 2, 3, 4];
+    await Story.landmark(lm('mtchimney'));
+    check('原始回歸：煙囪山連戰到熔岩隊首領赤焰松', G.state.flags.boss_mtchimney && fought[fought.length - 1].trainer.name === '赤焰松');
+    await Story.landmark(lm('mtpyre'));
+    check('原始回歸：送神山打敗水梧桐後得到朱紅色寶珠與靛藍色寶珠', G.state.flags.boss_mtpyre && G.state.bag['red-orb'] && G.state.bag['blue-orb'] && fought[fought.length - 1].trainer.name === '水梧桐');
+    fought = [];
+    await Story.legend(kyogre);
+    check('原始回歸：趕走海洋隊之後可以和蓋歐卡戰鬥', fought.length === 1 && fought[0].wild && fought[0].wild.sp === 382);
+    // 舊世界（第 8 版）：沒有這些地標，蓋歐卡照舊
+    World.generate(777, 'hoenn', 8);
+    check('劇情地標：第 8 版的世界沒有新地標', !lm('mtchimney') && !lm('lanakila'));
+    // 究極爆發
+    World.generate(777, 'hoenn', 9);
+    G.state.flags = {};
+    fought = [];
+    await Story.landmark(lm('lanakila'));
+    check('究極爆發：成為阿羅拉冠軍之前不會出現', !fought.length && !G.state.bag['ultranecrozium-z']);
+    G.state.champs.alola = 1;
+    await Story.landmark(lm('lanakila'));
+    check('究極爆發：打倒究極奈克洛茲瑪得到究極奈克洛Ｚ', fought.length === 1 && fought[0].trainer.party[0].form === 'necrozma-ultra' && G.state.bag['ultranecrozium-z'] === 1);
+    Object.assign(Game, { battle: keep.battle, save: keep.save });
+    Object.assign(UI, { say: keep.say, choose: keep.choose });
+    G.state = keep.state;
+  }
   // 12. 隨機對戰不出錯
   {
     let err = null;

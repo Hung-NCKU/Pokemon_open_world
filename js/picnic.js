@@ -54,6 +54,13 @@ define(Picnic, {
     // 隱藏特性：母方（或非百變怪那方）有隱藏特性時 60% 遺傳
     const hidden = Forms.data(mother).ab.find(x => x[1]);
     if (hidden && mother.ability === hidden[0] && U.chance(.6)) child.ability = hidden[0];
+    // 遺傳招式（第九世代）：雙親任一方會的蛋招式都會遺傳；招式滿 4 個時擠掉最早的
+    const egg = (window.EGG_MOVES && EGG_MOVES[sp]) || [];
+    for (const id of egg) {
+      if (!MOVES[id] || child.moves.some(s => s.id === id) || ![mother, father].some(p => p.moves.some(s => s.id === id))) continue;
+      if (child.moves.length >= 4) child.moves.shift();
+      child.moves.push({ id, pp: MOVES[id].pp });
+    }
     child.happy = 120;
     child.hp = Mon.maxHp(child);
     return { egg: true, mon: child, steps: Picnic.cycles(sp) * 128, laid: G.state.playMs };

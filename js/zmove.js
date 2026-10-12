@@ -18,6 +18,13 @@ for (const [type, z] of Object.entries(window.ZMOVES || {})) {
   ITEMS[z.item] = { n: z.itemN, price: 0, kind: 'held', d: `讓寶可夢攜帶後，可以把${TYPES[type].n}屬性的招式變成 Z 招式「${z.n}」。` };
 }
 
+// 專屬 Z 純晶（data/zsig.js）：特定寶可夢＋特定招式 → 專屬 Z 招式（皮卡丘＋伏特攻擊 → 皮卡皮卡必殺擊……）
+const ZSIG = window.ZSIG || {};
+for (const [item, z] of Object.entries(ZSIG)) {
+  const who = [...new Set(z.users.map(u => POKEDEX[u.sp] && POKEDEX[u.sp].n))].filter(Boolean).join('、');
+  ITEMS[item] = { n: z.n, price: 0, kind: 'held', d: `讓${who}攜帶後，可以把「${MOVES[z.from] ? MOVES[z.from].n : ''}」變成專屬 Z 招式「${z.z.n}」。` };
+}
+
 define(ZMove, {
   // 第七世代：原本威力 → Z 招式威力
   power(bp) {
@@ -26,10 +33,34 @@ define(ZMove, {
     if (bp <= 130) return 195; return 200;
   },
   typeOf(m) { return m && m.item ? ZCRYSTAL[m.item] || null : null; },
+  // 攜帶的是 Z 純晶（屬性或專屬）
+  holds(m) { return !!(m && m.item && (ZCRYSTAL[m.item] || ZSIG[m.item])); },
+  // 專屬 Z 招式：攜帶對應的純晶、是指定的寶可夢（形態）、使用指定的招式
+  sigFor(m, mv) {
+    const z = m && m.item && ZSIG[m.item];
+    if (!z || !mv || mv.num !== z.from) return null;
+    return z.users.some(u => u.sp === m.sp && (!u.form || u.form === m.form)) ? z : null;
+  },
   // 這個招式能不能變成 Z 招式
   eligible(b, m, mv) {
+    if (ZMove.sigFor(m, mv)) return true;
     const t = ZMove.typeOf(m);
     return !!(t && mv && mv.cat !== 'Status' && mv.bp > 0 && b.moveType(m, mv) === t);
+  },
+  // 選單上顯示的 Z 招式名稱
+  nameFor(m, mv) { const z = ZMove.sigFor(m, mv); return z ? z.z.n : ZMOVES[ZMove.typeOf(m)] ? ZMOVES[ZMove.typeOf(m)].n : ''; },
+  // 實際使出的招式（專屬優先）
+  makeFor(m, mv) {
+    const s = ZMove.sigFor(m, mv);
+    if (!s) return ZMove.make(mv, ZMove.typeOf(m));
+    const z = s.z;
+    const out = { ...mv, id: z.id, num: z.num, baseId: z.id, n: z.n, type: z.type, cat: z.cat, bp: z.bp, acc: true, isZ: true, breaksProtect: true,
+      secondary: null, secondaries: null, self: null, selfBoost: null, multihit: null, drain: null, recoil: null, boosts: null, ignoreAbility: !!z.ignoreAbility,
+      support: 'full', flags: { ...mv.flags } };
+    if (z.cat === 'Status') { out.target = 'self'; out.boosts = z.boosts || null; }
+    else if (z.boosts) out.selfBoost = { boosts: z.boosts }; // 熾魂熱舞烈音爆：自己全能力 +1
+    if (z.status) out.secondaries = [{ chance: 100, status: z.status }]; // 駕雷馭電戲衝浪：麻痺
+    return out;
   },
   make(mv, type) {
     const z = ZMOVES[type];
@@ -44,7 +75,7 @@ Object.assign(Battle.prototype, {
     const side = this.sideKey(m);
     if (this.gimmickUsed(side)) return false;
     if (side === 'me' && !G.state.bag['z-ring']) return false;
-    return !!ZMove.typeOf(m) && m.moves.some(s => s.pp > 0 && ZMove.eligible(this, m, md(s.id)));
+    return ZMove.holds(m) && m.moves.some(s => s.pp > 0 && ZMove.eligible(this, m, md(s.id)));
   },
 });
 
@@ -57,7 +88,7 @@ Battle.prototype.resolveMove = function (m, v, idx) {
   if (want && r.slot && !r.cont && this.canZ(m) && ZMove.eligible(this, m, r.mv)) {
     this.zUsed = this.zUsed || {};
     this.zUsed[side] = true;
-    r.mv = ZMove.make(r.mv, ZMove.typeOf(m));
+    r.mv = ZMove.makeFor(m, r.mv);
   }
   if (side === 'me') this._zMe = false; else this._zFoe = false;
   return r;
@@ -79,7 +110,9 @@ Battle.prototype.runMove = async function (user, target, act) {
 function installZAnim() {
   const prev = Battle.prototype.moveAnim;
   Battle.prototype.moveAnim = async function (user, target, view) {
-    if (view && view.isZ && await SDAnim.zmove(this, user, target, view.t)) return;
+    // 專屬 Z 招式用自己的動畫；一般 Z 招式的 view.id 是原本的招式，依屬性播放
+    const sig = view && Object.values(ZSIG).some(z => z.z.id === view.id) ? view.id : null;
+    if (view && view.isZ && await SDAnim.zmove(this, user, target, view.t, sig)) return;
     return prev.call(this, user, target, view);
   };
 }
@@ -109,7 +142,9 @@ World.generate = function (...a) {
   const r = _zGenerate.apply(this, a);
   const rng = mulberry32((this.seed ^ 0x2a2a) >>> 0);
   const gymTypes = new Set((LEADERS.alola || []).map(l => l[1]));
-  const left = Object.keys(ZMOVES || {}).filter(t => t !== 'normal' && !gymTypes.has(t));
+  // 屬性的 Z 純晶在前、專屬 Z 純晶接在後面（原本的位置不變）；究極奈克洛Ｚ靠劇情取得
+  const left = [...Object.keys(ZMOVES || {}).filter(t => t !== 'normal' && !gymTypes.has(t)).map(t => ZMOVES[t].item),
+    ...Object.keys(ZSIG).filter(k => k !== 'ultranecrozium-z')];
   const ok = new Set([T.TALL, T.GRASS, T.CAVE, T.SAND, T.FLOWER, T.SNOW, T.DESERT]);
   const [rx, ry, rad] = REGION_POS.alola;
   let n = 0;
@@ -118,7 +153,7 @@ World.generate = function (...a) {
     const x = Math.round(rx + Math.cos(ang) * rr), y = Math.round(ry + Math.sin(ang) * rr);
     if (this.regionAt(x, y) !== 'alola' || !ok.has(this.tile(x, y)) || this.townAt(x, y) || this.trainers.has(x + ',' + y)) continue;
     if ((this.legends && this.legends.has(x + ',' + y)) || [...this.events.values()].some(e => Math.hypot(e.x - x, e.y - y) < 10)) continue;
-    const item = ZMOVES[left[n]].item;
+    const item = left[n];
     this.events.set(x + ',' + y, { kind: 'megastone', id: 'zc_' + item, item, x, y });
     n++;
   }

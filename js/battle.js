@@ -147,7 +147,7 @@ class Battle {
         bar.id = 'gimmick-bar';
         const drawBar = idx => {
           bar.innerHTML = gm.map(g => {
-            const zTxt = g.id === 'z' && on === 'z' && me.moves[idx] ? (ZMove.eligible(this, me, md(me.moves[idx].id)) ? '：' + ZMOVES[ZMove.typeOf(me)].n : '（這個招式屬性不符）') : '';
+            const zTxt = g.id === 'z' && on === 'z' && me.moves[idx] ? (ZMove.eligible(this, me, md(me.moves[idx].id)) ? '：' + ZMove.nameFor(me, md(me.moves[idx].id)) : '（這個招式不能變成 Z 招式）') : '';
             return `<span class="gb${g.ok ? '' : ' dis'}${on === g.id ? ' on' : ''}" data-g="${g.id}" title="${U.esc(g.why || '')}">${g.key} ${g.label}${zTxt}${g.ok ? '' : `<small>${U.esc(g.why)}</small>`}</span>`;
           }).join('');
           bar.querySelectorAll('.gb').forEach(el => { el.onclick = ev => { ev.stopPropagation(); toggle(el.dataset.g); }; });
@@ -198,7 +198,7 @@ class Battle {
     }
     if (bag['z-ring'] && typeof ZMove !== 'undefined') {
       const t = ZMove.typeOf(me);
-      const why = used ? one : !t ? '要讓寶可夢攜帶 Z 純晶' : !this.canZ(me) ? `沒有${TYPES[t].n}屬性的攻擊招式` : '';
+      const why = used ? one : !ZMove.holds(me) ? '要讓寶可夢攜帶 Z 純晶' : !this.canZ(me) ? (t ? `沒有${TYPES[t].n}屬性的攻擊招式` : '這隻寶可夢或招式和專屬 Z 純晶不符') : '';
       out.push({ id: 'z', key: 'E', label: 'Z 招式', ok: !why, why });
     }
     if (bag['dynamax-band'] && typeof Dmax !== 'undefined') {

@@ -1,7 +1,8 @@
 // 後期機制：極巨化／超極巨化、太晶團體戰、合體與分離、究極爆發、戰鬥中變形（資料：data/late.js）
 import { BForm, Dmax, G, Game, Mega, Sound, Story, T, UI, define } from './core.js';
 import { U, mulberry32 } from './util.js';
-import { ITEMS, REGIONS, REGION_POS, TYPES } from './data.js';
+import { ITEMS, REGIONS, REGION_POS, TYPES, typeEff } from './data.js';
+import { Held } from './abilities.js';
 import { Mon } from './mon.js';
 import { TM } from './tm.js';
 import { STRUGGLE_MD, md } from './movedata.js';
@@ -38,7 +39,84 @@ define(Dmax, {
     fighting: { self: { atk: 1 } }, flying: { self: { spe: 1 } }, poison: { self: { spa: 1 } }, ground: { self: { spd: 1 } }, steel: { self: { def: 1 } },
     normal: { foe: { spe: -1 } }, dragon: { foe: { atk: -1 } }, ghost: { foe: { def: -1 } }, dark: { foe: { spd: -1 } }, bug: { foe: { spa: -1 } },
   },
-  gmaxForm(m) { const k = POKEDEX[m.sp].en + '-gmax'; return m.gmax && FORMS[k] ? k : null; },
+  // 超極巨招式打中後的效果
+  async gmaxEffect(b, user, target, id) {
+    const side = b.sideKey(user), oside = side === 'me' ? 'foe' : 'me';
+    const foes = b.activeMons().filter(m => m.hp > 0 && b.sideKey(m) === oside);
+    const allies = b.activeMons().filter(m => m.hp > 0 && b.sideKey(m) === side);
+    const each = async (list, fn) => { for (const m of list) { const r = b.focusOn(m); try { await fn(m, b.volOf(m)); } finally { r(); } } };
+    const g = Object.values(Dmax.GMAX).find(x => x[2] === id);
+    const name = g ? g[0] : '';
+    switch (id) {
+      case 'vinelash': case 'wildfire': case 'cannonade': case 'volcalith':
+        b.sides[oside].gmaxRes = { type: { vinelash: 'grass', wildfire: 'fire', cannonade: 'water', volcalith: 'rock' }[id], turns: 4, n: name };
+        return b.msg(`對手被${name}包圍了！`);
+      case 'befuddle': return each(foes, m => b.setStatus(m, U.pick(['psn', 'par', 'slp']), user, true));
+      case 'voltcrash': return each(foes, m => b.setStatus(m, 'par', user, true));
+      case 'malodor': return each(foes, m => b.setStatus(m, 'psn', user, true));
+      case 'stunshock': return each(foes, m => b.setStatus(m, U.pick(['psn', 'par']), user, true));
+      case 'goldrush': {
+        await each(foes, m => b.addVolatile(m, 'confusion', user, null, true));
+        if (side === 'me' && G.state) { const gold = Math.min(99999, user.lv * 100); G.state.money += gold; await b.msg(`撒了一地的金幣！撿到了 ${gold} 元！`); }
+        return;
+      }
+      case 'smite': return each(foes, m => b.addVolatile(m, 'confusion', user, null, true));
+      case 'cuddle': return each(foes, m => b.addVolatile(m, 'attract', user, null, true));
+      case 'meltdown': return each(foes, m => b.addVolatile(m, 'torment', user, null, true));
+      case 'sandblast': case 'centiferno': return each(foes, m => b.addVolatile(m, 'partiallytrapped', user, null, true));
+      case 'terror': await each(foes, (m, v) => { v.trapped = true; }); return b.msg('對手無法逃走了！');
+      case 'foamburst': return each(foes, m => b.boost(m, { spe: -2 }, user, true));
+      case 'tartness': return each(foes, m => b.boost(m, { evasion: -1 }, user, true));
+      case 'chistrike': await each(allies, (m, v) => { v.focus = Math.min(3, (v.focus || 0) + 1); }); return b.msg('己方變得容易擊中要害了！');
+      case 'resonance': if (!b.sides[side].auroraveil) { b.sides[side].auroraveil = 5; await b.msg('己方張起了極光幕！'); } return;
+      case 'replenish':
+        for (const m of allies) {
+          const v = b.volOf(m);
+          if (!m.item && v.usedItem && v.usedItem.endsWith('-berry') && U.rand() < .5) { m.item = v.usedItem; v.usedItem = null; await b.msg(`${b.label(m)} 撿回了${Held.name(m.item)}！`); }
+        }
+        return;
+      case 'sweetness': for (const m of allies) if (m.st) { m.st = null; b.draw(); await b.msg(`${b.label(m)} 的異常狀態治好了！`); } return;
+      case 'finale': return each(allies, async m => { if (m.hp < Mon.maxHp(m)) { await b.healMon(m, Math.floor(Mon.maxHp(m) / 6)); await b.msg(`${b.label(m)} 的體力回復了！`); } });
+      case 'windrage': {
+        const s = b.sides[oside];
+        s.reflect = s.lightscreen = s.auroraveil = s.safeguard = s.mist = 0;
+        for (const sd of Object.values(b.sides)) { sd.spikes = 0; sd.toxicspikes = 0; sd.stealthrock = false; sd.stickyweb = false; sd.steelsurge = false; }
+        b.field.terrain = null;
+        return b.msg('狂風吹散了場上的障礙！');
+      }
+      case 'gravitas': if (!b.field.gravity) { b.field.gravity = 5; await b.msg('重力變強了！'); } return;
+      case 'stonesurge': if (!b.sides[oside].stealthrock) { b.sides[oside].stealthrock = true; await b.msg('對手的周圍浮著尖銳的岩石！'); } return;
+      case 'steelsurge': if (!b.sides[oside].steelsurge) { b.sides[oside].steelsurge = true; await b.msg('對手的周圍浮著尖銳的鋼刺！'); } return;
+      case 'snooze': if (target && target.hp > 0 && U.rand() < .5) await b.addVolatile(target, 'yawn', user, null, true); return;
+      case 'depletion':
+        return each(foes, async (m, v) => {
+          const slot = v.lastMove && m.moves.find(s => s.id === v.lastMove);
+          if (slot && slot.pp > 0) { slot.pp = Math.max(0, slot.pp - 2); await b.msg(`${b.label(m)} 的 ${MOVES[slot.id].n} 的 PP 減少了！`); }
+        });
+    }
+  },
+  // 超極巨的形態：目前形態＋-gmax（武道熊師的連擊流、顫弦蠑螈的低調）→ 物種＋-gmax → 預設形態（一擊流、高調）
+  gmaxForm(m) {
+    if (!m || !m.gmax) return null;
+    const en = POKEDEX[m.sp].en, base = m.form && FORMS[m.form] && !FORMS[m.form].battle && !m.form.endsWith('-gmax') ? m.form : null;
+    const keys = [base && base + '-gmax', en + '-gmax', { urshifu: 'urshifu-single-strike-gmax', toxtricity: 'toxtricity-amped-gmax' }[en]];
+    return keys.find(k => k && FORMS[k]) || null;
+  },
+  // 超極巨招式（名稱依 52poke）：超極巨化的寶可夢使用「專屬屬性」的招式時才會變成，各有特別的效果
+  GMAX: {
+    venusaur: ['超極巨灰飛鞭滅', 'grass', 'vinelash'], charizard: ['超極巨地獄滅焰', 'fire', 'wildfire'], blastoise: ['超極巨水炮轟滅', 'water', 'cannonade'],
+    butterfree: ['超極巨蝶影蠱惑', 'bug', 'befuddle'], pikachu: ['超極巨萬雷轟頂', 'electric', 'voltcrash'], meowth: ['超極巨特大金幣', 'normal', 'goldrush'],
+    machamp: ['超極巨會心一擊', 'fighting', 'chistrike'], gengar: ['超極巨幻影幽魂', 'ghost', 'terror'], kingler: ['超極巨激漩泡渦', 'water', 'foamburst'],
+    lapras: ['超極巨極光旋律', 'ice', 'resonance'], eevee: ['超極巨熱情擁抱', 'normal', 'cuddle'], snorlax: ['超極巨資源再生', 'normal', 'replenish'],
+    garbodor: ['超極巨臭氣沖天', 'poison', 'malodor'], melmetal: ['超極巨液金熔擊', 'steel', 'meltdown'], rillaboom: ['超極巨狂擂亂打', 'grass', 'drumsolo'],
+    cinderace: ['超極巨破陣火球', 'fire', 'fireball'], inteleon: ['超極巨狙擊神射', 'water', 'hydrosnipe'], corviknight: ['超極巨旋風襲捲', 'flying', 'windrage'],
+    orbeetle: ['超極巨天道七星', 'psychic', 'gravitas'], drednaw: ['超極巨岩陣以待', 'water', 'stonesurge'], coalossal: ['超極巨炎石噴發', 'rock', 'volcalith'],
+    flapple: ['超極巨酸不溜丟', 'grass', 'tartness'], appletun: ['超極巨瓊漿玉液', 'grass', 'sweetness'], sandaconda: ['超極巨沙塵漫天', 'ground', 'sandblast'],
+    'toxtricity-amped': ['超極巨異毒電場', 'electric', 'stunshock'], 'toxtricity-low-key': ['超極巨異毒電場', 'electric', 'stunshock'],
+    centiskorch: ['超極巨百火焚野', 'fire', 'centiferno'], hatterene: ['超極巨天譴雷誅', 'fairy', 'smite'], grimmsnarl: ['超極巨睡魔降臨', 'dark', 'snooze'],
+    alcremie: ['超極巨幸福圓滿', 'fairy', 'finale'], copperajah: ['超極巨鋼鐵陣法', 'steel', 'steelsurge'], duraludon: ['超極巨劣化衰變', 'dragon', 'depletion'],
+    'urshifu-single-strike': ['超極巨奪命一擊', 'dark', 'oneblow'], 'urshifu-rapid-strike': ['超極巨流水連擊', 'water', 'rapidflow'],
+  },
   make(b, user, mv) {
     if (mv.cat === 'Status') {
       const g = md(182);
@@ -46,8 +124,14 @@ define(Dmax, {
     }
     const type = b.moveType(user, mv);
     const gm = Dmax.gmaxForm(user);
-    const name = gm ? `超極巨${TYPES[type].n}` : (MAX_MOVES[type] || {}).n || '極巨攻擊';
-    return { ...mv, id: 'maxmove', baseId: mv.id, n: name, type, bp: Dmax.power(mv.bp, type), acc: true, isMax: true, maxEffect: type,
+    // 超極巨招式：屬性和專屬的超極巨招式相同時
+    const g = gm && Dmax.GMAX[gm.replace(/-gmax$/, '')];
+    const isG = !!(g && g[1] === type);
+    const name = isG ? g[0] : (MAX_MOVES[type] || {}).n || '極巨攻擊';
+    // 狂擂亂打、破陣火球、狙擊神射：威力 160、無視特性；奪命一擊、流水連擊：無視守住類招式
+    const fixed160 = isG && ['drumsolo', 'fireball', 'hydrosnipe'].includes(g[2]);
+    return { ...mv, id: 'maxmove', baseId: mv.id, n: name, type, bp: fixed160 ? 160 : Dmax.power(mv.bp, type), acc: true, isMax: true, maxEffect: type,
+      gmax: isG ? g[2] : null, ignoreAbility: fixed160, bypassProtect: isG && (g[2] === 'oneblow' || g[2] === 'rapidflow'),
       secondary: null, secondaries: null, self: null, multihit: null, drain: null, recoil: null, flags: { ...mv.flags, protect: 1 } };
   },
 });
@@ -87,7 +171,7 @@ Object.assign(Battle.prototype, {
     m._dmax = false;
     delete m._dmax;
     if (m.hp > 0) m.hp = Math.ceil(m.hp / 2);
-    if (Dmax.gmaxForm(m) && m.form === Dmax.gmaxForm(m)) BForm.revert(m);
+    if (m.form && m.form.endsWith('-gmax')) BForm.revert(m); // 超極巨的形態（含武道熊師連擊流等）恢復
     if (this.el) { const side = this.sideKey(m); if (this.setSprite) this.setSprite(side, m); const img = this.el.querySelector(`.bmon.${side} img`); if (img) img.classList.remove('dmax'); }
     if (!quiet) await this.msg(`${this.label(m)} 恢復了原本的樣子！`);
     this.draw && this.draw();
@@ -111,7 +195,8 @@ Battle.prototype.runMove = async function (user, target, act) {
   await BattleForms.before(this, user, act);
   const r = await _runMoveD.call(this, user, target, act);
   const mv = act.mv;
-  if (mv && mv.maxEffect && user.hp > 0 && !this.volOf(user).lastMoveFailed) {
+  if (mv && mv.gmax && user.hp > 0 && !this.volOf(user).lastMoveFailed) await Dmax.gmaxEffect(this, user, target, mv.gmax);
+  else if (mv && mv.maxEffect && user.hp > 0 && !this.volOf(user).lastMoveFailed) {
     const e = Dmax.EFFECT[mv.maxEffect] || {};
     if (e.weather && this.field.weather !== e.weather) { this.field.weather = e.weather; this.field.weatherT = 5; await this.msg({ sunnyday: '日照變強了！', raindance: '開始下雨了！', sandstorm: '開始颳沙暴了！', snowscape: '開始下雪了！' }[e.weather]); }
     if (e.terrain && this.field.terrain !== e.terrain) { this.field.terrain = e.terrain; this.field.terrainT = 5; await this.msg({ electricterrain: '腳下電流飛竄！', grassyterrain: '腳下青草如茵！', psychicterrain: '腳下傳來奇妙的感覺！', mistyterrain: '腳下霧氣繚繞！' }[e.terrain]); }
@@ -143,6 +228,17 @@ Battle.prototype.endOfTurn = async function () {
     await BattleForms.endOfTurn(this, m);
   }
   if (this.raid) await Raid.endOfTurn(this);
+  // 超極巨招式的持續傷害（灰飛鞭滅、地獄滅焰、水炮轟滅、炎石噴發）：4 回合，非該屬性的寶可夢每回合受到 1/6 傷害
+  for (const key of ['me', 'foe']) {
+    const g = this.sides[key].gmaxRes;
+    if (!g) continue;
+    for (const m of this.activeMons().filter(x => this.sideKey(x) === key && x.hp > 0)) {
+      if (this.typesOf(m).includes(g.type) || this.ab(m) === 'magic-guard') continue;
+      const r = this.focusOn(m);
+      try { await this.hurt(m, Math.max(1, Math.floor(Mon.maxHp(m) / 6))); await this.msg(`${this.label(m)} 受到了${g.n}的傷害！`); } finally { r(); }
+    }
+    if (--g.turns <= 0) this.sides[key].gmaxRes = null;
+  }
 };
 const _onSwitchOutD = Battle.prototype.onSwitchOut;
 Battle.prototype.onSwitchOut = async function (m) {
@@ -153,6 +249,12 @@ Battle.prototype.onSwitchOut = async function (m) {
 const _onEntryD = Battle.prototype.onEntry;
 Battle.prototype.onEntry = async function (m) {
   const r = await _onEntryD.call(this, m);
+  // 超極巨鋼鐵陣法的鋼刺：和隱形岩一樣，依鋼屬性的相剋造成傷害
+  if (m && m.hp > 0 && this.sides[this.sideKey(m)].steelsurge && this.itm(m) !== 'heavy-duty-boots' && this.ab(m) !== 'magic-guard') {
+    const e = typeEff('steel', this.typesOf(m));
+    await this.hurt(m, Math.max(1, Math.floor(Mon.maxHp(m) * e / 8)));
+    await this.msg(`尖銳的鋼刺扎進了 ${this.label(m)} 的身體！`);
+  }
   if (m && m.hp > 0) await BattleForms.entry(this, m);
   return r;
 };
