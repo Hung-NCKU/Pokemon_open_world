@@ -10,6 +10,8 @@ const STAT_ZH = ['HP', '攻擊', '防禦', '特攻', '特防', '速度'];
 const STATUS_ZH = { par: '麻痺', slp: '睡眠', frz: '冰凍', brn: '灼傷', psn: '中毒', tox: '劇毒' };
 const STATUS_C = { par: '#d8b020', slp: '#8a8a8a', frz: '#60c8e8', brn: '#e05030', psn: '#9040b0', tox: '#702090' };
 const SPR = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/';
+const localSprites = new Set(window.GEN3 && GEN3.battleSprites || []);
+const warmedSprites = new Map();
 const STRUGGLE = { id: 165, n: '掙扎', t: 'unknown', c: 'ph', p: 50, a: 0, pp: 1, pr: 0, tg: 'selected-pokemon', dr: -25 };
 
 const Mon = {
@@ -113,7 +115,14 @@ const Mon = {
   teraType(m) { return m.tera && TYPES[m.tera] ? m.tera : Forms.data(m).t[0]; },
 
   sprite(id, { back = false, shiny = false } = {}) {
-    return SPR + (back ? 'back/' : '') + (shiny ? 'shiny/' : '') + id + '.png';
+    return Mon.spritePath((back ? 'back/' : '') + (shiny ? 'shiny/' : '') + id + '.png');
+  },
+
+  spritePath(path) { return localSprites.has(path) ? (window.GEN3_BASE || 'assets/gen3/') + 'battle/' + path : SPR + path; },
+  warmSprite(url) {
+    if (warmedSprites.has(url)) return;
+    const img = new Image(); img.decoding = 'async'; img.src = url; warmedSprites.set(url, img);
+    if (warmedSprites.size > 128) warmedSprites.delete(warmedSprites.keys().next().value);
   },
 
   // 單一條件組是否成立（item：使用道具時傳入的道具；null 表示升級時判定）

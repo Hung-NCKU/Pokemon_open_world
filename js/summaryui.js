@@ -19,6 +19,7 @@ const SummaryUI = (() => {
       root.id = 'summary';
       document.getElementById('game').appendChild(root);
       const draw = () => {
+        for (const next of list.slice(Math.max(0, k - 1), k + 2)) Mon.warmSprite(monSprite(next, false).url);
         const m = list[k], s = POKEDEX[m.sp], st = Mon.stats(m);
         const nat = m.mint ?? m.nat, up = NAT_STAT[Math.floor(nat / 5)], down = NAT_STAT[nat % 5];
         const g = m.gender === 'm' ? '<i class="gm">♂</i>' : m.gender === 'f' ? '<i class="gf">♀</i>' : '';

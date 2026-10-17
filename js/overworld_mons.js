@@ -4,13 +4,15 @@
 //   aggressive 兇猛（6 格內衝過來，等級 +2）、pack 成群（2～3 隻一起出現、跟著帶頭的移動）、
 //   nocturnal 夜行（只在晚上出現）、stationary 定點（睡在原地不動，靠近也不會醒）
 // - 碰到就開始戰鬥；離開太遠會消失；使用除蟲噴霧時不會出現
-// - 圖示：No.1–386 用綠寶石的圖示（2 格動畫），其他用第七世代圖示
+// - 地圖精靈：HGSS 風格四方向踏步，按物種載入；無素材時使用原有圖示
 // 物種的習性：先看代表性物種的表，其他依屬性與種族值推定
 import { Forms, G, Game, Sound, T, UI } from './core.js';
 import { U } from './util.js';
 import { Mon } from './mon.js';
+import { monSprite } from './sprites.js';
 import { Gen3 } from './gen3.js';
 import { BLOCKED, TILE, TOWN_H, TOWN_W, World } from './world.js';
+import { motionPose, movementDuration } from './overworld_motion.js';
 const Wild = (() => {
   const TABLE = {
     stationary: [143, 185, 213, 79, 74, 95, 111, 76, 446, 531, 324, 338, 337, 299, 476, 524, 557, 688, 703, 771, 194, 590, 591, 836, 833],
@@ -79,6 +81,7 @@ const OverworldMons = (() => {
       const mood = Wild.of(mon.sp);
       if (mood === 'aggressive') { mon.lv = Math.min(100, mon.lv + 2); mon.exp = Mon.expFor(POKEDEX[mon.sp].gr, mon.lv); mon.hp = Mon.maxHp(mon); }
       const lead = { x, y, px: x, py: y, t: 0, mon, mood, dir: 'down', biome, seen: false };
+      prepareMon(mon);
       list.push(lead);
       // 成群：同種的 1～2 隻在旁邊
       if (mood === 'pack') {
@@ -102,6 +105,7 @@ const OverworldMons = (() => {
       if (w.mood === 'stationary') continue;                       // 睡在原地
       const fleeing = (w.mood === 'timid' || w.mood === 'shy') && d <= 4;
       const charging = w.mood === 'aggressive' && d <= 6;
+      if (motionPose(w, now).moving) continue;
       if (now - w.t < (charging ? 200 : fleeing ? 250 : 420)) continue;
       w.t = now;
       // 膽小的被逼到 2 格內：有三成機率逃走消失
@@ -130,6 +134,7 @@ const OverworldMons = (() => {
         if (nx === s.x && ny === s.y) { touch(w); return; }
         if (!canStand(w, nx, ny)) continue;
         w.px = w.x; w.py = w.y; w.x = nx; w.y = ny; w.moved = now;
+        w.moveMs = movementDuration({ charging, fleeing });
         w.dir = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
         break;
       }
@@ -177,18 +182,59 @@ const OverworldMons = (() => {
     imgCache.set(sp, e);
     return e;
   }
+  function prepareMon(mon) {
+    if (available.has(+mon.sp)) walker(mon.sp);
+    Mon.warmSprite(monSprite(mon, false).url);
+    const active = G.state && G.state.party && G.state.party.find(m => m.hp > 0);
+    if (active) Mon.warmSprite(monSprite(active, true).url);
+  }
+  const walkers = new Map();
+  const available = new Set(Gen3.on && GEN3.overworld || []);
+  function drawWalker(g, sp, x, y, frame, dir) {
+    if (!available.has(+sp)) return false;
+    const e = walker(sp);
+    if (!e.img.complete) return true;
+    if (!e.img.naturalWidth) return false;
+    return drawWalkerPose(g, e, x, y, frame, dir);
+  }
+  function walker(sp) {
+    let e = walkers.get(sp);
+    if (!e) {
+      const img = new Image(); e = { img, poses: new Map() }; walkers.set(sp, e);
+      if (walkers.size > 96) walkers.delete(walkers.keys().next().value);
+      img.src = Gen3.base + `overworld/${sp}.png`;
+    }
+    return e;
+  }
+  function drawWalkerPose(g, e, x, y, frame, dir) {
+    const key = dir + frame;
+    let pose = e.poses.get(key);
+    if (!pose) {
+      const size = e.img.naturalHeight, scale = 3;
+      pose = document.createElement('canvas'); pose.width = size * scale; pose.height = size * scale;
+      const ctx = pose.getContext('2d'); ctx.imageSmoothingEnabled = false;
+      if (dir === 'right') { ctx.translate(pose.width, 0); ctx.scale(-1, 1); }
+      const index = (dir === 'up' ? 2 : dir === 'left' || dir === 'right' ? 4 : 0) + frame;
+      ctx.drawImage(e.img, index * size, 0, size, size, 0, 0, pose.width, pose.height);
+      e.poses.set(key, pose);
+    }
+    g.imageSmoothingEnabled = false;
+    g.drawImage(pose, x + (TILE - pose.width) / 2, y + TILE - pose.height + 18);
+    return true;
+  }
   let sheet = null;
   // 繪製（由 Game.render 依 y 座標排序呼叫）；ox, oy 為畫面左上角的世界像素座標
   function draw(g, w, ox, oy) {
-    const k = U.clamp((performance.now() - (w.moved || 0)) / 300, 0, 1);
-    const x = (w.px + (w.x - w.px) * k) * TILE - ox, y = (w.py + (w.y - w.py) * k) * TILE - oy;
-    drawIcon(g, w.mon.sp, x, y, Forms.get(w.mon) ? Forms.get(w.mon).id : null);
+    const pose = motionPose(w, performance.now());
+    const x = Math.round(pose.x * TILE / 3) * 3 - ox, y = Math.round(pose.y * TILE / 3) * 3 - oy;
+    drawIcon(g, w.mon.sp, x, y, Forms.get(w.mon) ? Forms.get(w.mon).id : null, pose.frame, pose.dir);
     if (w.seen && (w.mood === 'curious' || w.mood === 'aggressive')) { g.fillStyle = w.mood === 'aggressive' ? '#f84838' : '#f8f8f8'; g.font = 'bold 22px sans-serif'; g.fillText('!', x + TILE / 2 - 3, y - 10); }
     if (w.mood === 'stationary') { g.fillStyle = '#f8f8f8'; g.font = 'bold 16px sans-serif'; const z = (G.frame >> 5) % 3; g.fillText('z'.repeat(z + 1), x + TILE - 8, y - 4 - z * 3); }
   }
   // 地圖上的寶可夢小圖示（野生、傳說、卡比獸共用）；x, y 為格子左上角的畫面座標
-  function drawIcon(g, sp, x, y, formId = null) {
-    const e = formId ? icon('f' + formId) : icon(sp), frame = (G.frame >> 4) % 2;
+  function drawIcon(g, sp, x, y, formId = null, frame = 0, dir = 'down') {
+    if (drawWalker(g, sp, x, y, frame, dir)) return;
+    const e = formId ? icon('f' + formId) : icon(sp);
     g.imageSmoothingEnabled = false;
     g.fillStyle = 'rgba(0,0,0,.22)';
     g.beginPath(); g.ellipse(x + TILE / 2, y + TILE - 6, 14, 5, 0, 0, Math.PI * 2); g.fill();
@@ -196,19 +242,20 @@ const OverworldMons = (() => {
       if (!sheet) { sheet = new Image(); sheet.src = Gen3.base + 'mon_icons.png'; }
       if (sheet.complete && sheet.naturalWidth) {
         const k2 = sp - 1;
-        g.drawImage(sheet, (k2 % 32) * 32, Math.floor(k2 / 32) * 64 + frame * 32, 32, 32, x, y - 6 - frame * 2, TILE, TILE);
+        g.drawImage(sheet, (k2 % 32) * 32, Math.floor(k2 / 32) * 64 + frame * 32, 32, 32, x, y - 6, TILE, TILE);
       }
     } else if (e.img.complete && e.img.naturalWidth) {
       const s = TILE / Math.max(e.img.naturalWidth, e.img.naturalHeight) * 1.2;
-      g.drawImage(e.img, x + (TILE - e.img.naturalWidth * s) / 2, y + TILE - e.img.naturalHeight * s - 2 - frame * 2, e.img.naturalWidth * s, e.img.naturalHeight * s);
+      g.drawImage(e.img, x + (TILE - e.img.naturalWidth * s) / 2, y + TILE - e.img.naturalHeight * s - 2, e.img.naturalWidth * s, e.img.naturalHeight * s);
     }
   }
   return {
-    update, draw, drawIcon, touch, at, spawn,
+    update, draw, drawIcon, touch, at, spawn, prepareMon,
+    position: (w, now = performance.now()) => motionPose(w, now),
     get list() { return list; },
     clear() { list = []; },
     // 測試用
-    _spawnAt(x, y, mon, mood = 'wander') { const w = { x, y, px: x, py: y, t: 0, mon, mood, dir: 'down', biome: 'tall' }; list.push(w); return w; },
+    _spawnAt(x, y, mon, mood = 'wander') { prepareMon(mon); const w = { x, y, px: x, py: y, t: 0, mon, mood, dir: 'down', biome: 'tall' }; list.push(w); return w; },
     _step: step,
     _canStand: (x, y) => canStand(null, x, y),
   };

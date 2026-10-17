@@ -61,6 +61,8 @@ define(StorageUI, (() => {
       const PSLOT = [[104, 64], [152, 16], [152, 40], [152, 64], [152, 88], [152, 112], [152, 140]];
       const draw = () => {
         const meta = s.boxMeta[box], m = held ? held.m : focused();
+        const neighbors = mode === 'party' ? G.party.slice(Math.max(0, pslot - 1), pslot + 2) : grid[box].slice(Math.max(0, cur - 1), cur + 2);
+        for (const next of neighbors) if (next) Mon.warmSprite(monSprite(next, false).url);
         const cx = cur % COLS, cy = Math.floor(cur / COLS);
         let html = `<div class="st-scroll"></div><div class="st-panel"></div>
           <div class="st-pic">${m ? `<img src="${monSprite(m, false).url}" onerror="this.onerror=null;this.src='${Mon.spriteOf(m, { shiny: m.shiny })}'">` : ''}</div>

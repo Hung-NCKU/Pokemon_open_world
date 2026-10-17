@@ -115,6 +115,7 @@ const DexUI = (() => {
         const id = ids[cur];
         curId = id || curId;
         if (!ids.length) { $('.dx-pic').innerHTML = ''; $('.dx-list').innerHTML = '<div class="dx-row">（沒有符合的寶可夢）</div>'; return; }
+        for (const next of ids.slice(Math.max(0, cur - 7), cur + 8)) if (G.state.seen[next]) Mon.warmSprite(Mon.sprite(next));
         $('.dx-pic').innerHTML = G.state.seen[id] ? `<img src="${Mon.sprite(id)}">` : '';
         let html = '';
         for (let r = 0; r < ROWS; r++) {
@@ -184,7 +185,7 @@ const DexUI = (() => {
           <div class="dx-gen">${U.esc(s.gen)}</div>
           <div class="dx-types">${s.t.map(typeTag).join('')}</div>
           <div class="dx-l1"><span>世代</span><b>第 ${s.g} 世代</b></div>
-          ${id <= (GEN3.ui.icons || 0) ? `<i class="dx-foot" style="background-image:url(${Gen3.base}mon_feet.png);background-position:${-((id - 1) % 32) * 48}px ${-Math.floor((id - 1) / 32) * 48}px"></i>` : ''}
+          ${id <= Math.min(386, GEN3.ui.icons || 0) ? `<i class="dx-foot" style="background-image:url(${Gen3.base}mon_feet.png);background-position:${-((id - 1) % 32) * 48}px ${-Math.floor((id - 1) / 32) * 48}px"></i>` : ''}
           <div class="dx-l2"><span>重量</span><b>${caught ? (s.w / 10).toFixed(1) : '???.?'} kg</b></div>
           <div class="dx-text">${tab === 0 ? `<p>${where()}</p>` : body}</div>`;
         root.querySelectorAll('.dx-tabs span').forEach(el => { el.onclick = () => act(+el.dataset.t); });

@@ -482,6 +482,10 @@ def main():
     build_interiors()
     with open(os.path.join(OUT, "manifest.js"), "w", encoding="utf-8") as f:
         f.write("window.GEN3=" + json.dumps(man, ensure_ascii=False) + ";\n")
+    from build_overworld import build as build_overworld
+    build_overworld()
+    from build_battle_sprites import build as build_battle_sprites
+    build_battle_sprites()
     print("完成 →", OUT)
 
 

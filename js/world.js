@@ -22,7 +22,7 @@ const World = {
   idx(x, y) { return y * WW + x; },
   inside(x, y) { return x >= 0 && y >= 0 && x < WW && y < WH; },
   tile(x, y) { return this.inside(x, y) ? this.tiles[y * WW + x] : T.DEEP; },
-  set(x, y, t) { if (this.inside(x, y)) this.tiles[y * WW + x] = t; },
+  set(x, y, t) { if (this.inside(x, y) && this.tiles[y * WW + x] !== t) { this.tiles[y * WW + x] = t; this.revision = (this.revision || 0) + 1; } },
   regionAt(x, y) {
     if (!this.inside(x, y)) return 'kanto';
     return REGION_KEYS[this.regionMap[y * WW + x]];

@@ -1,6 +1,7 @@
 // 第三世代（綠寶石）風格的原創像素美術：以 16×16 原生解析度繪製後放大 2 倍
 import { Forms, G, T } from './core.js';
 import { mulberry32 } from './util.js';
+import { Mon } from './mon.js';
 import { TRAINER_CLASSES } from './data.js';
 const Spr = (() => {
   const S = 3; // 放大倍率
@@ -500,10 +501,10 @@ const ITEM_SPR = id => `https://raw.githubusercontent.com/PokeAPI/sprites/master
 function monSprite(m, back) {
   const id = m.sp, sh = m.shiny;
   const f = typeof Forms !== 'undefined' && Forms.get(m);
-  if (f) return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${f.id}.png`, scale: 2 };
-  if (id <= 386) return { url: `${PKSPR}versions/generation-iii/emerald/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 3 };
-  if (id <= 649) return { url: `${PKSPR}versions/generation-v/black-white/animated/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.gif`, scale: 2 };
-  return { url: `${PKSPR}${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`, scale: 2 };
+  if (f) return { url: Mon.spritePath(`${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${f.id}.png`), scale: 2 };
+  if (id <= 386) return { url: Mon.spritePath(`versions/generation-iii/emerald/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`), scale: 3 };
+  if (id <= 649) return { url: Mon.spritePath(`versions/generation-v/black-white/animated/${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.gif`), scale: 2 };
+  return { url: Mon.spritePath(`${back ? 'back/' : ''}${sh ? 'shiny/' : ''}${id}.png`), scale: 2 };
 }
 
 function playCry(id, faint = false) {

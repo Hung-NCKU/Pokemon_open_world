@@ -26,6 +26,8 @@ import { FieldMove } from './fieldmove.js';
 import './save.js';
 import { installLifecycle } from './lifecycle.js';
 import { loadDexText } from './dex_text.js';
+import { TerrainView } from './terrain_view.js';
+const terrainView = new TerrainView();
 const VW = 15, VH = 10;
 
 define(G, {
@@ -1321,7 +1323,7 @@ define(Game, {
   render() {
     const cv = document.getElementById('world');
     const g = cv.getContext('2d');
-    if (G.mode === 'title' || !G.state) return;
+    if (G.mode !== 'world' || !G.state) return;
     // 綠寶石的圖塊還在下載（第一次開啟、網路慢）：先顯示讀取中，不用原創圖塊頂替
     if (Gen3.on && !Gen3.ready()) {
       g.fillStyle = '#10131c'; g.fillRect(0, 0, cv.width, cv.height);
@@ -1340,11 +1342,10 @@ define(Game, {
     const ox = Math.round(px - (VW * TILE) / 2 + TILE / 2), oy = Math.round(py - (VH * TILE) / 2 + TILE / 2);
     const x0 = Math.floor(ox / TILE), y0 = Math.floor(oy / TILE);
     const wf = Math.floor(G.frame / 30) % 4;
-    // 每一格各自防錯：一格出錯不會讓下面的格子與人物都畫不出來（畫面停在一半）
-    for (let y = y0; y <= y0 + VH; y++) for (let x = x0; x <= x0 + VW; x++) {
-      try { World.drawTile(g, World.tile(x, y), x, y, x * TILE - ox, y * TILE - oy, wf); }
-      catch (e) { if (!G._tileErr) { G._tileErr = 1; Telemetry.error(`繪製地形失敗（${x},${y}）：${e && e.message}`, 'render'); } }
-    }
+    terrainView.draw(g, World, { x0, y0, width: VW, height: VH, tileSize: TILE, ox, oy, frame: wf,
+      assets: Gen3.on && Gen3.ready(),
+      onError: (e, x, y) => { if (!G._tileErr) { G._tileErr = 1; Telemetry.error(`繪製地形失敗（${x},${y}）：${e && e.message}`, 'render'); } },
+    });
     // 每個物件各自防錯：一個物件出錯時只略過它（並記錄位置），不會讓整個畫面只剩地形
     const safe = (what, x, y, fn) => { try { fn(); } catch (e) { Telemetry.error(`繪製${what}失敗（${x},${y}）：${e && e.message}`, 'render'); } };
     for (const b of World.buildings) {
@@ -1362,7 +1363,7 @@ define(Game, {
       const ev = World.eventAt && World.eventAt(x, y);
       if (ev) people.push({ y: y * TILE, ev });
     }
-    if (typeof OverworldMons !== 'undefined') for (const w of OverworldMons.list) people.push({ y: w.y * TILE, ow: w });
+    if (typeof OverworldMons !== 'undefined') for (const w of OverworldMons.list) people.push({ y: OverworldMons.position(w).y * TILE, ow: w });
     people.push({ y: py, player: true });
     people.sort((a, b) => a.y - b.y);
     const walking = G.move ? (G.move.t / G.move.dur < .5 ? G.stepAnim : 0) : 0;
@@ -1576,6 +1577,8 @@ define(Game, {
     Gen3.prepare();
     G.room = null;
     G.state = state;
+    for (const m of state.party) Mon.warmSprite(Mon.spriteOf(m, { shiny: m.shiny }));
+    if (Gen3.on && GEN3.ui && GEN3.ui.icons) Mon.warmSprite(Gen3.base + 'mon_icons.png');
     G.state.flags = G.state.flags || {};
     // 舊存檔的寶可夢補上性別
     for (const m of [...state.party, ...state.box]) {
