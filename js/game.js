@@ -699,7 +699,7 @@ define(Game, {
 
   // 飛翔：降落在目的地寶可夢中心的門口（和原作一樣）；沒有中心的地方降落在城鎮中央
   flyTo(t) {
-    if (t.id === World.legendIsland?.id) { Game.warp(t.landX, t.landY, 'up'); EmeraldUI.mapPopup(t.name, 'wood'); return; }
+    if (t.id === World.legendIsland?.id) { Game.warp(t.landX, t.landY, 'up'); EmeraldUI.mapPopup(t.name, 'wood'); Game.updateMusic(true); return; }
     const c = World.buildings.find(b => b.town === t && b.kind === 'center');
     if (c) Game.warp(c.door.x, c.door.y + 1, 'down');
     else Game.warp(t.cx, t.cy, 'down');
@@ -815,6 +815,7 @@ define(Game, {
     if (G.mode !== 'world' || !G.state) return;
     const s = G.state;
     const town = World.townAt(s.x, s.y);
+    if (G.room) { Sound.play(({ center: 'center', mart: 'mart', gym: 'gym', cave: 'cave', lab: 'lab' })[G.room.b.kind] || 'home'); return; }
     let name;
     if (s.surf) name = 'surf';
     else if (town) {
@@ -830,7 +831,7 @@ define(Game, {
       else name = ['route', 'route2', 'route3'][ri % 3];
     }
     // 只在進出城鎮、開始／結束衝浪、跨越地區時換曲，避免野外地形交錯時頻繁切換
-    const zone = town ? 'town' + town.id : s.surf ? 'surf' : 'wild' + World.regionAt(s.x, s.y);
+    const zone = [town ? 'town' + town.id : s.surf ? 'surf' : ['cave','snow','desert'].includes(name) ? name : 'wild', World.regionAt(s.x, s.y), !!World.islandAt?.(s.x, s.y), U.isNight()].join(':');
     if (force || zone !== G.musicZone) {
       G.musicZone = zone;
       Sound.play(name);
@@ -1053,7 +1054,7 @@ define(Game, {
 
   async battle(opts) {
     // 雙打：雙方都有兩隻以上能戰鬥的寶可夢時
-    const dbl = opts.double && typeof DoubleBattle !== 'undefined' && opts.trainer && opts.trainer.party.length >= 2 && G.party.filter(m => m.hp > 0).length >= 2;
+    const dbl = opts._quickRoot?.battle.doubles || (opts.double && typeof DoubleBattle !== 'undefined' && opts.trainer && opts.trainer.party.length >= 2 && G.party.filter(m => m.hp > 0).length >= 2);
     const b = dbl ? new DoubleBattle(opts) : new Battle(opts);
     b.raid = opts.raid ? { ...opts.raid } : null;
     // 霸主寶可夢、寶主寶可夢的氣場：登場時全能力提升
@@ -1066,7 +1067,8 @@ define(Game, {
     const t0 = performance.now();
     G.battle = b; // 目前的戰鬥（測試與除錯用）
     let r;
-    try { r = await b.run(); } finally { G.battle = null; }
+    if (opts._quickRoot) Game.restoreQuickBattle(b, opts._quickRoot);
+    try { r = await b.run({ resume: !!opts._quickRoot }); } finally { G.battle = null; }
     Telemetry.time(kind === 'wild' ? '野生戰鬥' : '訓練家戰鬥', performance.now() - t0);
     // 對戰統計：我方最高等級 − 對手最高等級
     const myTop = Math.max(...G.party.map(m => m.lv)), foeTop = Math.max(...(opts.trainer ? opts.trainer.party : [opts.wild]).filter(Boolean).map(m => m.lv));
@@ -1304,7 +1306,7 @@ define(Game, {
     if (World.doors.has(tx + ',' + ty) && dir === 'up') { Game.flow(() => Game.enterBuilding(World.doors.get(tx + ',' + ty))); G.keys.clear(); return; }
     if (World.landmarks && World.landmarks.has(tx + ',' + ty)) { Sound.sfx('door'); Game.flow(() => Story.landmark(World.landmarks.get(tx + ',' + ty))); G.keys.clear(); return; }
     const lg = World.legendAt && World.legendAt(tx, ty);
-    if (lg) { Game.flow(() => Story.legend(lg)); G.keys.clear(); return; }
+    if (lg) { G.keys.clear(); return; }
     const ev = World.eventAt && World.eventAt(tx, ty);
     if (ev) { Game.flow(() => Game.touchEvent(ev)); G.keys.clear(); return; }
     const ow = typeof OverworldMons !== 'undefined' && OverworldMons.at(tx, ty);
@@ -1739,7 +1741,7 @@ window.addEventListener('load', () => {
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
-  Game.title();
+  if (!Game.resumeQuickState?.()) Game.title();
   installLifecycle();
 });
 

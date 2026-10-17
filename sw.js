@@ -34,7 +34,8 @@ self.addEventListener('fetch', e => {
   e.respondWith((async () => {
     // Pokemon art is stable within one release. Cache-first avoids a network
     // round trip whenever a menu recreates its images; a new shell refreshes it.
-    const localSprite = url.href.startsWith(absolute('assets/gen3/battle/'))
+    const localSprite = url.href.startsWith(absolute('assets/bgm/'))
+      || url.href.startsWith(absolute('assets/gen3/battle/'))
       || url.href.startsWith(absolute('assets/gen3/overworld/'))
       || url.href === absolute('assets/gen3/mon_icons.png');
     const fixed = sprite || localSprite || immutable(url);

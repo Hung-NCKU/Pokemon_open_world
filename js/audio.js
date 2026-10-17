@@ -3,6 +3,7 @@
 // 自備音檔要先登記：在 index.html 加上 <script>window.CUSTOM_AUDIO = { bgm: ['title', ...], sfx: ['select', ...] };</script>
 // （沒有登記就不去找，避免每次開啟都對不存在的檔案發出上百個請求，拖慢第一次載入）
 import { G, Sound, define } from './core.js';
+import { regionalTrack } from './regional_music.js';
 import { Midi } from './gen3.js';
 
 // ---------- 自備素材載入 ----------
@@ -72,6 +73,8 @@ const Assets = {
 define(Sound, (() => {
   let ctx = null, master, musicGain, sfxGain, noiseBuf, waves = {};
   let current = null, currentName = null, fileAudio = null;
+  let currentTrack = null, musicEpoch = 0, musicAbort = null;
+  const musicBuffers = new Map();
   const settings = () => G.settings;
 
   function init() {
@@ -313,6 +316,10 @@ define(Sound, (() => {
   let pending = null;
   let timer = null;
   function stopMusic() {
+    musicEpoch++;
+    musicAbort?.abort(); musicAbort = null;
+    currentTrack = null;
+    if (current?.source) { try { current.source.stop(); } catch {} }
     if (timer) { clearInterval(timer); timer = null; }
     if (current) { current.out.gain.setTargetAtTime(0, ctx.currentTime, .05); current = null; }
     if (fileAudio) { fileAudio.pause(); fileAudio = null; }
@@ -323,10 +330,17 @@ define(Sound, (() => {
     try { playInner(name); } catch (e) { console.warn('音樂播放失敗', name, e); }
   }
   function playInner(name, at = 0) {
-    if (name === currentName) return;
+    const track = regionalTrack(name);
+    if (name === currentName && currentTrack === (track?.id || null)) return;
     if (!ctx) { pending = name; return; }
     stopMusic();
     currentName = name;
+    if (track) {
+      currentTrack = track.id;
+      const epoch = musicEpoch;
+      void playRegional(track, name, at, epoch);
+      return;
+    }
     if (Assets.bgm[name]) {
       fileAudio = new window.Audio(Assets.bgm[name]);
       fileAudio.loop = true;
@@ -364,6 +378,43 @@ define(Sound, (() => {
     };
     tick();
     timer = setInterval(tick, 60);
+  }
+  async function playRegional(track, name, at, epoch) {
+    try {
+      let buffer = musicBuffers.get(track.id);
+      if (!buffer) {
+        musicAbort = new AbortController();
+        const response = await fetch(new URL((window.GEN3_BASE || 'assets/gen3/') + '../bgm/' + track.file.split('/').pop(), document.baseURI), { signal: musicAbort.signal });
+        if (!response.ok) throw new Error(`BGM HTTP ${response.status}`);
+        buffer = await ctx.decodeAudioData(await response.arrayBuffer());
+        // Keep at most two decoded tracks; the Service Worker keeps compressed files.
+        if (epoch !== musicEpoch) return;
+        musicBuffers.set(track.id, buffer);
+        const bytes = () => [...musicBuffers.values()].reduce((n,b) => n + b.length * b.numberOfChannels * 4, 0);
+        while (musicBuffers.size > 1 && (musicBuffers.size > 2 || bytes() > 32 * 1024 * 1024)) musicBuffers.delete(musicBuffers.keys().next().value);
+      }
+      if (epoch !== musicEpoch || currentName !== name) return;
+      const source = ctx.createBufferSource(), out = ctx.createGain();
+      source.buffer = buffer; source.loop = true;
+      source.loopStart = track.loopStart || 0;
+      source.loopEnd = Math.min(track.loopEnd || buffer.duration, buffer.duration);
+      const end = source.loopEnd, start = source.loopStart;
+      const offset = at >= end ? start + (at - start) % (end - start) : at;
+      const begun = ctx.currentTime;
+      out.gain.value = 1.4; source.connect(out); out.connect(musicGain);
+      source.start(0, Math.max(0, offset));
+      current = { out, name, source, step: { pos: () => {
+        const position = offset + ctx.currentTime - begun;
+        return position < end ? position : start + (position - start) % (end - start);
+      } } };
+    } catch (error) {
+      if (epoch !== musicEpoch) return;
+      console.warn('地區 BGM 載入失敗，改用備援', track.title, error);
+      // Prevent a bad file from producing silence or repeated retries this session.
+      const choices = window.GEN3?.regionalMusic?.regions;
+      if (choices) for (const roles of Object.values(choices)) for (const key of Object.keys(roles)) if (roles[key] === track.id) delete roles[key];
+      stopMusic(); playInner(name, at);
+    }
   }
   // 播放短旋律，結束後回到原本的音樂
   function jingle(name) {
@@ -579,7 +630,7 @@ define(Sound, (() => {
 
   // 音樂資料晚一點才載入完成時：用新的資料重新播放目前的曲子（原本可能退回內建的晶片音樂）
   function reload() { const n = currentName; if (n) { stopMusic(); play(n); } }
-  return { init, play, reload, stop: stopMusic, sfx, jingle, applyVolume, get current() { return currentName; } };
+  return { init, play, reload, stop: stopMusic, sfx, jingle, applyVolume, get current() { return currentName; }, get track() { return currentTrack; }, get playback() { const s = current?.source; return s ? { duration: s.buffer.duration, loopStart: s.loopStart, loopEnd: s.loopEnd, volume: musicGain.gain.value } : null; } };
 })());
 
 export { Assets };

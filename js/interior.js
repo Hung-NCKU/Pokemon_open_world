@@ -94,6 +94,7 @@ define(Interior, (() => {
     const [ex, ey] = d.exits[0];
     room = { key, d, b, x: ex, y: ey, dir: 'up', npcs };
     G.room = room;
+    Game.updateMusic(true);
     G.move = null;
     Telemetry.event('進入建築', { kind: b.kind, town: t.name });
   }
@@ -106,7 +107,7 @@ define(Interior, (() => {
     const [ex, ey] = d.exits[0];
     room = { key, d, b: { kind: 'cave', town: null, door: { x: lm.x, y: lm.y }, lm }, x: ex, y: ey, dir: 'up', npcs: [],
       boulders: d.boulders.map(([x, y]) => ({ x, y })), onGoal };
-    G.room = room; G.move = null;
+    G.room = room; G.move = null; Game.updateMusic(true);
     Telemetry.event('進入洞窟', { lm: lm.id });
   }
   // 怪力：會怪力的寶可夢優先，其次格鬥屬性，再其次攻擊最高的（不會因為沒有秘傳招式而卡住）
@@ -224,7 +225,7 @@ define(Interior, (() => {
     await Gen3.whenLoaded(roomImages(key, npcs.map(n => n.gfx)));
     const [ex, ey] = d.exits[0];
     room = { key, d, b, x: ex, y: ey, dir: 'up', npcs, e4, noBack: true, cleared: false };
-    G.room = room; G.move = null;
+    G.room = room; G.move = null; Game.updateMusic(true);
     Telemetry.event('聯盟房間', { key });
   }
   // 往前的門：大廳需要 8 枚徽章並確認；四天王與冠軍的房間要先打贏

@@ -45,6 +45,16 @@
       {
         const key = (k, o = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...o }));
         const up = k => window.dispatchEvent(new KeyboardEvent('keyup', { key: k, bubbles: true }));
+        // Reloading this test document would restart the suite. Real scene reset
+        // and combat reloads are covered in quickstates.spec.js; keep this key test local.
+        const realRead = Game.readQuickState;
+        Game.readQuickState = async n => {
+          const data = JSON.parse(localStorage.getItem(Game.slotKey(n)) || 'null');
+          if (!data) return false;
+          const { unpackGraph } = await import('../js/quick_states.js');
+          Game.start(data.quickVersion === 2 ? unpackGraph(data.graph).state : data);
+          return true;
+        };
         const money0 = G.state.money, x0 = G.state.x;
         key('F2', { shiftKey: true });
         G.state.money += 777; G.state.x += 1;
@@ -52,11 +62,13 @@
         await new Promise(r => setTimeout(r, 100));
         check('即時存檔：Shift＋F2 存檔、F2 讀回原本的狀態', G.state.money === money0 && G.state.x === x0 && G.mode === 'world', `${G.state.money}/${money0}`);
         key('F7');
+        await Promise.resolve();
         check('即時存檔：沒有存檔的格子不會讀取', G.state.money === money0 && G.mode === 'world');
         key('x');
         check('按住 X 奔跑（GBA 的 B 鍵）', Game.running());
         up('x');
         check('放開 X 停止奔跑', !Game.running());
+        Game.readQuickState = realRead;
         // Enter＝START：在野外打開開始選單（這一頁的 UI.choose 是自動選第一項的替身，所以只確認有呼叫選單）
         const realMenu = Game.mainMenu;
         let menuCalls = 0;

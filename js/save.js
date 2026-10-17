@@ -170,25 +170,7 @@ define(Game, {
   running() { return G.keys.has('Shift') || G.keys.has('x') || G.keys.has('X'); },
   slotKey(n) { return (typeof Account !== 'undefined' ? Account.saveKey() : SAVE_KEY) + '_slot' + n; },
   async quickSlot(n, save) {
-    if (!G.state || G.mode !== 'world' || G.busy || UI.active() || G.tower) {
-      UI.banner(save ? '只能在野外自由行動時即時存檔' : '只能在野外自由行動時讀取即時存檔'); return false;
-    }
-    if (save) {
-      try {
-        G.state.savedAt = new Date().toISOString();
-        localStorage.setItem(Game.slotKey(n), Game.serialize(G.state));
-      } catch { UI.banner('即時存檔失敗（瀏覽器的儲存空間不足？）'); return false; }
-      Sound.sfx('save');
-      UI.banner(`已即時存檔到第 ${n} 格（F${n} 讀取）`);
-      return true;
-    }
-    let raw = null;
-    try { raw = localStorage.getItem(Game.slotKey(n)); } catch { }
-    const r = Game.parseSave(raw);
-    if (!r.ok) { UI.banner(r.empty ? `第 ${n} 格沒有即時存檔（Shift＋F${n} 存檔）` : `第 ${n} 格的即時存檔無法使用：${r.error}`); return false; }
-    Game.start(r.state);
-    UI.banner(`已讀取第 ${n} 格的即時存檔`);
-    return true;
+    return save ? Game.writeQuickState(n) : Game.readQuickState(n);
   },
   // 匯出、匯入存檔（JSON 檔案）
   /** @param {import('./types.js').SaveState} state */

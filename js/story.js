@@ -209,10 +209,9 @@ define(Story, {
     if (typeof playCry === 'function') playCry(l.sp);
     await UI.say(`${sp.lg === 2 ? '幻之寶可夢' : '傳說的寶可夢'}「${sp.n}」出現在眼前！`);
     const top = Math.max(...G.party.map(m => m.lv));
-    if (top < l.lv - 15) {
-      const c = await UI.choose(['挑戰', '先離開'], { prompt: `牠的力量深不可測（約 Lv.${l.lv}）。要挑戰嗎？`, cancel: false });
-      if (c !== 0) return;
-    }
+    const warning = top < l.lv - 15 ? '牠的力量深不可測。\n' : '';
+    const c = await UI.choose(['挑戰', '先離開'], { prompt: `${warning}要挑戰 ${sp.n}（Lv.${l.lv}）嗎？` });
+    if (c !== 0) return;
     const wild = Mon.create(l.sp, l.lv, { perfect: 31, hidden: 0 });
     const r = await Game.battle({ wild, biome: World.tile(l.x, l.y) === T.WATER || World.tile(l.x, l.y) === T.DEEP ? 'water' : 'cave' });
     if (r === 'catch') {

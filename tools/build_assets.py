@@ -486,6 +486,8 @@ def main():
     build_overworld()
     from build_battle_sprites import build as build_battle_sprites
     build_battle_sprites()
+    from build_regional_music import build as build_regional_music
+    build_regional_music()
     print("完成 →", OUT)
 
 

@@ -28,6 +28,7 @@ class Battle {
     this.aiItems = this.trainer && this.trainer.kind !== 'trainer' ? (this.trainer.items ?? 2) : 0;
     this.initEngine();
   }
+  static moveCursor(mon, value) { if (value !== undefined) LAST_MOVE.set(mon, value); return LAST_MOVE.get(mon); }
   musicName() {
     if (this.wildMon) return POKEDEX[this.wildMon.sp].lg ? 'battle_legend' : 'battle_wild';
     return { gym: 'battle_gym', champion: 'battle_champion' }[this.trainer.kind] || 'battle_trainer';
@@ -40,11 +41,12 @@ class Battle {
   label(m) { return m === this.foe ? this.foeName(m) : Mon.name(this.shownMon ? this.shownMon(m) : m); }
 
   // ---------- 主流程 ----------
-  async run() {
+  async run({ resume = false } = {}) {
     this.setup();
     G.mode = 'battle';
     Game.markSeen(this.foe.sp);
     Sound.play(this.musicName());
+    if (!resume) {
     this.el.querySelector('.hbox.me').classList.add('hidden');
     this.el.querySelector('.bmon.me img').classList.add('gone');
     if (this.wildMon) {
@@ -89,12 +91,15 @@ class Battle {
       this.field.weather = this.owWeather; this.field.weatherT = 99;
       await this.msg({ raindance: '外面正在下雨。', sunnyday: '陽光非常強烈。', snowscape: '外面正在下雪。', sandstorm: '沙暴正在吹襲。' }[this.owWeather] || '');
     }
+    } else this.draw();
     let result = null;
     while (!result) {
       this.turn++;
+      Game.quickBoundary?.(this);
       const v = this.vMe;
       // 鎖定、蓄力、硬直中不用選擇行動
       const action = v.recharge || v.charging || v.locked ? { type: 'move', idx: -2 } : await this.chooseAction();
+      this.quickReady = false;
       result = await this.doTurn(action);
     }
     return this.finish(result);
@@ -122,7 +127,8 @@ class Battle {
   async chooseAction() {
     while (true) {
       const me = this.me;
-      const c = await UI.choose(['戰鬥', '背包', '寶可夢', '逃跑'], { prompt: `${Mon.name(me)} 要做什麼？`, cols: 2, cancel: false, cls: 'battle-menu' });
+      const c = await UI.choose(['戰鬥', '背包', '寶可夢', '逃跑'], { prompt: `${Mon.name(me)} 要做什麼？`, cols: 2, cancel: false, cls: 'battle-menu', start: this.lastAction || 0 });
+      this.lastAction = c;
       if (c === 0) {
         const usable = me.moves.filter(s => s.pp > 0 && !this.moveBlocked(me, this.vMe, s.id));
         if (!usable.length) return { type: 'move', idx: -1 };
@@ -366,6 +372,7 @@ class Battle {
   }
 
   async finish(result) {
+    this.quickReady = false; this._quickBoundary = null;
     const tr = this.trainer;
     // 太晶珠用過後要到寶可夢中心充能
     if (this.teraUsed && this.teraUsed.me) G.state.teraCharged = false;

@@ -193,10 +193,11 @@ class DoubleBattle extends Battle {
   }
 
   // ---------- 主流程 ----------
-  async run() {
+  async run({ resume = false } = {}) {
     this.setup();
     G.mode = 'battle';
     Sound.play(this.musicName());
+    if (!resume) {
     for (const side of ['me', 'foe']) for (const k of [0, 1]) {
       this.slotEls[side].hbox[k].classList.add('hidden');
       this.slotEls[side].bmon[k].querySelector('img').classList.add('gone');
@@ -213,10 +214,12 @@ class DoubleBattle extends Battle {
     // 登場特性：速度快的先；威嚇等針對對手的特性對兩隻對手各發動一次
     const all = [...ms, ...fs].sort((a, b) => this.speedOf(b, this.volOf(b)) - this.speedOf(a, this.volOf(a)));
     for (const m of all) await this.entryAbility(m);
+    }
     this.drawAll();
     let result = null;
     while (!result) {
       this.turn++;
+      Game.quickBoundary?.(this);
       result = await this.doubleTurn();
     }
     return this.finish(result);
@@ -296,6 +299,7 @@ class DoubleBattle extends Battle {
     const acts = [];
     const mine = this.actives('me');
     for (let k = 0; k < mine.length; k++) acts.push(await this.chooseDouble(mine[k], k));
+    this.quickReady = false;
     for (const f of this.actives('foe')) acts.push(this.aiDouble(f));
     this.queued = {};
     // 換人、道具先處理

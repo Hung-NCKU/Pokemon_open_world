@@ -77,3 +77,6 @@ window.addEventListener('load', () => { void installUpdates(); });
 import { BattleHooks } from './battle_hooks.js';
 BattleHooks.install(m31.Battle.prototype);
 Object.assign(window, { BattleHooks });
+
+import { installQuickStates } from './quick_states.js';
+installQuickStates(Object.fromEntries(['Game','Story','Interior','Regions2','Regions','RIVAL','SILVER','TownEvents','Raid','BattleTower'].filter(k => window[k]).map(k => [k, window[k]])));
