@@ -1,6 +1,6 @@
 // Version and precache URLs are filled by the production build.
-const VERSION = '51ce699f186d7192';
-const PRECACHE = ["index.html","assets/Cubic_11_game-UnpbrcuP.woff2","assets/main-BqilQ0xt.js","assets/game-data-B0CUPFit.js","assets/main-9aldyPpK.css","assets/gen3/manifest.js","assets/gen3/interiors.js"];
+const VERSION = '8a46db23fa5d8563';
+const PRECACHE = ["index.html","assets/Cubic_11_game-UnpbrcuP.woff2","assets/main-BxXraqep.js","assets/game-data-B0CUPFit.js","assets/main-9aldyPpK.css","assets/gen3/manifest.js","assets/gen3/interiors.js"];
 const PREFIX = 'pkmn-' + new URL(self.registration.scope).pathname + '-';
 const SHELL = PREFIX + VERSION, ASSETS = PREFIX + 'assets', SPRITES = PREFIX + 'sprites';
 const absolute = path => new URL(path, self.registration.scope).href;
@@ -34,7 +34,8 @@ self.addEventListener('fetch', e => {
   e.respondWith((async () => {
     // Pokemon art is stable within one release. Cache-first avoids a network
     // round trip whenever a menu recreates its images; a new shell refreshes it.
-    const localSprite = url.href.startsWith(absolute('assets/gen3/battle/'))
+    const localSprite = url.href.startsWith(absolute('assets/bgm/'))
+      || url.href.startsWith(absolute('assets/gen3/battle/'))
       || url.href.startsWith(absolute('assets/gen3/overworld/'))
       || url.href === absolute('assets/gen3/mon_icons.png');
     const fixed = sprite || localSprite || immutable(url);
