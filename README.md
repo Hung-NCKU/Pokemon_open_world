@@ -4,6 +4,8 @@
 
 **想學習這個專案是怎麼做出來的：請看 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**（依系統整理的教材：架構、資料管線、世界生成、繪製、對戰引擎、AI、存檔、測試、真實的錯誤與除錯過程）。時間順序的完整紀錄見 [DEVLOG.md](DEVLOG.md)，規劃與進度見 [PROGRESS.md](PROGRESS.md)。
 
+最新品質改善與測試方式見 [docs/QUALITY_UPGRADE.md](docs/QUALITY_UPGRADE.md)（存檔衝突保護、離線更新、手機招式介面、綠寶石美術與讀取優化）。
+
 ## 開始遊玩
 
 **線上遊玩：https://hung-ncku.github.io/Pokemon_open_world/** （電腦、手機都可以；手機建議加到主畫面全螢幕遊玩）。線上版是測試、教學用途，從 `gh-pages` 分支提供，含本機建置的綠寶石素材（`tools/deploy_pages.sh`）；`main` 分支不含原版素材，直接從 `main` 執行時使用內建的原創像素圖與晶片音樂。

@@ -1,3 +1,4 @@
+import { BattleHooks } from './battle_hooks.js';
 // 後期機制：極巨化／超極巨化、太晶團體戰、合體與分離、究極爆發、戰鬥中變形（資料：data/late.js）
 import { BForm, Dmax, G, Game, Mega, Sound, Story, T, UI, define } from './core.js';
 import { U, mulberry32 } from './util.js';
@@ -183,17 +184,13 @@ const _gimmickUsed = Battle.prototype.gimmickUsed;
 Battle.prototype.gimmickUsed = function (side) { return _gimmickUsed.call(this, side) || !!(this.dmaxUsed && this.dmaxUsed[side]); };
 
 // 招式換成極巨招式
-const _resolveMoveD = Battle.prototype.resolveMove;
-Battle.prototype.resolveMove = function (m, v, idx) {
-  const r = _resolveMoveD.call(this, m, v, idx);
+BattleHooks.register('resolveMove', 'dynamax-move', { after(r, m, v, idx) {
   if (m._dmax && r.mv && !r.recharge && r.mv !== STRUGGLE_MD) r.mv = Dmax.make(this, m, r.mv);
-  return r;
-};
-const _runMoveD = Battle.prototype.runMove;
-Battle.prototype.runMove = async function (user, target, act) {
+} });
+BattleHooks.register('runMove', 'dynamax-and-forms', { async before(user, target, act) {
   if (user._dmax) { this.volOf(user).flinch = false; this.volOf(user).choiceLock = null; } // 極巨化不會畏縮、不受講究類限制
   await BattleForms.before(this, user, act);
-  const r = await _runMoveD.call(this, user, target, act);
+}, async after(r, user, target, act) {
   const mv = act.mv;
   if (mv && mv.gmax && user.hp > 0 && !this.volOf(user).lastMoveFailed) await Dmax.gmaxEffect(this, user, target, mv.gmax);
   else if (mv && mv.maxEffect && user.hp > 0 && !this.volOf(user).lastMoveFailed) {
@@ -203,8 +200,7 @@ Battle.prototype.runMove = async function (user, target, act) {
     if (e.self) await this.boost(user, e.self, user);
     if (e.foe && target && target.hp > 0) await this.boost(target, e.foe, user);
   }
-  return r;
-};
+} });
 // 極巨化的寶可夢不會被強制換下
 const _forceOut = Battle.prototype.forceOut;
 Battle.prototype.forceOut = async function (m) {
@@ -212,16 +208,12 @@ Battle.prototype.forceOut = async function (m) {
   return _forceOut.call(this, m);
 };
 // 回合開始：玩家按 D、訓練家的王牌
-const _doTurnD = Battle.prototype.doTurn;
-Battle.prototype.doTurn = async function (action) {
+BattleHooks.register('doTurn', 'dynamax-start', { async before(action) {
   if (action && action.type === 'move' && action.dmax) await this.dynamax(this.me);
   if (this.aiDmax && this.aiDmax()) await this.dynamax(this.foe);
-  return _doTurnD.call(this, action);
-};
+} });
 // 回合結束：極巨化倒數、戰鬥中變形、團體戰的同伴與時間
-const _endOfTurnD = Battle.prototype.endOfTurn;
-Battle.prototype.endOfTurn = async function () {
-  await _endOfTurnD.call(this);
+BattleHooks.register('endOfTurn', 'dynamax-forms-raid', { async after() {
   for (const m of [this.me, this.foe]) {
     if (!m || m.hp <= 0) continue;
     if (m._dmax) { const v = this.volOf(m); if (--v.dmaxT <= 0) await this.undynamax(m); }
@@ -239,16 +231,12 @@ Battle.prototype.endOfTurn = async function () {
     }
     if (--g.turns <= 0) this.sides[key].gmaxRes = null;
   }
-};
-const _onSwitchOutD = Battle.prototype.onSwitchOut;
-Battle.prototype.onSwitchOut = async function (m) {
+} });
+BattleHooks.register('onSwitchOut', 'dynamax-and-forms', { async before(m) {
   if (m && m._dmax) await this.undynamax(m, true);
   await BattleForms.switchOut(this, m);
-  return _onSwitchOutD.call(this, m);
-};
-const _onEntryD = Battle.prototype.onEntry;
-Battle.prototype.onEntry = async function (m) {
-  const r = await _onEntryD.call(this, m);
+} });
+BattleHooks.register('onEntry', 'steelsurge-and-forms', { async after(r, m) {
   // 超極巨鋼鐵陣法的鋼刺：和隱形岩一樣，依鋼屬性的相剋造成傷害
   if (m && m.hp > 0 && this.sides[this.sideKey(m)].steelsurge && this.itm(m) !== 'heavy-duty-boots' && this.ab(m) !== 'magic-guard') {
     const e = typeEff('steel', this.typesOf(m));
@@ -256,8 +244,7 @@ Battle.prototype.onEntry = async function (m) {
     await this.msg(`尖銳的鋼刺扎進了 ${this.label(m)} 的身體！`);
   }
   if (m && m.hp > 0) await BattleForms.entry(this, m);
-  return r;
-};
+} });
 const _finishD = Battle.prototype.finish;
 Battle.prototype.finish = async function (result) {
   for (const m of [...G.party, ...this.foeParty]) {
@@ -542,4 +529,4 @@ Story.questSummary = function (s) {
   return _questSummaryG.call(this, s) + '\n' + lines.join('\n');
 };
 
-export { _monStats, _gimmickUsed, _resolveMoveD, _runMoveD, _forceOut, _doTurnD, _endOfTurnD, _onSwitchOutD, _onEntryD, _finishD, BattleForms, _useMoveOnD, _hurtD, FUSION, Fusion, _megaFormFor, _canMegaU, RAID_TYPES, Raid, _abilityStartR, _lateGenerate, _eventAtR, _eventEntityR, drawRaidCrystal, _rollWildG, _profD, _questSummaryG };
+export { _monStats, _gimmickUsed, _forceOut, _finishD, BattleForms, _useMoveOnD, _hurtD, FUSION, Fusion, _megaFormFor, _canMegaU, RAID_TYPES, Raid, _abilityStartR, _lateGenerate, _eventAtR, _eventEntityR, drawRaidCrystal, _rollWildG, _profD, _questSummaryG };

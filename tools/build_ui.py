@@ -8,6 +8,7 @@ import os
 import sys
 
 from PIL import Image
+from build_title import build_title
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gen3_tiles import png_rgba, read_pal, render_tilemap  # noqa: E402
@@ -391,7 +392,7 @@ def build_naming():
 
 
 def build_all():
-    return {"dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary(), "storage": build_storage(), "shop": build_shop(),
+    return {"title": build_title(ROOT, OUT), "dex": build_dex(), "card": build_card(), "party": build_party(), "map": build_map(), "summary": build_summary(), "storage": build_storage(), "shop": build_shop(),
             "msgbox": build_msgbox(), "popups": build_popups(), "naming": build_naming()}
 
 

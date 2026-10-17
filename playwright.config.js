@@ -11,17 +11,18 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [['list'], ['github']] : 'list',
   use: {
+    serviceWorkers: 'block',
     baseURL: `http://localhost:${PORT}`,
     // 本機可以用已安裝的 Chrome（PW_CHANNEL=chrome），不必下載 Playwright 的瀏覽器
     channel: process.env.PW_CHANNEL || undefined,
     launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] },
   },
   projects: [
-    { name: 'unit', testMatch: /(engine|smoke)\.spec\.js/ },
+    { name: 'unit', testMatch: /(engine|smoke|reliability|mobile|hooks)\.spec\.js/ },
     { name: 'natural', testMatch: /natural\.spec\.js/, timeout: 60 * 60 * 1000 },
   ],
   webServer: {
-    command: `npx vite --port ${PORT} --strictPort`, // Vite 開發伺服器（轉換 JSX、解析 import 'preact'）
+    command: `"${process.execPath}" node_modules/vite/bin/vite.js --port ${PORT} --strictPort`, // Vite 開發伺服器（轉換 JSX、解析 import 'preact'）
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env.CI,
   },

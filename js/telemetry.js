@@ -4,20 +4,20 @@
 // - 耗時：世界生成、地圖繪製、存檔、戰鬥……（最近一次、平均、最大）
 // - 遊玩事件：最近 60 筆（進入戰鬥、勝負、傳送、存檔），錯誤發生時可以對照前後發生了什麼
 // ` 鍵（Esc 下面）切換畫面左上角的即時顯示；設定選單「遊玩紀錄」可以查看與下載（F1～F12 是即時存檔／讀檔）
-import { G } from './core.js';
+import { G, Story } from './core.js';
 const Telemetry = (() => {
   const KEY = 'pkmn_openworld_log';
   const MAX_ERR = 30, MAX_EV = 60;
-  let errors = [], events = [], battles = {};
+  let errors = [], events = [], battles = {}, journeys = {};
   const timings = {};
   const fps = { frames: 0, acc: 0, cur: 0, min: Infinity, samples: 0, sum: 0, long: 0, worst: 0 };
   const started = Date.now();
-  try { const s = JSON.parse(localStorage.getItem(KEY) || '{}'); errors = Array.isArray(s.errors) ? s.errors.slice(-MAX_ERR) : []; battles = s.battles && typeof s.battles === 'object' ? s.battles : {}; } catch { }
+  try { const s = JSON.parse(localStorage.getItem(KEY) || '{}'); errors = Array.isArray(s.errors) ? s.errors.slice(-MAX_ERR) : []; battles = s.battles && typeof s.battles === 'object' ? s.battles : {}; journeys = s.journeys && typeof s.journeys === 'object' ? s.journeys : {}; } catch { }
 
   let saveT = 0;
   function persist() {
     clearTimeout(saveT);
-    saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify({ errors, battles })); } catch { } }, 200);
+    saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify({ errors, battles, journeys })); } catch { } }, 200);
   }
   const mode = () => (typeof G !== 'undefined' && G.mode) || '';
   function error(msg, where = '') {
@@ -58,10 +58,35 @@ const Telemetry = (() => {
     }
   }
   // 對戰統計（依遊玩數據調整平衡用）：每種對戰的場數、勝負、平均回合、我方與對手的等級差
+  // Local-only pacing measurements. Existing starter, quest hints and training stay unchanged.
+  function progress(s = G.state) {
+    if (!s?.region || !s.party?.length) return null;
+    const key = s.seed + ':' + s.region, stage = Story.questStage?.(s, s.region) ?? 0;
+    const now = s.playMs || 0;
+    const j = journeys[key] ||= { region: s.region, phases: {}, defeats: {}, stalls: 0, steps: s.steps || 0, stepAt: now };
+    const phase = j.phases[stage] ||= { enteredMs: now, battles: 0, losses: 0 };
+    if (j.stage !== undefined && j.stage !== stage && j.phases[j.stage]) j.phases[j.stage].completedMs ??= now;
+    j.stage = stage; phase.elapsedMs = Math.max(0, now - phase.enteredMs);
+    if (j.steps !== s.steps || now < j.stepAt) { j.steps = s.steps; j.stepAt = now; j.stalled = false; }
+    else if (now - j.stepAt >= 300000 && !j.stalled) { j.stalls++; j.stalled = true; }
+    const keys = Object.keys(journeys);
+    while (keys.length > 12) delete journeys[keys.shift()];
+    persist(); return j;
+  }
+  function checkpoint(s = G.state) { return progress(s); }
   function battle(kind, result, lvDiff, turns) {
     const b = battles[kind] || (battles[kind] = { n: 0, win: 0, lose: 0, other: 0, turns: 0, lvDiff: 0 });
     b.n++; b.turns += turns || 0; b.lvDiff += lvDiff || 0;
     if (result === 'win') b.win++; else if (result === 'lose') b.lose++; else b.other++;
+    const j = progress();
+    if (j) {
+      const phase = j.phases[j.stage]; phase.battles++; if (result === 'lose') phase.losses++;
+      if (result === 'lose') {
+        const k = G.state.region + ':' + G.state.x + ',' + G.state.y;
+        j.defeats[k] = (j.defeats[k] || 0) + 1;
+        const keys = Object.keys(j.defeats); while (keys.length > 24) delete j.defeats[keys.shift()];
+      }
+    }
     persist();
   }
   function battleStats() {
@@ -74,7 +99,7 @@ const Telemetry = (() => {
       at: new Date().toISOString(), sessionMin: Math.round((Date.now() - started) / 60000),
       ua: navigator.userAgent,
       fps: { now: fps.cur, avg: fps.samples ? Math.round(fps.sum / fps.samples) : 0, min: fps.samples ? fps.min : 0, longFrames: fps.long, worstMs: Math.round(fps.worst) },
-      timings: t, errors, events: events.slice(-30), battles: battleStats(),
+      timings: t, errors, events: events.slice(-30), battles: battleStats(), journeys,
       save: typeof G !== 'undefined' && G.state ? { v: G.state.v, worldVer: G.state.worldVer, region: G.state.region, seed: G.state.seed } : null,
     };
   }
@@ -110,7 +135,7 @@ const Telemetry = (() => {
   console.error = (...a) => { error(a.map(x => (x && x.stack) ? x.stack.split('\n').slice(0, 3).join(' | ') : String(x)).join(' '), 'console'); realErr.apply(console, a); };
   window.addEventListener('keydown', e => { if (e.key === '`' && e.target.tagName !== 'INPUT') { e.preventDefault(); toggleOverlay(); } });
 
-  return { battle, battleStats, error, event, time, measure, frame, report, download, clearErrors, toggleOverlay, get errors() { return errors; } };
+  return { progress, checkpoint, battle, battleStats, error, event, time, measure, frame, report, download, clearErrors, toggleOverlay, get errors() { return errors; } };
 })();
 
 export { Telemetry };

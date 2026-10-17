@@ -340,3 +340,42 @@ body.touch #touch .fast.toggled { background: rgba(240, 200, 64, .75); color: #3
 /* A、B 斜著排：改成 A 往上（原本 B 往下會超出畫面底部） */
 body.touch #touch .ab .b { transform: none; }
 body.touch #touch .ab .a { transform: translateY(-18px); }
+
+#game-update { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 200; max-width: 95vw; min-height: 44px; padding: 8px 16px; border: 2px solid #f8d048; border-radius: 10px; color: #fff; background: #263653; font: 16px sans-serif; cursor: pointer; }
+
+/* Touch menus use CSS pixels, so hit areas remain usable when the game is scaled down. */
+body.touch-menu-open #touch, body.touch-menu-open #choices, body.touch-menu-open #gimmick-bar { visibility: hidden; }
+#touch-battle-menu { position: fixed; left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); z-index: 80; padding: 8px; color: #484848; background: #f8f8f0; border: 4px solid #5070a0; box-shadow: inset 0 0 0 2px #b8d0e0; font: 16px "Cubic11", "Microsoft JhengHei", sans-serif; max-height: calc(100dvh - 16px); overflow-y: auto; }
+#touch-battle-menu button { min-width: 44px; min-height: 48px; padding: 6px 10px; border: 2px solid #a0b0c0; border-radius: 0; color: #484848; background: #f8f8f0; font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; }
+#touch-battle-menu .tb-options, #touch-battle-menu .tb-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#touch-battle-menu .tb-options .sel { border-color: #485870; box-shadow: inset 4px 0 #485870; background: #e0e8f0; }
+#touch-battle-menu .dis, #touch-battle-menu button:disabled { color: #909898; background: #e0e0d8; }
+#touch-battle-menu .tb-info { min-height: 28px; padding: 4px 2px; font-size: 14px; white-space: normal; }
+#touch-battle-menu .tb-confirm { background: #d0e8d0; }
+#touch-battle-menu .tb-gimmicks { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+#touch-battle-menu .tb-gimmicks:empty { display: none; }
+#touch-battle-menu .tb-gimmicks .on { border-color: #b85050; background: #f8e0a0; }
+body.touch.landscape #touch-battle-menu { left: auto; width: min(420px, 52vw); }
+
+/* Emerald art direction: limited green/blue palette and hard pixel edges. */
+#title { background: #004a62; color: #f8f8f0; border-radius: 0; }
+#title .sub, #title .note, #title .press-start, #title #loading { color: #f8f8f0; text-shadow: 2px 2px #183838; }
+#title .account, #title .keys { color: #f8f8f0; background: #185870; border: 2px solid #78b8a0; border-radius: 0; }
+#title .lg-world, #title .lg-sub { fill: #e8d858; stroke: #184850; }
+#title .lg-world-shine { display: none; }
+#title.emerald-title { background-position: center; background-size: 720px 480px; image-rendering: pixelated; }
+#title.emerald-title .logo-svg, #title.emerald-title .logo-img { display: none; }
+#title .emerald-logo { position: relative; margin: 28px auto 0; height: 270px; display: flex; flex-direction: column; align-items: center; }
+#title .emerald-logo img { width: auto; height: 168px; image-rendering: pixelated; object-fit: contain; }
+#title .emerald-logo b { font-size: 36px; line-height: 48px; color: #f8e868; text-shadow: 3px 3px #185038; letter-spacing: 8px; }
+#title .emerald-logo span { color: #e8f8e0; font-size: 20px; letter-spacing: 6px; text-shadow: 2px 2px #185038; }
+#title .press-start { color: #f8f8f0; text-shadow: 3px 3px #183838; }
+#gimmick-bar .gb { border-radius: 0; border-width: 3px; box-shadow: inset 0 0 0 2px #c8d8e8; }
+#gimmick-bar .gb.on { background: #f8e0a0; border-color: #b85050; box-shadow: inset 0 0 0 2px #f8f8d0; }
+#goal { border: 2px solid #80b8a0; border-radius: 0; background: #184850; }
+#side-hud .hd-goal, #side-hud .hd-move { border: 3px solid #607890; border-radius: 0; background: #203848; box-shadow: inset 0 0 0 1px #a8c0c0; }
+#game-update { border-radius: 0; color: #484848; background: #f8f8f0; border-color: #607890; box-shadow: inset 0 0 0 2px #c8d8e0; font-family: "Cubic11", sans-serif; }
+#touch-battle-menu { border-image: url("../assets/gen3/ui_window_1.png") 8 fill / 8px stretch; image-rendering: pixelated; padding: 10px; }
+
+#sync-status { position: absolute; right: 8px; top: 8px; z-index: 16; padding: 3px 8px; border: 2px solid #80b8a0; background: #184850; color: #f8f8f0; font-size: 14px; pointer-events: none; }
+#sync-status[data-status="failed"], #sync-status[data-status="conflict"] { color: #f8e078; border-color: #d8b860; }

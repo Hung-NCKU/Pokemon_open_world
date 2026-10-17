@@ -136,7 +136,7 @@ class Battle {
           if (!s) return '';
           const m = md(s.id);
           return Battle.moveInfo(m, s) + `<div class="mv-desc">${Battle.moveDesc(m, {
-            why: this.moveBlocked(me, this.vMe, s.id),
+            why: s.pp <= 0 ? 'PP 已用完' : this.moveBlocked(me, this.vMe, s.id),
             maxName: me._dmax ? (m.cat === 'Status' ? (MAX_MOVES.guard || {}).n : (MAX_MOVES[m.type] || {}).n) : '',
           })}</div>`;
         };

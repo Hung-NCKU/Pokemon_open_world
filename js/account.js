@@ -4,10 +4,12 @@
 // - 登入狀態記在「pkmn_session」（下次開啟自動登入）
 // - 跨平台同步（優先順序）：GitHub Gist（js/gist_cloud.js，每台裝置輸入一次只有 gist 權限的金鑰）
 //   → Supabase（js/cloud.js，js/cloud_config.js 有設定時）→ 只存在這台裝置的本機帳號
-import { Account, SAVE_KEY, UI, define } from './core.js';
+import { Account, Game, SAVE_KEY, UI, define } from './core.js';
 import { Telemetry } from './telemetry.js';
 import { Cloud } from './cloud.js';
 import { GistCloud } from './gist_cloud.js';
+import { SaveStore } from './save_store.js';
+import { revisionOf } from './sync_journal.js';
 define(Account, (() => {
   const ACC_KEY = 'pkmn_accounts', SES_KEY = 'pkmn_session';
   const store = {
@@ -76,13 +78,84 @@ define(Account, (() => {
       const remote = await be.download();
       if (!still()) return 'stale';
       if (!remote || !remote.data) return 'none';
-      const localRaw = store.get(key);
+      const raw = JSON.stringify(remote.data), checked = Game.parseSave(raw);
+      if (!checked.ok) throw new Error('雲端存檔無效：' + checked.error);
+      const localRaw = store.get(key), queue = be.getJournal?.() || {};
+      // Outstanding local work is a separate branch; a clock cannot resolve this conflict.
+      if (queue.pending && revisionOf(remote) !== (queue.head ?? null)) {
+        SaveStore.conflict(key + '_conflict_remote', raw);
+        SaveStore.conflict(key + '_conflict_local', localRaw || queue.pending);
+        be.markConflict?.(remote);
+        UI.banner('發現兩份不同進度，請到「帳號」處理同步衝突');
+        return 'conflict';
+      }
       let localAt = 0;
       try { localAt = localRaw ? Date.parse(JSON.parse(localRaw).savedAt || 0) || 0 : 0; } catch { }
       const remoteAt = Date.parse(remote.data.savedAt || remote.updated_at || 0) || 0;
-      if (remoteAt > localAt) { store.set(key, JSON.stringify(remote.data)); return 'downloaded'; }
+      if (!queue.pending && (!localRaw || remoteAt > localAt)) {
+        SaveStore.write(key, raw, Game.parseSave);
+        be.accept?.(remote);
+        return 'downloaded';
+      }
+      // Only establish ancestry when there is no competing unsent branch.
+      if (!queue.pending) be.accept?.(remote);
       return 'local';
     } catch (e) { Telemetry.error('雲端同步失敗：' + e.message, 'cloud'); return 'error'; }
+  }
+  async function resume() {
+    const be = backend();
+    if (be && be.getJournal?.().pending && !be.getJournal().conflict) await be.flush();
+  }
+  const syncStatus = () => backend()?.status || 'local';
+  function downloadCopy(json, label) {
+    const a = document.createElement('a'), url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    a.href = url; a.download = `pokemon-${label}-${Date.now()}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function conflictMenu() {
+    try {
+    const be = backend(), key = saveKey(), id = be?.identity();
+    if (!be) return;
+    const row = await be.download();
+    if (backend() !== be || be.identity() !== id) return;
+    if (!row?.data) {
+      const c = await UI.choose(['重新上傳本機進度', '返回'], { prompt: '雲端目前沒有存檔，本機進度仍保留。要重新上傳嗎？' });
+      if (c === 0 && backend() === be && be.identity() === id) {
+        const raw = store.get(key);
+        if (Game.parseSave(raw).ok) { be.accept(null); be.upload(raw); await be.flush(); }
+      }
+      return;
+    }
+    const raw = JSON.stringify(row.data), checked = Game.parseSave(raw);
+    if (!checked.ok) { await UI.say('雲端存檔無效，已保留本機進度。'); return; }
+    const local = store.get(key) || be.getJournal?.().pending;
+    const localState = Game.parseSave(local);
+    const summary = s => `${s.name}・${Math.floor((s.playMs || 0) / 60000)} 分鐘・${s.savedAt || '時間不明'}`;
+    const c = await UI.choose(['繼續本機進度', '使用雲端進度', '匯出本機進度', '匯出雲端進度', '返回'],
+      { prompt: `本機：${localState.ok ? summary(localState.state) : '無有效存檔'}\n雲端：${summary(checked.state)}\n選擇後仍會保留另一份供復原。` });
+    if (backend() !== be || be.identity() !== id || saveKey() !== key) return;
+    if (c === 2 && local) { downloadCopy(local, 'local'); return; }
+    if (c === 3) { downloadCopy(raw, 'cloud'); return; }
+    if (c !== 0 && c !== 1) return;
+    if (c === 0 && !localState.ok) { await UI.say('本機存檔無效，請選擇雲端進度。'); return; }
+    if (local) SaveStore.conflict(key + '_conflict_local', local);
+    SaveStore.conflict(key + '_conflict_remote', raw);
+    if (c === 1) {
+      SaveStore.write(key, raw, Game.parseSave);
+      be.discardPending(row);
+    } else {
+      be.accept(row); be.upload(local); await be.flush();
+    }
+    await UI.say(c === 1 ? '已使用雲端進度。本機另一份進度仍保留在復原選單。' : '已保留本機進度，並嘗試同步到雲端。');
+    } catch (e) { Telemetry.error('處理同步衝突失敗：' + e.message, 'cloud'); await UI.say('目前無法處理同步衝突，原本的進度仍保留。請恢復連線或釋出儲存空間後再試。'); }
+  }
+  async function recoveryMenu() {
+    const key = saveKey();
+    const c = await UI.choose(['匯出保留的本機進度', '匯出保留的雲端進度', '返回'], { prompt: '保留的另一份進度（匯出後可從標題匯入）' });
+    const raw = store.get(key + (c === 0 ? '_conflict_local' : '_conflict_remote'));
+    if (c < 0 || c > 1) return;
+    if (raw) downloadCopy(raw, c === 0 ? 'recovery-local' : 'recovery-cloud');
+    else await UI.say('目前沒有這份復原存檔。');
   }
   const hasSave = name => !!store.get(name ? SAVE_KEY + '_' + name : SAVE_KEY);
 
@@ -117,6 +190,13 @@ define(Account, (() => {
   // 標題畫面的帳號選單
   async function menu() {
     while (true) {
+      const be = backend();
+      if (be) {
+        const c = await UI.choose(['處理同步衝突／比較進度', '匯出保留的進度', '帳號設定', '返回'], { prompt: `同步狀態：${{ local: '本機', idle: '待命', syncing: '本機已存・同步中', saved: '雲端已同步', failed: '本機已存・等待重試', conflict: '有兩份進度需要選擇' }[syncStatus()]}` });
+        if (c === 0) { await conflictMenu(); continue; }
+        if (c === 1) { await recoveryMenu(); continue; }
+        if (c !== 2) { UI.hideDialog(); return; }
+      }
       if (gh()) {
         const c = await UI.choose(['解除 GitHub 連結', '返回'], { prompt: `已連結 GitHub：${GistCloud.name}\n存檔會同步到你的私人 Gist，其他裝置連結同一個 GitHub 帳號就能接著玩。` });
         if (c === 0) { GistCloud.disconnect(); await UI.say('已解除連結。這台裝置不再同步（GitHub 上的存檔仍然保留）。'); continue; }
@@ -163,5 +243,5 @@ define(Account, (() => {
       return;
     }
   }
-  return { sync, upload, backend, online: () => !!backend(), linkGitHub, set fastHash(v) { fastHash = v; }, get current() { return who(); }, saveKey, register, login, logout, menu, store, accounts };
+  return { sync, upload, resume, syncStatus, conflictMenu, recoveryMenu, backend, online: () => !!backend(), linkGitHub, set fastHash(v) { fastHash = v; }, get current() { return who(); }, saveKey, register, login, logout, menu, store, accounts };
 })());

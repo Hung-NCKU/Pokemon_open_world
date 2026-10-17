@@ -23,6 +23,9 @@ import { Battle } from './battle.js';
 import { DoubleBattle } from './doubles.js';
 import { FUSION, Fusion, drawRaidCrystal } from './late.js';
 import { FieldMove } from './fieldmove.js';
+import './save.js';
+import { installLifecycle } from './lifecycle.js';
+import { loadDexText } from './dex_text.js';
 const VW = 15, VH = 10;
 
 define(G, {
@@ -40,212 +43,6 @@ define(G, {
 });
 
 define(Game, {
-  // ---------- 存檔 ----------
-  newState(name, region, starter) {
-    const seed = Math.floor(Math.random() * 1e9);
-    return {
-      v: SAVE_VER, worldVer: WORLD_VER, seed, region, name, x: 0, y: 0, dir: 'down', surf: false,
-      party: [], box: [],
-      bag: { 'poke-ball': 5, 'potion': 3, 'exp-share': 1 },
-      money: 3000, badges: {}, champs: {}, seen: {}, caught: {},
-      defeated: {}, visited: {}, center: null, repel: 0, steps: 0, playMs: 0,
-      flags: {}, starter,
-    };
-  },
-  // 存檔：寫入前把上一份有效的存檔保留為備份
-  save(silent = false) {
-    // 對戰塔進行中：隊伍是 Lv.50 的複本，不能存檔
-    if (G.tower) return true;
-    try {
-      // 存檔位置依登入的帳號（訪客用原本的位置）
-      const key = typeof Account !== 'undefined' ? Account.saveKey() : SAVE_KEY;
-      const prev = localStorage.getItem(key);
-      if (prev && Game.parseSave(prev).ok) localStorage.setItem(key + '_bak', prev);
-      G.state.savedAt = new Date().toISOString();
-      const json = Game.serialize(G.state);
-      Telemetry.measure('存檔', () => localStorage.setItem(key, json));
-      // 同步帳號（GitHub 或雲端）：同時上傳（跨裝置共用）
-      if (typeof Account !== 'undefined') Account.upload(json);
-      Telemetry.event('存檔');
-      if (!silent) UI.banner(typeof Account !== 'undefined' && Account.online() ? '已儲存遊戲進度（同步到雲端中……）' : '已儲存遊戲進度');
-      return true;
-    } catch (e) { console.error(e); UI.banner('存檔失敗！'); return false; }
-  },
-  // 驗證存檔內容；必要欄位錯誤時回傳 { ok:false, error }，選填欄位缺少時補上預設值
-  // 存檔版本遷移：MIGRATE[n] 把第 n 版的存檔升級成第 n+1 版（只補欄位，不刪除玩家資料）
-  MIGRATE: {
-    // 1 → 2：加上世界配置版本；沒有記錄的是舊世界（道館依離家由遠到近），保留原本的配置
-    1: s => { if (!Number.isInteger(s.worldVer)) s.worldVer = 1; },
-  },
-  migrateState(s) {
-    let v = Number.isInteger(s.v) && s.v >= 1 ? s.v : 1;
-    if (v > SAVE_VER) return `存檔來自較新的版本（第 ${v} 版，目前支援到第 ${SAVE_VER} 版）`;
-    for (; v < SAVE_VER; v++) Game.MIGRATE[v](s);
-    s.v = SAVE_VER;
-    return null;
-  },
-  validateState(s) {
-    if (!s || typeof s !== 'object' || Array.isArray(s)) return '存檔不是有效的資料';
-    const mErr = Game.migrateState(s);
-    if (mErr) return mErr;
-    if (!Number.isFinite(s.seed)) return '缺少世界種子';
-    if (!REGIONS[s.region]) return '出發地區不正確';
-    if (!Number.isFinite(s.x) || !Number.isFinite(s.y)) return '位置資料不正確';
-    if (s.x < 0 || s.y < 0 || s.x >= WW || s.y >= WH) return '位置超出世界範圍';
-    if (!Array.isArray(s.party) || !s.party.length || s.party.length > 6) return '隊伍中沒有寶可夢';
-    for (const m of [...s.party, ...(Array.isArray(s.box) ? s.box : [])]) {
-      const err = Game.validateMon(m);
-      if (err) return `寶可夢資料不正確（${err}）`;
-    }
-    const def = { name: '主角', dir: 'down', surf: false, box: [], bag: {}, money: 0, badges: {}, champs: {}, seen: {}, caught: {},
-      defeated: {}, visited: {}, flags: {}, repel: 0, steps: 0, playMs: 0, center: null, starter: s.party[0].sp, mats: {} };
-    for (const [k, v] of Object.entries(def)) {
-      const bad = s[k] === undefined || (typeof v === 'object' && v !== null && (typeof s[k] !== 'object' || s[k] === null || Array.isArray(v) !== Array.isArray(s[k])));
-      if (bad) s[k] = v;
-    }
-    if (!Number.isFinite(s.money) || s.money < 0) s.money = 0;
-    // 學習裝置：一開始就有（舊存檔補上）
-    if (!s.bag['exp-share']) s.bag['exp-share'] = 1;
-    // 對戰塔：BP、連勝紀錄
-    for (const k of ['bp', 'towerStreak', 'towerBest']) if (s[k] !== undefined && !(Number.isInteger(s[k]) && s[k] >= 0)) s[k] = 0;
-    // 世界配置版本：沒有記錄的是舊存檔（第 1 版），保留原本的世界
-    if (!Number.isInteger(s.worldVer) || s.worldVer < 1 || s.worldVer > WORLD_VER) s.worldVer = 1;
-    // 箱子名稱與桌布
-    if (!Array.isArray(s.boxMeta)) s.boxMeta = [];
-    s.boxMeta = s.boxMeta.map((x, i) => (x && typeof x.n === 'string' && typeof x.wp === 'string' ? { n: x.n.slice(0, 8), wp: x.wp } : { n: `箱子 ${i + 1}`, wp: 'forest' }));
-    // 蛋籃與野餐
-    if (!Array.isArray(s.eggs)) s.eggs = [];
-    s.eggs = s.eggs.filter(e => e && e.mon && Number.isFinite(e.steps) && !Game.validateMon(e.mon)).slice(0, 6);
-    s.picnic = null;
-    if (s.meal && !(s.meal.type in TYPES && Number.isFinite(s.meal.until))) s.meal = null;
-    // 巢狀資料：徽章是各地區 0–7 的不重複整數陣列；冠軍、旗標等是物件
-    for (const k of Object.keys(s.badges)) {
-      const b = s.badges[k];
-      if (!REGIONS[k] || !Array.isArray(b)) { delete s.badges[k]; continue; }
-      s.badges[k] = [...new Set(b.filter(v => Number.isInteger(v) && v >= 0 && v <= 7))];
-    }
-    for (const k of Object.keys(s.champs)) if (!REGIONS[k]) delete s.champs[k];
-    for (const k of ['repel', 'steps', 'playMs']) if (!Number.isFinite(s[k]) || s[k] < 0) s[k] = 0;
-    if (!['up', 'down', 'left', 'right'].includes(s.dir)) s.dir = 'down';
-    for (const k of Object.keys(s.bag)) if (!Number.isInteger(s.bag[k]) || s.bag[k] <= 0) delete s.bag[k];
-    // 舊存檔：已捕捉過的傳說／幻之寶可夢不再出現在地圖上
-    if (s.legendsGone !== undefined && (!s.legendsGone || typeof s.legendsGone !== 'object' || Array.isArray(s.legendsGone))) s.legendsGone = {};
-    if (!s.legendsCaught || typeof s.legendsCaught !== 'object' || Array.isArray(s.legendsCaught)) {
-      s.legendsCaught = {};
-      for (const id of Object.keys(s.caught)) if (POKEDEX[id] && POKEDEX[id].lg) s.legendsCaught[id] = 1;
-    }
-    return null;
-  },
-  // 驗證單隻寶可夢；無法修正的錯誤回傳原因，可修正的直接修正
-  validateMon(m) {
-    const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
-    if (!m || typeof m !== 'object') return '不是寶可夢資料';
-    if (!POKEDEX[m.sp]) return '物種不存在';
-    if (!int(m.lv, 1, 100)) return '等級';
-    if (!Array.isArray(m.iv) || m.iv.length !== 6 || !m.iv.every(v => int(v, 0, 31))) return '個體值';
-    if (!int(m.nat, 0, 24)) return '性格';
-    if (!Array.isArray(m.moves) || m.moves.length < 1 || m.moves.length > 4) return '招式數量';
-    for (const x of m.moves) {
-      if (!x || !MOVES[x.id]) return '招式不存在';
-      if (!Number.isFinite(x.pp) || x.pp < 0) return '招式 PP';
-      x.pp = Math.min(x.pp, MOVES[x.id].pp);
-    }
-    if (!Array.isArray(m.ev) || m.ev.length !== 6 || !m.ev.every(v => int(v, 0, 252))) m.ev = [0, 0, 0, 0, 0, 0];
-    if (m.ev.reduce((a, b) => a + b, 0) > 510) m.ev = [0, 0, 0, 0, 0, 0];
-    if (!Number.isFinite(m.exp) || m.exp < 0) m.exp = Mon.expFor(POKEDEX[m.sp].gr, m.lv);
-    if (!int(m.happy, 0, 255)) m.happy = POKEDEX[m.sp].hap;
-    // 培育欄位：薄荷（0–24 的性格）、極限特訓（6 項旗標）
-    if (m.mint !== undefined && !int(m.mint, 0, 24)) delete m.mint;
-    if (m._megaFrom !== undefined && typeof Mega !== 'undefined') Mega.revert(m);
-    if (m._bfFrom !== undefined) { if (m._bfFrom) m.form = m._bfFrom; else delete m.form; delete m._bfFrom; }
-    delete m._dmax; delete m._raid; delete m._heroReady;
-    // 合體：夥伴的資料要正確，否則解除合體
-    if (m.fused !== undefined && (typeof m.fused !== 'object' || Game.validateMon(m.fused))) { delete m.fused; delete m.form; }
-    if (m.form !== undefined && (!Forms.get(m) || FORMS[m.form].mega || FORMS[m.form].battle || FORMS[m.form].gmax || FORMS[m.form].ultra || FORMS[m.form].primal)) delete m.form;
-    if (m.form && FORMS[m.form] && FORMS[m.form].fusion && !m.fused) delete m.form;
-    if (m.boxPos !== undefined && !(m.boxPos && int(m.boxPos.b, 0, 999) && int(m.boxPos.i, 0, 29))) delete m.boxPos;
-    if (m.marks !== undefined && !(Array.isArray(m.marks) && m.marks.every(x => MARKS.includes(x)))) delete m.marks;
-    if (m.ivHT !== undefined && !(Array.isArray(m.ivHT) && m.ivHT.length === 6)) delete m.ivHT;
-    else if (m.ivHT) m.ivHT = m.ivHT.map(v => (v ? 1 : 0));
-    const max = Mon.stats(m)[0];
-    if (!Number.isFinite(max)) return '能力值無法計算';
-    if (!Number.isFinite(m.hp)) m.hp = max;
-    m.hp = U.clamp(Math.floor(m.hp), 0, max);
-    if (m.st && !STATUS_ZH[m.st]) m.st = null;
-    if (m.item && !ITEMS[m.item]) m.item = null;
-    if (m.nick !== undefined && (typeof m.nick !== 'string' || !m.nick.trim() || m.nick.length > 12)) delete m.nick;
-    if (!m.uid) m.uid = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    return null;
-  },
-  parseSave(text) {
-    if (!text) return { ok: false, empty: true };
-    let s;
-    try { s = JSON.parse(text); } catch { return { ok: false, error: '存檔格式損毀（無法解析）' }; }
-    const err = Game.validateState(s);
-    return err ? { ok: false, error: err } : { ok: true, state: s };
-  },
-  // 讀取存檔：主存檔無效時改用備份，並回報原因
-  loadSave() {
-    let main = null, bak = null;
-    const key = typeof Account !== 'undefined' ? Account.saveKey() : SAVE_KEY;
-    try { main = localStorage.getItem(key); bak = localStorage.getItem(key + '_bak'); } catch { }
-    const m = Game.parseSave(main);
-    if (m.ok) return { state: m.state };
-    const b = Game.parseSave(bak);
-    if (m.empty && !b.ok) return null;
-    return { state: b.ok ? b.state : null, fromBackup: b.ok, error: m.error || '找不到主存檔' };
-  },
-  // 即時存檔欄位（Shift＋F1～F12 存、F1～F12 讀；每個帳號各自 12 格，和一般存檔分開）
-  // 奔跑：按住 X（GBA 的 B 鍵）或 Shift
-  running() { return G.keys.has('Shift') || G.keys.has('x') || G.keys.has('X'); },
-  slotKey(n) { return (typeof Account !== 'undefined' ? Account.saveKey() : SAVE_KEY) + '_slot' + n; },
-  async quickSlot(n, save) {
-    if (!G.state || G.mode !== 'world' || G.busy || UI.active() || G.tower) {
-      UI.banner(save ? '只能在野外自由行動時即時存檔' : '只能在野外自由行動時讀取即時存檔'); return false;
-    }
-    if (save) {
-      try {
-        G.state.savedAt = new Date().toISOString();
-        localStorage.setItem(Game.slotKey(n), Game.serialize(G.state));
-      } catch { UI.banner('即時存檔失敗（瀏覽器的儲存空間不足？）'); return false; }
-      Sound.sfx('save');
-      UI.banner(`已即時存檔到第 ${n} 格（F${n} 讀取）`);
-      return true;
-    }
-    let raw = null;
-    try { raw = localStorage.getItem(Game.slotKey(n)); } catch { }
-    const r = Game.parseSave(raw);
-    if (!r.ok) { UI.banner(r.empty ? `第 ${n} 格沒有即時存檔（Shift＋F${n} 存檔）` : `第 ${n} 格的即時存檔無法使用：${r.error}`); return false; }
-    Game.start(r.state);
-    UI.banner(`已讀取第 ${n} 格的即時存檔`);
-    return true;
-  },
-  // 匯出、匯入存檔（JSON 檔案）
-  serialize(state) { return JSON.stringify(state); },
-  exportSave() {
-    const blob = new Blob([Game.serialize(G.state)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `pokemon-openworld-${G.state.name}-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  },
-  importSave() {
-    return new Promise(res => {
-      const inp = document.createElement('input');
-      inp.type = 'file'; inp.accept = '.json,application/json';
-      inp.onchange = () => {
-        const f = inp.files[0];
-        if (!f) return res({ ok: false, error: '沒有選擇檔案' });
-        const r = new FileReader();
-        r.onload = () => res(Game.parseSave(String(r.result)));
-        r.onerror = () => res({ ok: false, error: '無法讀取檔案' });
-        r.readAsText(f);
-      };
-      inp.click();
-    });
-  },
-
   markSeen(id) { G.state.seen[id] = 1; },
   markCaught(id) { G.state.seen[id] = 1; G.state.caught[id] = 1; },
   dexCount() { return [Object.keys(G.state.seen).length, Object.keys(G.state.caught).length]; },
@@ -718,6 +515,7 @@ define(Game, {
   },
   // 圖鑑頁（捕捉新寶可夢後也會顯示）
   async dexEntry(id) {
+    await loadDexText();
     Game.coverUI();
     if (Game.emeraldUI('dex')) return DexUI.entry(id);
     const s = POKEDEX[id];
@@ -998,6 +796,7 @@ define(Game, {
         <p>畫面更新率：${r.fps.avg ? `目前 ${r.fps.now}、平均 ${r.fps.avg}、最低 ${r.fps.min} FPS` : '測量中'}；卡頓（超過 50ms 的畫格）${r.fps.longFrames} 次，最長 ${r.fps.worstMs}ms</p>
         ${tm.map(l => `<p>${U.esc(l)}</p>`).join('') || '<p>還沒有耗時紀錄</p>'}
         <h3>對戰統計</h3>${r.battles.map(b => `<p>${U.esc({ wild: '野生', trainer: '訓練家', gym: '道館／四天王', champion: '冠軍', raid: '團體戰' }[b.kind] || b.kind)}：${b.n} 場，勝率 ${b.winRate}%，平均 ${b.avgTurns} 回合，我方平均高 ${b.avgLvDiff} 級</p>`).join('') || '<p>還沒有對戰紀錄</p>'}
+        <h3>任務節奏（只保存在這台裝置）</h3>${Object.values(r.journeys || {}).map(j => `<p>${U.esc(REGIONS[j.region]?.n || j.region)}：任務階段 ${j.stage + 1}，本階段 ${Math.round((j.phases[j.stage]?.elapsedMs || 0) / 60000)} 分鐘、${j.phases[j.stage]?.battles || 0} 場戰鬥、${j.phases[j.stage]?.losses || 0} 次戰敗；停留觀察 ${j.stalls} 次</p>`).join('') || '<p>還沒有任務紀錄</p>'}
         <h3>最近的錯誤（共 ${r.errors.length} 筆）</h3>${er.map(l => `<p class="err">${U.esc(l)}</p>`).join('') || '<p>沒有錯誤</p>'}
         <p><small>\` 鍵（Esc 下面）：在畫面左上角顯示 FPS 與錯誤數</small></p></div>`);
       const c = await UI.choose(['下載紀錄檔', '清除錯誤紀錄', '返回'], { prompt: '遊玩紀錄' });
@@ -1350,7 +1149,7 @@ define(Game, {
     else if (t === T.CAVE) { biome = 'cave'; rate = .07; }
     else if (t === T.DESERT) { biome = 'desert'; rate = .05; }
     if (typeof OverworldMons !== 'undefined' && OverworldMons.list.length) rate /= 2; // 看得到的寶可夢在附近時，隨機遇敵減半
-    if (biome && !s.repel && Math.random() < rate) {
+    if (biome && !s.repel && U.rand() < rate) {
       const wild = World.rollWild(s.x, s.y, biome);
       Sound.sfx('encounter');
       G.flash = 1;
@@ -1649,9 +1448,17 @@ define(Game, {
     }
     const loaded = Game.loadSave();
     const scr = document.getElementById('title');
+    if (Gen3.on && GEN3.ui?.title && !scr.querySelector('.emerald-logo')) {
+      scr.classList.add('emerald-title');
+      scr.style.backgroundImage = `url(${Gen3.base}title_background.png)`;
+      const logo = document.createElement('div'); logo.className = 'emerald-logo';
+      logo.innerHTML = `<img src="${Gen3.base}title_pokemon.png" alt="Pokémon"><b>THE WORLD</b><span>OPEN WORLD</span>`;
+      scr.prepend(logo);
+    }
     scr.classList.remove('hidden');
     const ld = document.getElementById('loading');
     if (ld) ld.remove();
+    if (!performance.getEntriesByName('game-ready').length) { performance.mark('game-ready'); Telemetry.time('開場可操作', performance.now()); }
     // 標題畫面顯示目前的帳號
     let acc = scr.querySelector('.account');
     if (!acc) { acc = document.createElement('div'); acc.className = 'account'; scr.appendChild(acc); }
@@ -1717,6 +1524,7 @@ define(Game, {
 
   // 新遊戲設定：每一步都可以按 X／Esc 回到上一步（名字 → 地區 → 夥伴）；在名字返回時回傳 false
   async newGame() {
+    const textReady = loadDexText();
     await UI.say('歡迎來到寶可夢的世界！');
     await UI.say('這個世界上住著被稱為「寶可夢」的不可思議的生物。在這片廣大的世界裡，九個地區相連在一起，全部 1025 種寶可夢都生活在某個角落。');
     const keys = Object.keys(REGIONS);
@@ -1739,6 +1547,7 @@ define(Game, {
         await UI.say(`${reg.prof}：「${name}，歡迎來到${reg.n}地區！我是${reg.prof}。」`);
         step = 3;
       } else {
+        await textReady;
         const i = await UI.list({
           title: `${reg.prof}：「選一隻作為你的夥伴吧！」`,
           rows: reg.starters.map(id => `<img class="big-icon" src="${Mon.sprite(id)}"><div class="grow"><b>${POKEDEX[id].n}</b> ${POKEDEX[id].t.map(typeTag).join('')}<div class="dim small">${U.esc(POKEDEX[id].gen)}　${U.esc(POKEDEX[id].fl || "")}</div></div>`),
@@ -1764,6 +1573,7 @@ define(Game, {
   },
 
   start(state, fresh = false) {
+    Gen3.prepare();
     G.room = null;
     G.state = state;
     G.state.flags = G.state.flags || {};
@@ -1784,6 +1594,7 @@ define(Game, {
       state.center = { x: house.door.x, y: house.door.y + 1 };
       state.visited[h.id] = 1;
     }
+    Telemetry.progress(state);
     G.lastTown = World.townAt(state.x, state.y);
     G.mode = 'world';
     UI.hideDialog();
@@ -1819,6 +1630,7 @@ function fit() {
 
 window.addEventListener('load', () => {
   fit();
+  if (Gen3.on) document.body.classList.add('gen3');
   window.addEventListener('resize', fit);
   if (!window.POKEDEX || !window.MOVES) {
     document.getElementById('title').innerHTML = '<div class="err">找不到 data/pokedex.js。請先執行：python tools/fetch_data.py</div>';
@@ -1923,8 +1735,7 @@ window.addEventListener('load', () => {
   };
   requestAnimationFrame(loop);
   Game.title();
-  // 每 2 分鐘自動存檔
-  setInterval(() => { if (G.mode === 'world' && !G.busy) Game.save(true); }, 120000);
+  installLifecycle();
 });
 
 export { VW, VH, isTouch, fit };

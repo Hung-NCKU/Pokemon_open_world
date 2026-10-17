@@ -20,8 +20,7 @@ trap 'rm -rf "$OUT"' EXIT
 npm run build
 cp -r dist/. "$OUT/"
 touch "$OUT/.nojekyll"
-# Service Worker 的版本＝提交編號（版本改變時，玩家的裝置會清掉舊的快取）
-sed -i "s/const VERSION = 'dev';/const VERSION = '$REV';/" "$OUT/sw.js"
+# Service Worker 的版本與必要檔案由 Vite 依建置內容產生；不另行覆寫。
 
 cd "$OUT"
 git init -q

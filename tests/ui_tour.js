@@ -1,3 +1,4 @@
+import '../js/main.js';
 // 介面巡覽：用網址的 #名稱 打開指定的畫面，方便逐一截圖檢查（tools/ui_shots.sh 會依序截下所有畫面）
 // 例：tests/ui_tour.html#party、#summary1、#battle_move
 (() => {

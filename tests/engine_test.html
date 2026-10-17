@@ -58,6 +58,7 @@ async function use(b, user, sd, slotPP = 10) {
 }
 
 async function run() {
+  await SDAnim.load(); // Exercise the same Z animation data after it became lazy-loaded.
   // 天氣依現實時間變化；測試時固定為晴朗，天氣的測試再個別指定
   Weather.force('clear');
   // 測試不連到真的雲端資料庫（雲端的測試用假的 fetch 另外設定）
@@ -2100,7 +2101,14 @@ async function run() {
       if (u.pathname === '/auth/v1/token') { const usr = users[body.email]; return usr && usr.pw === body.password ? reply(200, sess(usr.id)) : reply(400, {}); }
       if (u.pathname === '/rest/v1/saves') {
         const id = (opt.headers.Authorization || '').split(':')[1];
-        if (opt.method === 'POST') { const g = gates.post; if (g) await g; saves[id] = body.data; arrived.push(body.data.v); return reply(201, null); }
+        if (opt.method === 'POST' || opt.method === 'PATCH') {
+          const g = gates.post; if (g) await g;
+          if (opt.method === 'PATCH') {
+            const expected = u.searchParams.get('data->>syncRevision');
+            if (expected !== (saves[id]?.syncRevision ? 'eq.' + saves[id].syncRevision : 'is.null')) return reply(200, []);
+          }
+          saves[id] = body.data; arrived.push(body.data.v); return reply(200, [{ data: body.data }]);
+        }
         const g = gates.get; if (g) await g;
         return reply(200, saves[id] ? [{ data: saves[id] }] : []);
       }
@@ -2145,6 +2153,7 @@ async function run() {
     check('雲端下載：更新 token 中換了帳號，不寫入任何本機快取', localStorage.getItem(keyOf('乙乙')) === bLocal && localStorage.getItem(keyOf('甲甲')) === null, r);
     // 4. 同一帳號連續兩次存檔：第一次還在傳輸時第二次不會同時送出，伺服器最後是第二次
     Cloud.logout(); await Cloud.login('甲甲', 'secret12');
+    Cloud.accept({ data: saves[idA] }); // This device has explicitly read the current cloud branch.
     arrived.length = 0;
     open = gate('post');
     Cloud.upload(JSON.stringify({ v: 1 }));

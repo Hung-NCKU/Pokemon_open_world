@@ -82,7 +82,7 @@ window.addEventListener('load', () => {
   add('assets/gen3/midi.js', () => { if (window.Sound && Sound.reload) Sound.reload(); });
   add('assets/gen3/se_bank.js');
   // 線上版：用 Service Worker 把檔案存在裝置上，之後開啟幾乎不用等待
-  if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+  // 更新流程由 js/updates.js 處理，安全存檔後才切換版本。
 });
 </script>
 </body>

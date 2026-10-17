@@ -1,40 +1,50 @@
-// Service Worker（只在線上版 https 啟用）：第一次開啟後把檔案存在手機／電腦上，之後開啟幾乎不用等待，網路不穩也能玩
-// - 同網站的檔案：先用快取、背景更新（stale-while-revalidate）
-// - 寶可夢圖片（PokéAPI 的 raw.githubusercontent.com）：先用快取，獨立的快取不隨版本清除
-// - VERSION 由 tools/deploy_pages.sh 換成提交編號；版本改變時清掉舊的快取
+// Version and precache URLs are filled by the production build.
 const VERSION = 'dev';
-const CACHE = 'pkmn-' + VERSION, SPRITES = 'pkmn-sprites';
-
-self.addEventListener('install', () => self.skipWaiting());
+const PRECACHE = /* __PRECACHE__ */ [];
+const PREFIX = 'pkmn-' + new URL(self.registration.scope).pathname + '-';
+const SHELL = PREFIX + VERSION, ASSETS = PREFIX + 'assets', SPRITES = PREFIX + 'sprites';
+const absolute = path => new URL(path, self.registration.scope).href;
+const immutable = url => /\/assets\/[^/]+-[\w-]{8,}\.(?:js|css|woff2|png)$/.test(url.pathname);
+self.addEventListener('install', e => {
+  e.waitUntil((async () => {
+    const assets = await caches.open(ASSETS), shell = await caches.open(SHELL);
+    await Promise.all(PRECACHE.map(async path => {
+      const url = absolute(path), r = await fetch(url, { cache: 'reload' });
+      if (!r.ok) throw new Error('Precache failed: ' + path);
+      await (immutable(new URL(url)) ? assets : shell).put(url, r);
+    }));
+  })());
+});
+self.addEventListener('message', e => { if (e.data?.type === 'ACTIVATE_UPDATE') self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k !== CACHE && k !== SPRITES) await caches.delete(k);
+    // Keep hashed assets available for tabs still running an older version.
+    for (const k of await caches.keys()) {
+      if (k.startsWith(PREFIX) && ![SHELL, ASSETS, SPRITES].includes(k)) await caches.delete(k);
+    }
     await self.clients.claim();
   })());
 });
-
 self.addEventListener('fetch', e => {
-  const req = e.request;
+  const req = e.request, url = new URL(req.url);
   if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  // 雲端存檔、帳號：一律走網路
-  if (url.hostname.endsWith('supabase.co') || url.hostname === 'api.github.com') return;
-  if (url.hostname === 'raw.githubusercontent.com') {
-    e.respondWith((async () => {
-      const c = await caches.open(SPRITES);
-      const hit = await c.match(req);
-      if (hit) return hit;
-      const r = await fetch(req);
-      if (r.ok) c.put(req, r.clone());
-      return r;
-    })());
-    return;
-  }
-  if (url.origin !== self.location.origin) return;
+  const sprite = url.hostname === 'raw.githubusercontent.com';
+  if (url.origin !== self.location.origin && !sprite) return;
+  if (!sprite && !url.href.startsWith(self.registration.scope)) return;
   e.respondWith((async () => {
-    const c = await caches.open(CACHE);
-    const hit = await c.match(req, { ignoreSearch: true });
-    const net = fetch(req).then(r => { if (r.ok) c.put(req, r.clone()); return r; }).catch(() => hit);
-    return hit || net;
+    const fixed = sprite || immutable(url);
+    const c = await caches.open(sprite ? SPRITES : fixed ? ASSETS : SHELL);
+    const hit = await c.match(req);
+    if (fixed && hit) return hit;
+    try {
+      const r = await fetch(req, fixed ? {} : { cache: 'no-cache' });
+      if (r.ok) e.waitUntil(c.put(req, r.clone()).catch(() => {}));
+      if (!r.ok && req.mode === 'navigate' && hit) return hit;
+      return r;
+    } catch {
+      if (hit) return hit;
+      if (req.mode === 'navigate') return (await c.match(absolute('index.html'))) || Response.error();
+      return Response.error();
+    }
   })());
 });

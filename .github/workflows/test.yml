@@ -22,6 +22,7 @@ jobs:
       - run: npm test
       # 打包也要成功（Vite；沒有素材時 CSS 裡的素材網址保持原樣）
       - run: npm run build
+      - run: npm run test:production
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

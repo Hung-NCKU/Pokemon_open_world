@@ -100,7 +100,7 @@ Battle.prototype.runMove = async function (user, target, act) {
     act.mv.zHitProtect = !!this.volOf(target).protect;
     await this.msg(`${this.label(user)} 把全身的力量集中起來！\n釋放出全力的 Z 招式！`);
     // Z 力量的演出（Showdown 的動畫：Z 標誌與光芒）；沒有動畫資料時用太晶化的閃光代替
-    if (SDAnim.ok() && this.el) await SDAnim.zpower(this, user, target);
+    if (this.el && await SDAnim.load()) await SDAnim.zpower(this, user, target);
     else if (this.teraAnim) await this.teraAnim(this.sideKey(user));
   }
   return _runMove.call(this, user, target, act);

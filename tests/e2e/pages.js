@@ -12,6 +12,7 @@ export async function runPage(page, path, { timeout } = {}) {
   const failed = out.split('\n').filter(l => l.startsWith('✘') || l.startsWith('EXC'));
   console.log(`${path}: ${summary}`);
   if (failed.length) console.log(failed.join('\n'));
+  expect(errors, `${path} 未捕捉的瀏覽器錯誤`).toEqual([]);
   expect(failed, `${path} 失敗的測試`).toEqual([]);
   expect(await page.title()).toBe('PASS');
   return { summary, errors };

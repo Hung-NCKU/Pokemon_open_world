@@ -1,11 +1,11 @@
 // 畫面提示
 // - 野外左下角顯示「下一步」（任務線目前的目標），第一次玩的人也知道接下來要做什麼
 // - 手機直向：遊戲畫面和按鍵之間的空白放大字的提示——平常是下一步與操作說明，戰鬥選招式時是招式說明
-import { G, Story } from './core.js';
+import { Account, G, Story } from './core.js';
 import { U } from './util.js';
 const Hud = (() => {
   const $ = id => document.getElementById(id);
-  let goalEl = null, sideEl = null, lastSide = '';
+  let goalEl = null, sideEl = null, statusEl = null, lastSide = '';
 
   function goalText() {
     const s = G.state;
@@ -22,6 +22,12 @@ const Hud = (() => {
     if (!goalEl) return;
     const world = G.mode === 'world' && G.state;
     const goal = world ? goalText() : '';
+    const status = Account.syncStatus?.();
+    const labels = { idle: '雲端同步待命', syncing: '本機已存・同步中', saved: '雲端已同步', failed: '本機已存・等待重試', conflict: '本機已存・雲端有另一份進度' };
+    const label = labels[status] || '';
+    if (statusEl.textContent !== label) statusEl.textContent = label;
+    statusEl.dataset.status = status;
+    statusEl.classList.toggle('hidden', !world || !Account.online?.() || covered());
     const portrait = document.body.classList.contains('portrait');
     goalEl.textContent = goal ? '下一步：' + goal : '';
     goalEl.classList.toggle('hidden', !goal || portrait || covered());
@@ -48,6 +54,8 @@ const Hud = (() => {
     goalEl = document.createElement('div');
     goalEl.id = 'goal'; goalEl.className = 'hidden';
     $('game').appendChild(goalEl);
+    statusEl = document.createElement('div'); statusEl.id = 'sync-status'; statusEl.className = 'hidden';
+    statusEl.setAttribute('role', 'status'); $('game').appendChild(statusEl);
     sideEl = document.createElement('div');
     sideEl.id = 'side-hud'; sideEl.className = 'hidden';
     document.body.appendChild(sideEl);

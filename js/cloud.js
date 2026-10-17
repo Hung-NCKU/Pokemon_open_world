@@ -4,6 +4,7 @@
 // - 存檔：存檔時同時上傳（合併 2 秒內的多次存檔）；開啟標題畫面時下載雲端的存檔，比本機新就用雲端的
 import { UI } from './core.js';
 import { Telemetry } from './telemetry.js';
+import { syncJournal, revisionOf, revisionId } from './sync_journal.js';
 const Cloud = (() => {
   const cfg = () => window.CLOUD_CONFIG || {};
   const enabled = () => !!(cfg().url && cfg().anonKey);
@@ -20,7 +21,10 @@ const Cloud = (() => {
   async function call(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
     const h = { apikey: cfg().anonKey, 'Content-Type': 'application/json', ...headers };
     if (auth && session) h.Authorization = 'Bearer ' + session.access_token;
-    const r = await fetch(cfg().url.replace(/\/$/, '') + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+    let r;
+    try { r = await fetch(cfg().url.replace(/\/$/, '') + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal }); }
+    finally { clearTimeout(timer); }
     const text = await r.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -61,53 +65,91 @@ const Cloud = (() => {
   }
   function logout() { cancelUpload(); gen++; keep(null); status = 'idle'; }
 
-  // 存檔：upsert 到 saves（每個帳號一份），2 秒內的多次存檔只上傳最後一次
-  // 排程的資料綁定「當時的帳號」與登入世代；送出前再確認一次，不是同一個人就丟掉
-  let upT = null, pending = null;
-  function cancelUpload() { clearTimeout(upT); upT = null; pending = null; }
+  // Compare-and-swap uses a revision inside the existing JSONB column; no schema migration.
+  const journal = () => syncJournal('supabase:' + cfg().url, session.user_id);
+  let upT = null, retryT = null, attempts = 0;
+  function cancelUpload() { clearTimeout(upT); clearTimeout(retryT); upT = retryT = null; }
   function upload(json) {
     if (!enabled() || !session) return;
-    pending = { json, uid: session.user_id, gen };
-    status = 'syncing';
+    try { journal().stage(json); }
+    catch { fail('無法保留待同步的存檔'); return; }
+    status = journal().get().conflict ? 'conflict' : 'syncing';
     clearTimeout(upT);
     upT = setTimeout(flush, 2000);
   }
-  // 同一時間只有一個上傳在傳輸：新的上傳排在前一個完成之後，並且送出「當時最新」的存檔
-  // （否則網路慢時，先送出的舊存檔可能比新存檔晚到伺服器，把雲端的進度蓋回舊的）
   let chain = Promise.resolve();
-  function flush() { clearTimeout(upT); upT = null; chain = chain.then(send, send); return chain; }
+  function flush() { clearTimeout(upT); clearTimeout(retryT); upT = retryT = null; chain = chain.then(send, send); return chain; }
+  async function readRemote() {
+    const r = await call(`/rest/v1/saves?select=data,updated_at&user_id=eq.${encodeURIComponent(session.user_id)}`);
+    if (!r.ok) throw new Error(errMsg(r.data));
+    return Array.isArray(r.data) && r.data.length ? r.data[0] : null;
+  }
+  function conflict(j, remote) {
+    j.conflict(remote);
+    status = 'conflict';
+    UI.banner?.('發現另一台裝置的進度，兩份都已保留；請到「帳號」處理同步衝突');
+  }
   async function send() {
-    const p = pending; pending = null;
-    if (!p) return;
-    const same = () => p.gen === gen && session && session.user_id === p.uid;
+    if (!enabled() || !session) return;
+    const j = journal(), state = j.get(), json = state.pending;
+    if (!json || state.conflict) { if (state.conflict) status = 'conflict'; return; }
+    const g = gen, uid = session.user_id;
+    const same = () => g === gen && session?.user_id === uid;
     try {
-      if (!same() || !(await fresh()) || !same()) return;
-      const r = await call('/rest/v1/saves?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
-        body: { user_id: p.uid, data: JSON.parse(p.json), updated_at: new Date().toISOString() } });
-      if (p.gen !== gen) return;
-      if (!r.ok) fail(errMsg(r.data));
-      else { status = 'saved'; Telemetry.event('雲端存檔'); }
-    } catch (e) { if (p.gen === gen) fail(e.message); }
+      status = 'syncing';
+      if (!(await fresh()) || !same()) return;
+      const remote = await readRemote();
+      if (!same()) return;
+      const head = revisionOf(remote);
+      // Unknown ancestry with an existing remote must be resolved, never blindly overwritten.
+      if (head !== (state.head ?? null)) { conflict(j, remote); return; }
+      const data = { ...JSON.parse(json), syncRevision: revisionId() };
+      const body = { user_id: uid, data, updated_at: new Date().toISOString() };
+      let r;
+      if (remote) {
+        const filter = remote.data?.syncRevision
+          ? 'data->>syncRevision=eq.' + encodeURIComponent(remote.data.syncRevision)
+          : 'data->>syncRevision=is.null' + (remote.updated_at ? '&updated_at=eq.' + encodeURIComponent(remote.updated_at) : '');
+        r = await call('/rest/v1/saves?user_id=eq.' + encodeURIComponent(uid) + '&' + filter,
+          { method: 'PATCH', headers: { Prefer: 'return=representation' }, body });
+      } else r = await call('/rest/v1/saves', { method: 'POST', headers: { Prefer: 'return=representation' }, body });
+      if (!same()) return;
+      if (r.status === 409 || (r.ok && remote && (!Array.isArray(r.data) || r.data.length !== 1))) {
+        const latest = await readRemote();
+        if (same()) conflict(j, latest);
+        return;
+      }
+      if (!r.ok) throw new Error(errMsg(r.data));
+      j.ack(json, data.syncRevision); attempts = 0;
+      status = j.get().conflict ? 'conflict' : j.get().pending ? 'syncing' : 'saved';
+      Telemetry.event('雲端存檔');
+      if (j.get().pending && !j.get().conflict) upT = setTimeout(flush, 0);
+    } catch (e) {
+      if (same()) {
+        fail(e.message);
+        retryT = setTimeout(flush, Math.min(60000, 2000 * 2 ** Math.min(attempts++, 5)));
+      }
+    }
   }
   function fail(msg) {
     status = 'failed';
     Telemetry.error('雲端存檔失敗：' + msg, 'cloud');
-    if (typeof UI !== 'undefined') UI.banner('雲端同步失敗：這次的存檔只存在這台裝置（下次存檔會再試）');
+    UI.banner?.('雲端同步失敗：本機已保留，恢復連線後會重試');
   }
-  // 下載：回傳 { data, updated_at } 或 null
-  // 下載期間登出或換了帳號：丟掉回覆（不把 A 的存檔交給 B）
   async function download() {
     if (!enabled() || !session) return null;
     const g = gen, uid = session.user_id;
-    const same = () => g === gen && session && session.user_id === uid;
-    if (!(await fresh()) || !same()) return null;
-    const r = await call(`/rest/v1/saves?select=data,updated_at&user_id=eq.${uid}`);
-    if (!same() || !r.ok || !Array.isArray(r.data) || !r.data.length) return null;
-    return r.data[0];
+    if (!(await fresh()) || g !== gen || session?.user_id !== uid) return null;
+    const row = await readRemote();
+    return g === gen && session?.user_id === uid ? row : null;
   }
-  // 目前的身分（登入世代＋使用者）：Account.sync 用來確認下載前後是同一個人
+  function accept(row) { if (session) { const j = journal(); j.observe(revisionOf(row)); j.clearConflict(); } }
+  function markConflict(row) { if (session) conflict(journal(), row); }
+  function discardPending(row) { if (session) { const j = journal(); j.ack(j.get().pending, revisionOf(row)); status = 'saved'; } }
+  function getJournal() { return session ? journal().get() : {}; }
   const identity = () => (session ? gen + ':' + session.user_id : null);
-  return { enabled, register, login, logout, upload, flush, download, identity, get status() { return status; }, get name() { return session && session.name; }, get session() { return session; } };
+  return { enabled, register, login, logout, upload, flush, download, identity, accept, getJournal, markConflict, discardPending,
+    get status() { return status; }, get name() { return session && session.name; }, get session() { return session; } };
 })();
 
 export { Cloud };

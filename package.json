@@ -13,7 +13,11 @@
     "test:smoke": "playwright test tests/e2e/smoke.spec.js",
     "test:natural": "playwright test --project=natural",
     "test:install": "playwright install --with-deps chromium",
-    "test:live": "node tools/live_check.mjs"
+    "test:live": "node tools/live_check.mjs",
+    "test:production": "playwright test --config playwright.production.config.js",
+    "test:mobile": "playwright test tests/e2e/mobile.spec.js --project=unit",
+    "test:perf": "node tools/perf_check.mjs",
+    "test:ui": "node tools/ui_review.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",

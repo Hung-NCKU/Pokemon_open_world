@@ -15,7 +15,10 @@ const Gen3 = (() => {
     i.src = base + file;
     img[name] = i;
   }
-  if (on) {
+  let prepared = false;
+  function prepare() {
+    if (!on || prepared) return;
+    prepared = true;
     load('tiles', 'tiles.png');
     for (const k of Object.keys(GEN3.buildings)) load('bld_' + k, `bld_${k}.png`);
     load('player_walk', 'player_walk.png'); load('player_run', 'player_run.png'); load('player_surf', 'player_surf.png');
@@ -136,7 +139,7 @@ const Gen3 = (() => {
   const anims = on ? new Set(GEN3.anims) : new Set();
   function animUrl(name) { return anims.has(name) ? `${base}anim/${name}.png` : null; }
 
-  return { on, ready, ensure, loading, whenLoaded, tile, recolor, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
+  return { on, prepare, ready, ensure, loading, whenLoaded, tile, recolor, building, charFrame, surfFrame, surfBlob, exclaim, auto, single, animUrl, base, SC,
     hasTrainer: n => on && GEN3.trainers.includes(n), bld: k => on && GEN3.buildings[k] };
 })();
 

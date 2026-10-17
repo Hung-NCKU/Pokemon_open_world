@@ -159,15 +159,23 @@ class Scene {
   }
 }
 
+let loading;
 const SDAnim = {
+  async load() {
+    if (window.SD_ANIMS) return true;
+    try { await (loading ||= import('../data/sd_anims.js')); return SDAnim.ok(); }
+    catch { loading = null; return false; }
+  },
   ok() { return !!(window.SD_ANIMS && typeof Element !== 'undefined' && Element.prototype.animate); },
   // Z 力量（使出 Z 招式前，使用者身上的 Z 標誌與光芒）
-  zpower(battle, user, target) {
+  async zpower(battle, user, target) {
+    await SDAnim.load();
     if (!SDAnim.ok() || !battle.el) return Promise.resolve();
     return new Scene(battle).run(SD_ANIMS.BattleOtherAnims.zpower.anim, user, target);
   },
   // Z 招式動畫：專屬 Z 招式有自己的動畫，其他依屬性
-  zmove(battle, user, target, type, sigId) {
+  async zmove(battle, user, target, type, sigId) {
+    await SDAnim.load();
     if (!SDAnim.ok()) return Promise.resolve(false);
     const a = (sigId && SD_ANIMS.BattleMoveAnims[sigId]) || SD_ANIMS.BattleMoveAnims[SD_ANIMS.Z[type]];
     if (!a || !battle.el) return Promise.resolve(false);

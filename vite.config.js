@@ -5,8 +5,9 @@
 //   打包後原樣複製到 dist/
 // - 圖鑑說明（pokedex.js 的 fl 欄位，約 57 KB）拆成 data/dex_text.js，頁面載入完成後才下載
 import { defineConfig } from 'vite';
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const STATIC = ['assets', 'fonts', 'sw.js'];
 
@@ -18,6 +19,16 @@ function copyStatic() {
     configResolved(c) { out = resolve(c.root, c.build.outDir); },
     closeBundle() {
       for (const p of STATIC) if (existsSync(p)) cpSync(p, resolve(out, p), { recursive: true });
+      const html = readFileSync(resolve(out, 'index.html'), 'utf8');
+      const version = createHash('sha256').update(html).digest('hex').slice(0, 16);
+      const critical = ['index.html', ...[...html.matchAll(/(?:src|href)="([^"]+)"/g)]
+        .map(m => m[1].replace(/^\.\//, ''))
+        .filter(p => /\.(js|css|woff2)$/.test(p) && existsSync(resolve(out, p)))];
+      let worker = readFileSync(resolve(out, 'sw.js'), 'utf8');
+      worker = worker.replace("const VERSION = 'dev';", `const VERSION = '${version}';`)
+        .replace('/* __PRECACHE__ */ []', JSON.stringify([...new Set(critical)]));
+      writeFileSync(resolve(out, 'sw.js'), worker);
+      writeFileSync(resolve(out, 'build-info.json'), JSON.stringify({ version, critical }));
     },
   };
 }
@@ -35,10 +46,6 @@ function splitDexText() {
       text = {};
       for (const [k, v] of Object.entries(dex)) if (v.fl) { text[k] = v.fl; delete v.fl; }
       return { code: prefix + JSON.stringify(dex) + ';', map: null };
-    },
-    transformIndexHtml(html) {
-      const anchor = "  add('assets/gen3/se_bank.js');";
-      return html.replace(anchor, anchor + "\n  add('data/dex_text.js');");
     },
     closeBundle() {
       if (!text) return;
@@ -58,8 +65,15 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     target: 'es2020',
-    chunkSizeWarningLimit: 4000,
-    rollupOptions: { input: { main: resolve('index.html') } },
+    chunkSizeWarningLimit: 1800,
+    rollupOptions: {
+      input: { main: resolve('index.html') },
+      output: { manualChunks(id) {
+        const path = id.replace(/\\/g, '/');
+        if (path.endsWith('/data/sd_anims.js')) return 'sd-anims';
+        if (path.includes('/data/')) return 'game-data';
+      } },
+    },
   },
   plugins: [splitDexText(), copyStatic()],
 });

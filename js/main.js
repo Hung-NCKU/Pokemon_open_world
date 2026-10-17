@@ -11,7 +11,6 @@ import '../data/late.js';
 import '../data/zmoves.js';
 import '../data/zsig.js'; // 專屬 Z 純晶與專屬 Z 招式（tools/fetch_zsig.py）
 import '../data/eggmoves.js'; // 遺傳招式（tools/fetch_eggmoves.py）
-import '../data/sd_anims.js'; // Showdown 的 Z 招式動畫（tools/fetch_showdown_anims.mjs）
 import '../data/breeding.js';
 import '../data/towns.js';
 import * as core from './core.js';
@@ -70,3 +69,10 @@ import * as m48 from './hud.js';
 
 for (const m of [core, m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45, m46, m47, m48]) Object.assign(window, m);
 Object.assign(window, johto, storyLate, sdanim);
+
+import { installUpdates } from './updates.js';
+window.addEventListener('load', () => { void installUpdates(); });
+
+import { BattleHooks } from './battle_hooks.js';
+BattleHooks.install(m31.Battle.prototype);
+Object.assign(window, { BattleHooks });

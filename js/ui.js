@@ -3,6 +3,7 @@ import { EmeraldUI, G, Sound, UI, define } from './core.js';
 import { U } from './util.js';
 import { STATUS_C, STATUS_ZH } from './mon.js';
 import { Gen3 } from './gen3.js';
+import { touchMenu } from './touch_menu.js';
 define(UI, (() => {
   const $ = id => document.getElementById(id);
   const stack = [];
@@ -106,7 +107,7 @@ define(UI, (() => {
       box.className = cls;
       box.innerHTML = '';
       box.style.gridTemplateColumns = `repeat(${cols}, auto)`;
-      let idx = Math.min(start, options.length - 1);
+      let idx = Math.min(start, options.length - 1), mobile = null, closed = false;
       const els = options.map((o, i) => {
         const d = document.createElement('div');
         const opt = typeof o === 'string' ? { label: o } : o;
@@ -121,11 +122,13 @@ define(UI, (() => {
         els.forEach((e, i) => e.classList.toggle('sel', i === idx));
         keepVisible(box, els[idx]);
         if (onFocus) info.innerHTML = onFocus(idx) || '';
+        mobile?.update(idx);
       };
       box.scrollTop = 0;
       box.classList.remove('hidden');
       upd();
       const close = v => {
+        if (closed) return; closed = true; mobile?.close();
         pop(); box.classList.add('hidden'); box.innerHTML = '';
         info.classList.add('hidden'); dlg.classList.remove('act', 'mov');
         res(v);
@@ -149,6 +152,9 @@ define(UI, (() => {
         upd();
       };
       const pop = pushKey(onKey);
+      mobile = touchMenu({ options, cls, focus: i => { idx = i; upd(); }, pick,
+        cancel: () => { if (cancel) close(-1); }, current: () => idx, info: () => info.innerHTML });
+      mobile?.update(idx);
       box.classList.remove('hidden');
     });
   }
