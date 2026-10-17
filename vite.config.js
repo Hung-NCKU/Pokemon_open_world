@@ -16,6 +16,12 @@ function copyStatic() {
   return {
     name: 'copy-static',
     apply: 'build',
+    transformIndexHtml(html) {
+      // Missing classic scripts can receive the SPA HTML fallback in preview.
+      // Omit optional Emerald manifests entirely when building without local assets.
+      return html.replace(/<script src="(assets\/gen3\/(?:manifest|interiors)\.js)"><\/script>/g,
+        (tag, path) => existsSync(path) ? tag : '');
+    },
     configResolved(c) { out = resolve(c.root, c.build.outDir); },
     closeBundle() {
       for (const p of STATIC) if (existsSync(p)) cpSync(p, resolve(out, p), { recursive: true });

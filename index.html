@@ -78,6 +78,7 @@
 <script>
 // 音樂與音效的資料（約 400 KB）不影響開始畫面，等頁面載入完成後才下載；瀏覽器本來也要等玩家第一次點擊才能播放聲音
 window.addEventListener('load', () => {
+  if (!window.GEN3) return;
   const add = (src, done) => { const s = document.createElement('script'); s.src = src; s.onload = done || null; document.body.appendChild(s); };
   add('assets/gen3/midi.js', () => { if (window.Sound && Sound.reload) Sound.reload(); });
   add('assets/gen3/se_bank.js');
