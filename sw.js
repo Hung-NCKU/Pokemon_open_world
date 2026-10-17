@@ -1,6 +1,6 @@
 // Version and precache URLs are filled by the production build.
-const VERSION = 'a4512a7438a75442';
-const PRECACHE = ["index.html","assets/Cubic_11_game-UnpbrcuP.woff2","assets/main-CmiFZjjv.js","assets/game-data-B0CUPFit.js","assets/main-9aldyPpK.css","assets/gen3/manifest.js","assets/gen3/interiors.js"];
+const VERSION = '51ce699f186d7192';
+const PRECACHE = ["index.html","assets/Cubic_11_game-UnpbrcuP.woff2","assets/main-BqilQ0xt.js","assets/game-data-B0CUPFit.js","assets/main-9aldyPpK.css","assets/gen3/manifest.js","assets/gen3/interiors.js"];
 const PREFIX = 'pkmn-' + new URL(self.registration.scope).pathname + '-';
 const SHELL = PREFIX + VERSION, ASSETS = PREFIX + 'assets', SPRITES = PREFIX + 'sprites';
 const absolute = path => new URL(path, self.registration.scope).href;
