@@ -26,7 +26,11 @@ function copyStatic() {
     closeBundle() {
       for (const p of STATIC) if (existsSync(p)) cpSync(p, resolve(out, p), { recursive: true });
       const html = readFileSync(resolve(out, 'index.html'), 'utf8');
-      const version = createHash('sha256').update(html).digest('hex').slice(0, 16);
+      const releaseHash = createHash('sha256').update(html).update(readFileSync(resolve(out, 'sw.js')));
+      for (const path of ['assets/gen3/manifest.js', 'assets/gen3/mon_icons.png', 'assets/gen3/overworld/coverage.json']) {
+        if (existsSync(resolve(out, path))) releaseHash.update(readFileSync(resolve(out, path)));
+      }
+      const version = releaseHash.digest('hex').slice(0, 16);
       const critical = ['index.html', ...[...html.matchAll(/(?:src|href)="([^"]+)"/g)]
         .map(m => m[1].replace(/^\.\//, ''))
         .filter(p => /\.(js|css|woff2)$/.test(p) && existsSync(resolve(out, p)))];
