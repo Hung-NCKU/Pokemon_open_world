@@ -17,7 +17,7 @@ const MapUI = (() => {
 
   // 地形分類（每 3×3 格）與距離海岸的遠近（決定綠色深淺）
   function base() {
-    if (cache && cache.seed === G.state.seed) return cache.c;
+    if (cache && cache.tiles === World.tiles) return cache.c;
     const kind = new Uint8Array(MW * MH); // 0 海 1 陸 2 山 3 雪 4 沙漠 5 道路
     for (let my = 0; my < MH; my++) for (let mx = 0; mx < MW; mx++) {
       let water = 0, mount = 0, snow = 0, desert = 0, path = 0;
@@ -63,7 +63,7 @@ const MapUI = (() => {
       img.data[o] = col[0]; img.data[o + 1] = col[1]; img.data[o + 2] = col[2]; img.data[o + 3] = 255;
     }
     g.putImageData(img, 0, 0);
-    cache = { seed: G.state.seed, c };
+    cache = { tiles: World.tiles, c };
     return c;
   }
 
@@ -79,7 +79,7 @@ const MapUI = (() => {
   // 游標所在位置的城鎮、地標、地區
   function at(mx, my) {
     const wx = mx * CELL + 1, wy = my * CELL + 1;
-    const town = World.towns.find(t => Math.abs(t.cx - wx) <= 10 && Math.abs(t.cy - wy) <= 8);
+    const town = World.islandAt?.(wx, wy) || World.towns.find(t => Math.abs(t.cx - wx) <= 10 && Math.abs(t.cy - wy) <= 8);
     const lm = [...(World.landmarks || new Map()).values()].find(l => Math.abs(l.x - wx) <= 4 && Math.abs(l.y - wy) <= 4);
     const inside = wx >= 0 && wy >= 0 && wx < WW && wy < WH;
     return { town, lm, region: inside ? World.regionAt(wx, wy) : null };
@@ -92,7 +92,7 @@ const MapUI = (() => {
       const s = G.state;
       const root = document.createElement('div');
       root.id = 'rmap';
-      root.innerHTML = `<canvas width="${CW}" height="${CH}"></canvas><div class="rm-name"></div><div class="rm-hint">${canFly ? '方向鍵 選城鎮　Z／點選 飛翔　' : ''}X 返回</div>`;
+      root.innerHTML = `<canvas width="${CW}" height="${CH}"></canvas><div class="rm-name"></div><div class="rm-hint">${canFly ? '方向鍵 選目的地　Z／點選 飛翔　' : ''}X 返回</div>`;
       document.getElementById('game').appendChild(root);
       const cv = root.querySelector('canvas'), g = cv.getContext('2d');
       const cursorImg = new Image(); cursorImg.src = Gen3.base + 'map_cursor.png';
@@ -111,9 +111,9 @@ const MapUI = (() => {
           g.fillStyle = 'rgb(98,98,98)'; g.fillRect(x - 1, y - 1, 3, 3);
           g.fillStyle = seen(lm) ? 'rgb(255,172,16)' : 'rgb(205,205,205)'; g.fillRect(x, y, 1, 1);
         }
-        for (const t of World.towns) {
+        for (const t of [...World.towns, ...(World.legendIsland ? [World.legendIsland] : [])]) {
           const [x, y] = toMap(t.cx, t.cy);
-          if (s.visited[t.id]) capsule(g, x, y, [255, 57, 16], [148, 0, 0]);
+          if (t.alwaysFly || s.visited[t.id]) capsule(g, x, y, [255, 57, 16], [148, 0, 0]);
           else capsule(g, x, y, [0, 115, 172], [0, 57, 139]);
         }
         // 古代石板解讀後：標示夢幻的位置
@@ -127,12 +127,12 @@ const MapUI = (() => {
         g.restore();
         const a = at(cx, cy);
         const name = a.town ? a.town.name : a.lm && seen(a.lm) ? a.lm.n : '';
-        const band = a.region ? World.regionBand(a.region) : null;
+        const band = a.town?.alwaysFly ? [50, 90] : a.region ? World.regionBand(a.region) : null;
         root.querySelector('.rm-name').textContent = a.region ? `${REGIONS[a.region].n}地區${name ? '・' + name : ''}　Lv.${band[0]}–${band[1]}` : '海上';
       };
       const timer = setInterval(() => { tick++; draw(); }, 1000 / 30);
       const close = v => { clearInterval(timer); pop(); root.remove(); res(v); };
-      const visited = () => World.towns.filter(t => s.visited[t.id]);
+      const visited = () => World.flyDestinations ? World.flyDestinations(s) : World.towns.filter(t => s.visited[t.id]);
       // 往某個方向最近的去過的城鎮（夾角 60 度以內）
       const jump = (dx, dy) => {
         let best = null, bd = 1e9;
@@ -148,7 +148,7 @@ const MapUI = (() => {
       // 確認後飛過去
       let asking = false;
       const tryFly = async t => {
-        if (!canFly || !t || !s.visited[t.id]) { Sound.sfx('bump'); return; }
+        if (!canFly || !t || !t.alwaysFly && !s.visited[t.id]) { Sound.sfx('bump'); return; }
         asking = true;
         const c = await UI.choose(['是', '否'], { prompt: `要飛到${t.name}嗎？` });
         UI.hideDialog();

@@ -59,6 +59,7 @@ define(EmeraldUI, (() => {
   function placeName() {
     const s = G.state;
     if (G.room && G.room.b && G.room.b.town) return G.room.b.town.name;
+    if (!G.room && World.islandAt?.(s.x, s.y)) return World.legendIsland.name;
     const t = World.townAt(s.x, s.y);
     return t ? t.name : `${REGIONS[World.regionAt(s.x, s.y)].n}的野外`;
   }

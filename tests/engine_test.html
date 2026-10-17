@@ -444,7 +444,7 @@ async function run() {
       check('神奧冠軍竹蘭的王牌是烈咬陸鯊', cy[5].sp === 445);
       check('豐緣、神奧、城都都有四天王', ['johto', 'hoenn', 'sinnoh'].every(r => ELITE_FOUR[r].length === 4));
       const ho = [...World.legends.values()].find(l => l.sp === 250);
-      check('鳳王站在鈴鐺塔前，需要城都冠軍', ho && ho.lm && ho.lm.id === 'belltower' && !LegendGate.ok(ho.lm));
+      check('鳳王移居島上仍需要城都冠軍', ho && ho.lm && ho.lm.id === 'belltower' && !LegendGate.ok(ho.lm));
       G.state.champs.johto = 1;
       check('成為城都冠軍後可以接近鳳王', LegendGate.ok(ho.lm));
       G.state = keepS;
@@ -486,7 +486,7 @@ async function run() {
       got.add(World.rollWild(far.cx + (i % 7), far.cy + (i % 5), b).sp);
     }
     check('野外遭遇不會出現任何傳說／幻之寶可夢', ![...got].some(id => POKEDEX[id].lg), [...got].filter(id => POKEDEX[id].lg).map(id => POKEDEX[id].n).join('、'));
-    const want = Object.values(POKEDEX).filter(sp => sp.lg && !(sp.pre && POKEDEX[sp.pre] && POKEDEX[sp.pre].lg)).map(sp => sp.id);
+    const want = Object.values(POKEDEX).filter(sp => sp.lg).map(sp => sp.id);
     const placed = [...World.legends.values()];
     const count = {};
     placed.forEach(l => count[l.sp] = (count[l.sp] || 0) + 1);
@@ -495,7 +495,7 @@ async function run() {
     const bad = placed.filter(l => !World.inside(l.x, l.y) || BLOCKED.has(World.tile(l.x, l.y)) || World.doors.has(l.x + ',' + l.y) || World.trainers.has(l.x + ',' + l.y));
     check('傳說站在可以抵達的格子上', !bad.length, bad.map(l => POKEDEX[l.sp].n).join('、'));
     const ev = placed.filter(l => EVENT_LEGENDS.has(l.sp));
-    check('事件傳說站在地標入口前', ev.length === EVENT_LEGENDS.size && ev.every(l => l.lm && l.lm.sp === l.sp), ev.filter(l => !l.lm).map(l => POKEDEX[l.sp].n).join('、') + ' 未放置：' + [...EVENT_LEGENDS].filter(sp => !ev.some(l => l.sp === sp)).map(sp => sp + POKEDEX[sp].n).join('、'));
+    check('事件傳說搬到島上並保留地標條件', ev.length === EVENT_LEGENDS.size && ev.every(l => l.lm && l.lm.sp === l.sp), ev.filter(l => !l.lm).map(l => POKEDEX[l.sp].n).join('、') + ' 未放置：' + [...EVENT_LEGENDS].filter(sp => !ev.some(l => l.sp === sp)).map(sp => sp + POKEDEX[sp].n).join('、'));
     const mew = placed.find(l => l.sp === 151);
     check('傳說擋住去路（不能走上去）', mew && !Game.walkable(mew.x, mew.y));
     G.state.legendsCaught = { 151: 1 };
@@ -1277,8 +1277,13 @@ async function run() {
   // 若是刻意改變地形生成，要提高 WORLD_VER 並讓舊存檔沿用舊算法，再更新這裡的雜湊
   {
     const h = a => { let x = 2166136261 >>> 0; for (let i = 0; i < a.length; i++) { x ^= a[i]; x = Math.imul(x, 16777619) >>> 0; } return x.toString(16); };
+    // The user-requested island patch also applies to old saves; verify the original
+    // generator separately so unrelated towns and routes remain reproducible.
+    const islandPatch = World.placeLegendIsland;
+    World.placeLegendIsland = () => {};
     const got = [[20261010, 'kanto'], [7, 'johto'], [99, 'hoenn']].map(([sd, r]) => { World.generate(sd, r, 2); return h(World.tiles) + '/' + h(World.regionMap); });
-    check('世界生成：固定種子的地形與舊版完全相同', got.join() === '8069a4f1/73b17e1f,c7f84d59/73b17e1f,80b347c6/73b17e1f', got.join());
+    World.placeLegendIsland = islandPatch;
+    check('世界生成：小島改造前的底圖與舊版完全相同', got.join() === '8069a4f1/73b17e1f,c7f84d59/73b17e1f,80b347c6/73b17e1f', got.join());
     World.generate(20261010, 'kanto');
   }
   // 遊玩紀錄：錯誤、耗時、事件
@@ -1855,6 +1860,7 @@ async function run() {
       }
       return n;
     };
+    const islandPatch = World.placeLegendIsland; World.placeLegendIsland = () => {};
     World.generate(20261010, 'kanto', 6);
     const before = small(), h6 = Array.from(World.tiles.slice(0, 5000)).join('');
     World.generate(20261010, 'kanto', 7);
@@ -1863,6 +1869,7 @@ async function run() {
     const h6b = Array.from(World.tiles.slice(0, 5000)).join('');
     check('地形平滑：第 7 版大幅減少零星的小草叢', before > 50 && after < before * .2, `${before} → ${after}`);
     check('地形平滑：第 6 版以前的地形不變', h6 === h6b);
+    World.placeLegendIsland = islandPatch;
     World.generate(20261010, 'kanto');
     G.state = keep;
   }

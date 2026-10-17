@@ -271,7 +271,8 @@ define(Story, {
     }
     // 傳說寶可夢站在入口前（見 Story.legend）；入口本身只有景色
     if (s.flags[key] || Story.legendDone(lm.sp)) { await UI.say('這裡已經恢復了平靜。'); return; }
-    await UI.say(`${lm.n}的深處傳來強大的氣息……傳說的寶可夢就在入口前。`);
+    const moved = [...World.legends.values()].find(l => l.sp === lm.sp && l.island);
+    await UI.say(moved ? `${lm.n}留有傳說寶可夢的氣息……\n牠現在棲息在阿羅拉北方的「傳說之島」，可以從地圖使用飛翔前往。` : `${lm.n}的深處傳來強大的氣息……傳說的寶可夢就在入口前。`);
   },
 });
 

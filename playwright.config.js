@@ -18,7 +18,7 @@ export default defineConfig({
     launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] },
   },
   projects: [
-    { name: 'unit', testMatch: /(engine|smoke|reliability|mobile|hooks|overworld)\.spec\.js/ },
+    { name: 'unit', testMatch: /(engine|smoke|reliability|mobile|hooks|overworld|island)\.spec\.js/ },
     { name: 'natural', testMatch: /natural\.spec\.js/, timeout: 60 * 60 * 1000 },
   ],
   webServer: {

@@ -667,6 +667,7 @@ define(Game, {
       g.beginPath(); g.moveTo(lm.x, lm.y - 7); g.lineTo(lm.x + 6, lm.y + 4); g.lineTo(lm.x - 6, lm.y + 4); g.fill();
       if (seen) { g.fillStyle = '#000'; g.fillText(lm.n, lm.x + 1, lm.y + 19); g.fillStyle = '#fff'; g.fillText(lm.n, lm.x, lm.y + 18); }
     }
+    if (World.legendIsland) { const t = World.legendIsland; g.fillStyle = '#ffd040'; g.fillRect(t.cx - 5, t.cy - 5, 10, 10); g.fillText(t.name, t.cx, t.cy - 12); }
     g.fillStyle = '#f22'; g.beginPath(); g.arc(G.state.x, G.state.y, 6, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
     wrap.appendChild(c);
@@ -679,8 +680,8 @@ define(Game, {
       c.onclick = ev => {
         const r = c.getBoundingClientRect();
         const x = (ev.clientX - r.left) / r.width * WW, y = (ev.clientY - r.top) / r.height * WH;
-        const t = World.towns.find(t => x >= t.x - 4 && x <= t.x + TOWN_W + 4 && y >= t.y - 4 && y <= t.y + TOWN_H + 4);
-        if (t && G.state.visited[t.id] && Game.canFly()) { pop(); res(t); }
+        const t = World.islandAt?.(x, y) || World.towns.find(t => x >= t.x - 4 && x <= t.x + TOWN_W + 4 && y >= t.y - 4 && y <= t.y + TOWN_H + 4);
+        if (t && (t.alwaysFly || G.state.visited[t.id]) && Game.canFly()) { pop(); res(t); }
       };
     });
     m.remove();
@@ -698,6 +699,7 @@ define(Game, {
 
   // 飛翔：降落在目的地寶可夢中心的門口（和原作一樣）；沒有中心的地方降落在城鎮中央
   flyTo(t) {
+    if (t.id === World.legendIsland?.id) { Game.warp(t.landX, t.landY, 'up'); EmeraldUI.mapPopup(t.name, 'wood'); return; }
     const c = World.buildings.find(b => b.town === t && b.kind === 'center');
     if (c) Game.warp(c.door.x, c.door.y + 1, 'down');
     else Game.warp(t.cx, t.cy, 'down');
